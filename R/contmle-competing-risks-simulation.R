@@ -42,7 +42,7 @@ t3_coefs <- c(1.8e-5, 1.2)
 # Estimation targets
 tau <- 720
 target <- 1:3
-B <- 400
+B <- 800
 n_cores <- 8
 registerDoParallel(n_cores)
 
@@ -150,32 +150,38 @@ simulate_data <- function(n = 1e3, assign_A = function(W, n) rbinom(n, 1, 0.5), 
 
 # 3.1 True Psi --------------------------------------------------------------------------------
 
-obs <- as.data.table(bind_rows(lapply(1:1200, function(b) base_data)))
+obs <- as.data.table(bind_rows(lapply(1:5000, function(b) base_data)))
 true_risks <- list("A=1" = NULL, "A=0" = NULL)
-for (a in 1:0) {
-    A <- rep(a, nrow(obs))
-    outcomes <- data.table("T1" = T1_fn(A, obs[["SMOKER"]], obs[["BMIBL"]], t1_coefs,
-                                        output = "F_inv.u", u = runif(nrow(obs), 0, 1))$F_inv.u,
-                           "T2" = T2_fn(A, obs[["STROKSFL"]], obs[["MIFL"]], t2_coefs,
-                                        output = "F_inv.u", u = runif(nrow(obs), 0, 1))$F_inv.u,
-                           "T3" = T3_fn(t3_coefs, output = "F_inv.u",
-                                        u = runif(nrow(obs), 0, 1))$F_inv.u)
-    outcomes <- outcomes %>%
-        mutate("1>2" = (T1 - T2) > 0,
-               "2>3" = (T2 - T3) > 0,
-               "3>1" = (T3 - T1) > 0,
-               "T" = T1*`3>1`*(1 - `1>2`) + T2*`1>2`*(1 - `2>3`) + T3*`2>3`*(1 - `3>1`),
-               "J" = `3>1`*(1 - `1>2`) + 2*`1>2`*(1 - `2>3`) + 3*`2>3`*(1 - `3>1`)) %>%
-        dplyr::select(`T`, J)
-    true_risks[[paste0("A=", a)]] <- foreach(t = interval, 
-                                             .combine = rbind, 
-                                             .inorder = T) %dopar% {
-                                                 tabulate(outcomes[["J"]][outcomes[["T"]] <= t])
-                                             }
-    true_risks[[paste0("A=", a)]] <- as.data.table(true_risks[[paste0("A=", a)]] / nrow(obs)) %>% 
-        rename_all(~paste0("F.j", 1:3, ".a", a))
+
+if (file.exists("./data/true_risks.RDS")) {
+    true_risks <- readRDS("./data/true_risks.RDS")
+} else {
+    for (a in 1:0) { # for binary treatment only
+        A <- rep(a, nrow(obs))
+        outcomes <- data.table("T1" = T1_fn(A, obs[["SMOKER"]], obs[["BMIBL"]], t1_coefs,
+                                            output = "F_inv.u", u = runif(nrow(obs), 0, 1))$F_inv.u,
+                               "T2" = T2_fn(A, obs[["STROKSFL"]], obs[["MIFL"]], t2_coefs,
+                                            output = "F_inv.u", u = runif(nrow(obs), 0, 1))$F_inv.u,
+                               "T3" = T3_fn(t3_coefs, output = "F_inv.u",
+                                            u = runif(nrow(obs), 0, 1))$F_inv.u)
+        outcomes <- outcomes %>%
+            mutate("1>2" = (T1 - T2) > 0,
+                   "2>3" = (T2 - T3) > 0,
+                   "3>1" = (T3 - T1) > 0,
+                   "T" = T1*`3>1`*(1 - `1>2`) + T2*`1>2`*(1 - `2>3`) + T3*`2>3`*(1 - `3>1`),
+                   "J" = `3>1`*(1 - `1>2`) + 2*`1>2`*(1 - `2>3`) + 3*`2>3`*(1 - `3>1`)) %>%
+            dplyr::select(`T`, J)
+        true_risks[[paste0("A=", a)]] <- foreach(t = interval, 
+                                                 .combine = rbind, 
+                                                 .inorder = T) %dopar% {
+                                                     tabulate(outcomes[["J"]][outcomes[["T"]] <= t])
+                                                 }
+        true_risks[[paste0("A=", a)]] <- as.data.table(true_risks[[paste0("A=", a)]] / nrow(obs)) %>% 
+            rename_all(~paste0("F.j", 1:3, ".a", a))
+    }
+    rm(outcomes); rm(obs); rm(A); gc()
+    saveRDS(true_risks, "./data/true_risks.RDS")
 }
-rm(outcomes); rm(obs); rm(A); gc()
 
 # plot survival curves
 lapply(true_risks, function(r) rename_all(r, ~c("J=1", "J=2", "J=3"))) %>% 
@@ -187,48 +193,64 @@ lapply(true_risks, function(r) rename_all(r, ~c("J=1", "J=2", "J=3"))) %>%
                linetype = as.character(A), colour = event)) + 
     geom_line()+ theme_minimal()
 
-Psi0 <- cbind("time" = tau, (true_risks[["A=1"]] - true_risks[["A=0"]])[tau, ])
-
 
 # 3.2 contmle Estimation ----------------------------------------------------------------------
 
-estimates <- foreach(i=1:B,
-                     .combine = rbind,
-                     .packages = c("data.table", "tidyverse", "survival", "zoo")) %dopar% {
-                         
-                         obs <- simulate_data(n = n, base_data = base_data)
-                         est <- contmle(obs, #-- dataset
-                                        target = target, #-- go after cause 1 and cause 2 specific risks
-                                        iterative = FALSE, #-- use one-step tmle to target F1 and F2 simultaneously
-                                        treat.effect = "ate", #-- target the ate directly
-                                        tau = tau, #-- time-point of interest
-                                        estimation = list("cause1" = list(fit = "cox",
-                                                                          model = Surv(TIME, EVENT == 1) ~ 
-                                                                              ARM + SEX + AGE + BMIBL + 
-                                                                              SMOKER + STROKSFL + MIFL),
-                                                          "cens" = list(fit = "cox",
-                                                                        model = Surv(TIME, EVENT == 0) ~ 
-                                                                            ARM + SEX + AGE + BMIBL + 
-                                                                            SMOKER + STROKSFL + MIFL), 
-                                                          "cause2" = list(fit = "cox",
-                                                                          model = Surv(TIME, EVENT == 2) ~ 
-                                                                              ARM + SEX + AGE + BMIBL + 
-                                                                              SMOKER + STROKSFL + MIFL), 
-                                                          "cause3" = list(fit = "cox",
-                                                                          model = Surv(TIME, EVENT == 3) ~ 
-                                                                              ARM + SEX + AGE + BMIBL + 
-                                                                              SMOKER + STROKSFL + MIFL)
-                                        ),
-                                        treat.model = ARM ~ SEX + AGE + BMIBL + SMOKER + STROKSFL + MIFL,
-                                        sl.models = list(mod1 = list(Surv(TIME, EVENT == 1) ~ ARM),
-                                                         mod2 = list(Surv(TIME, EVENT == 1) ~ ARM + SEX + AGE + BMIBL),
-                                                         mod3 = list(Surv(TIME, EVENT == 1) ~ ARM + SEX + AGE + BMIBL + 
-                                                                         SMOKER + STROKSFL + MIFL))
-                         )
-                         estimates <- bind_rows(unlist(bind_cols(est$init)[1, ]),
-                                                unlist(bind_cols(est$tmle)[1, ]))
-                         estimates <- as.data.table(cbind("run" = i, "Estimator" = c("init", "TMLE"), estimates))
-                         estimates
-                     }
+if (file.exists("./output/contmle_estimates.RDS")) {
+    estimates <- readRDS("./output/contmle_estimates.RDS")
+} else {
+    estimates <- foreach(i=1:B,
+                         .combine = rbind,
+                         .packages = c("data.table", "tidyverse", "survival", "zoo")) %dopar% {
+                             
+                             obs <- simulate_data(n = n, base_data = base_data)
+                             est <- contmle(obs, #-- dataset
+                                            target = target, #-- target competing events
+                                            iterative = FALSE, #-- one-step tmle to target \simultaneously
+                                            treat.effect = "ate", #-- target the ate directly
+                                            tau = tau, #-- time-point of interest
+                                            estimation = list("cause1" = list(fit = "cox",
+                                                                              model = Surv(TIME, EVENT == 1) ~ 
+                                                                                  ARM + SEX + AGE + BMIBL + 
+                                                                                  SMOKER + STROKSFL + MIFL),
+                                                              "cens" = list(fit = "cox",
+                                                                            model = Surv(TIME, EVENT == 0) ~ 
+                                                                                ARM + SEX + AGE + BMIBL + 
+                                                                                SMOKER + STROKSFL + MIFL), 
+                                                              "cause2" = list(fit = "cox",
+                                                                              model = Surv(TIME, EVENT == 2) ~ 
+                                                                                  ARM + SEX + AGE + BMIBL + 
+                                                                                  SMOKER + STROKSFL + MIFL), 
+                                                              "cause3" = list(fit = "cox",
+                                                                              model = Surv(TIME, EVENT == 3) ~ 
+                                                                                  ARM + SEX + AGE + BMIBL + 
+                                                                                  SMOKER + STROKSFL + MIFL)
+                                            ),
+                                            treat.model = ARM ~ SEX + AGE + BMIBL + SMOKER + STROKSFL + MIFL,
+                                            sl.models = list(mod1 = list(Surv(TIME, EVENT == 1) ~ ARM),
+                                                             mod2 = list(Surv(TIME, EVENT == 1) ~ 
+                                                                             ARM + SEX + AGE + BMIBL),
+                                                             mod3 = list(Surv(TIME, EVENT == 1) ~ 
+                                                                             ARM + SEX + AGE + BMIBL + 
+                                                                             SMOKER + STROKSFL + MIFL))
+                             )
+                             estimates <- bind_rows(unlist(bind_cols(est$init)[1, ]),
+                                                    unlist(bind_cols(est$tmle)[1, ]))
+                             estimates <- as.data.table(cbind("run" = i, 
+                                                              "Estimator" = c("init", "TMLE"), 
+                                                              estimates))
+                             estimates
+                         }
+    saveRDS(estimates, "./output/contmle_estimates.RDS")
+}
 
-estimates %>% group_by(Estimator) %>% summarise_all(mean)
+
+# 4. Evaluation / Visualization ---------------------------------------------------------------
+
+
+Psi0 <- cbind("time" = tau, (true_risks[["A=1"]] - true_risks[["A=0"]])[tau, ])
+estimates %>% group_by(Estimator) %>% summarise_all(list(mean = mean, se = var)) %>% 
+    mutate_at(vars(ends_with("se")), sqrt)
+
+
+

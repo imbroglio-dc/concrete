@@ -1227,7 +1227,7 @@ contmle <- function(dt,
     })
     names(init.list) <- paste0("F", sapply(outcome.index[target], function(each)
       estimation[[each]]["event"]))
-    if (length(target) == length(outcome.index)) {
+    if (length(target) == length(outcome.index)) { ## what if not all events are targeted? ------------------------------------------------
       S.se.init <- sapply(tau, function(tt) {
         sqrt(
           mean(
@@ -1250,7 +1250,7 @@ contmle <- function(dt,
             fl["init.est", paste0("tau=", tt)])))
       init.list$S <- rbind(init.est = S.fit.init, init.se = S.se.init)
       colnames(init.list$S) <- paste0("tau=", tau)
-    } ## what if not all events are targeted? ------------------------------------------------
+    } 
     if (target.S) {
       tmle.list <- list(init = init.list[names(init.list) == "S"])
     } else {
@@ -1582,18 +1582,16 @@ contmle <- function(dt,
               fit.delta2 <- estimation[[each2]][["event"]]
               if (fit.delta == fit.delta2) {
                 mat[surv.t > 0, (paste0("Ht", fit.delta, ".lambda", fit.delta2, ".", kk)) :=
-                      -(1 - (get(
-                        paste0("F", fit.delta, ".tau", kk)
-                      ) - get(
-                        paste0("F", fit.delta, ".t")
-                      )) / surv.t)]
-                mat[round(surv.t, 8) == 0, (paste0("Ht", fit.delta, ".lambda", fit.delta2, ".", kk)) := -1]
+                      -(1 - (get(paste0("F", fit.delta, ".tau", kk)) - 
+                               get(paste0("F", fit.delta, ".t"))) / surv.t)]
+                mat[round(surv.t, 8) == 0, 
+                    (paste0("Ht", fit.delta, ".lambda", fit.delta2, ".", kk)) := -1]
               } else {
                 mat[surv.t > 0, (paste0("Ht", fit.delta, ".lambda", fit.delta2, ".", kk)) :=
-                      (get(paste0(
-                        "F", fit.delta, ".tau", kk
-                      )) - get(paste0("F", fit.delta, ".t"))) / surv.t]
-                mat[round(surv.t, 8) == 0, (paste0("Ht", fit.delta, ".lambda", fit.delta2, ".", kk)) := 0]
+                      (get(paste0("F", fit.delta, ".tau", kk)) - 
+                         get(paste0("F", fit.delta, ".t"))) / surv.t]
+                mat[round(surv.t, 8) == 0, 
+                    (paste0("Ht", fit.delta, ".lambda", fit.delta2, ".", kk)) := 0]
               }
             }
           }
@@ -1626,19 +1624,12 @@ contmle <- function(dt,
       }
       
       Pn.eic <- Pn.eic.fun(mat)
-      
       Pn.eic2 <- Pn.eic2.fun(Pn.eic)
-      
-      #print("CHECK 3")
-      #print(Pn.eic2)
-      
       Pn.eic.norm <- Pn.eic.norm.fun(Pn.eic2, Pn.eic)
       
       print(paste0("step = ", step))
       if (verbose)
         print(paste0("Pn.eic.norm=", Pn.eic.norm))
-      
-      #if (step == 7) browser()
       
       if (Pn.eic.norm.prev <= Pn.eic.norm) {
         # reset all columns to '.tmp'
@@ -1660,15 +1651,7 @@ contmle <- function(dt,
               for (each2 in outcome.index[target]) {
                 fit.delta2 <- estimation[[each2]][["event"]]
                 mat[, (paste0("Ht", fit.delta2, ".lambda", fit.delta, ".", kk)) :=
-                      get(paste0(
-                        "Ht",
-                        fit.delta2,
-                        ".lambda",
-                        fit.delta,
-                        ".",
-                        kk,
-                        ".tmp"
-                      ))]
+                      get(paste0("Ht", fit.delta2, ".lambda", fit.delta, ".", kk, ".tmp"))]
               }
             }
           }
@@ -1683,7 +1666,7 @@ contmle <- function(dt,
         Pn.eic2 <- Pn.eic2.fun(Pn.eic)
         
         Pn.eic.norm <- Pn.eic.norm.fun(Pn.eic2, Pn.eic)
-        deps.size <- 0.5 * deps.size#0.1*deps.size
+        deps.size <- 0.5 * deps.size # 0.1 * deps.size
         
       } else {
         Pn.eic.norm.prev <- Pn.eic.norm
@@ -1697,8 +1680,9 @@ contmle <- function(dt,
         } else {
           Pn.eic3 <-
             lapply(1:length(Pn.eic), function(kk)
-              Pn.eic[[kk]] / (ifelse(
-                any(unlist(init.ic) == 0), init.ic[[kk]] + 0.001, init.ic[[kk]]
+              Pn.eic[[kk]] / (ifelse(any(unlist(init.ic) == 0), 
+                                     init.ic[[kk]] + 0.001, 
+                                     init.ic[[kk]]
               ) * sqrt(n)))
         }
       }
@@ -1771,7 +1755,7 @@ contmle <- function(dt,
       
       if (check.sup.norm |
           step == no.small.steps) {
-        #(left.criterion <= criterion) {
+        # (left.criterion <= criterion) {
         if (step == no.small.steps) {
           message("Warning: Algorithm did not converge")
         }
@@ -1838,8 +1822,6 @@ contmle <- function(dt,
             return(out)
           })
         
-        #browser()
-        
         if (cr)
           names(final.list) <-
           paste0("F", sapply(outcome.index[target], function(each)
@@ -1854,21 +1836,20 @@ contmle <- function(dt,
               sqrt(mean(rowSums(
                 sapply(1:length(outcome.index), function(target11) {
                   unlist(
-                    eval.ic(
-                      mat,
-                      unlist(lapply(final.list, function(xx)
-                        xx["tmle.est", paste0("tau=", tt)])),
-                      target.index = outcome.index[target11],
-                      tau.values = tt,
-                      survival = TRUE
+                    eval.ic( mat,
+                             unlist(lapply(final.list, function(xx)
+                               xx["tmle.est", paste0("tau=", tt)]
+                             )),
+                             target.index = outcome.index[target11],
+                             tau.values = tt,
+                             survival = TRUE
                     )
                   )
                 })
-              ) ^ 2) / n))
-          S.fit <-
-            sapply(tau, function(tt)
-              (treat.effect != "ate") - sum(sapply(final.list, function(fl)
-                fl["tmle.est", paste0("tau=", tt)])))
+              )^2) / n))
+          S.fit <- sapply(tau, function(tt)
+            (treat.effect != "ate") - sum(sapply(final.list, function(fl)
+              fl["tmle.est", paste0("tau=", tt)])))
           final.S <- rbind(S.fit, S.se)
           colnames(final.S) <- paste0("tau=", tau)
           rownames(final.S) <- c("tmle.est", "tmle.se")
@@ -1916,8 +1897,7 @@ contmle <- function(dt,
     }
     
   } else {
-    #---------------------------------------------------------------
-    # ITERATIVE TMLE
+    # 6. Perform iterative TMLE ---------------------------------------------------------
     
     mat1 <- copy(mat)
     
@@ -1967,16 +1947,12 @@ contmle <- function(dt,
               print(paste0("F", target1, ":"))
             eps.hat <- sapply(outcome.index, function(index) {
               nleqslv(0.01, function(eps)
-                unlist(
-                  eval.equation(
-                    mat,
-                    eps,
-                    target.index =
-                      outcome.index[target1],
-                    cr.index =
-                      index
-                  )
-                )[tau == tt])$x
+                unlist(eval.equation(
+                  mat,
+                  eps,
+                  target.index = outcome.index[target1],
+                  cr.index = index
+                ))[tau == tt])$x
             })
           } else {
             if (iter == 1 & verbose)
@@ -1998,16 +1974,15 @@ contmle <- function(dt,
           if (verbose)
             print(sapply(1:length(eps.hat),
                          function(index) {
-                           paste0("iter=",
-                                  iter,
-                                  ", eps",
+                           paste0("iter=", iter, ", eps",
                                   ifelse(cr, paste0("(cause=",
-                                                    estimation[[outcome.index[index]]][["event"]], ")"), ""),
-                                  "=",
-                                  round(eps.hat[index], 4))
-                         }))
+                                                    estimation[[outcome.index[index]]][["event"]],
+                                                    ")"), ""), 
+                                  "=", round(eps.hat[index], 4))
+                         })
+            )
           
-          #-- 12b -- update hazard(s):
+          ## 6.1 update hazards --------------------------------------------------------------
           if (cr) {
             mat[, surv.t := 1]
             #for (target11 in target1) {
