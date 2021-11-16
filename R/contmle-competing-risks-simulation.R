@@ -150,13 +150,12 @@ simulate_data <- function(n = 1e3, assign_A = function(W, n) rbinom(n, 1, 0.5), 
 
 # 3.1 True Psi --------------------------------------------------------------------------------
 
-obs <- as.data.table(bind_rows(lapply(1:5000, function(b) base_data)))
-true_risks <- list("A=1" = NULL, "A=0" = NULL)
-
 if (file.exists("./data/true_risks.RDS")) {
     true_risks <- readRDS("./data/true_risks.RDS")
 } else {
     for (a in 1:0) { # for binary treatment only
+        obs <- as.data.table(bind_rows(lapply(1:5000, function(b) base_data)))
+        true_risks <- list("A=1" = NULL, "A=0" = NULL)
         A <- rep(a, nrow(obs))
         outcomes <- data.table("T1" = T1_fn(A, obs[["SMOKER"]], obs[["BMIBL"]], t1_coefs,
                                             output = "F_inv.u", u = runif(nrow(obs), 0, 1))$F_inv.u,
