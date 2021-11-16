@@ -7,17 +7,18 @@ setwd("/Shared/Projects/ConCR-TMLE/")
 
 # simulated data ------------------------------------------------------------------------------
 # source("./R/contmle-competing-risks-simulation.R") 
-## just need simulate_data() and true_risks from above
+## just need base_data and true_risks from above
 source(file = "R/functions/my_sl_functions.R")
 source(file = "R/functions/my_MOSS_hazard_methods.R")
 source(file = "R/functions/my_survtmle_functions.R")
+source(file = "R/functions/sim_functions.R")
 source(file = "R/contmle.R")
 set.seed(0)
 
 # parameters ----------------------------------------------------------------------------------
 
 B <- 1000
-n_cores <- 10
+n_cores <- 25
 registerDoParallel(n_cores)
 registerDoRNG(0)
 target_times <- (1:5) * 4
@@ -297,7 +298,7 @@ while (b + n_cores <= B) {
             mutate_at(c("s1", "s0"), ~ 1 - .) %>% 
             dplyr::select(colnames(results$estimates)) %>% 
             bind_rows(results$estimates, .)
-        sim_results[[b]] <- results$estimates
+        return(results)
     }
 }
 
