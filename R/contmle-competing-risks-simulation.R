@@ -29,7 +29,6 @@ base_data <- read_excel("./data/test_leader.xlsx") %>%
 
 # 0.2 Variables -------------------------------------------------------------------------------
 
-interval <- 1:2e3
 n <- 1e3
 
 # 0.3 simulation functions ------------------------------------------------
@@ -47,7 +46,7 @@ n_cores <- 8
 registerDoParallel(n_cores)
 
 # 3.1 True Psi --------------------------------------------------------------------------------
-
+## True risks approximated by computing risks in a very large sample
 if (file.exists("./data/true_risks.RDS")) {
     true_risks <- readRDS("./data/true_risks.RDS")
 } else {
