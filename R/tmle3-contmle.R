@@ -27,9 +27,17 @@ sim_results <- vector("list", B)
 
 # true risks ----------------------------------------------------------------------------------
 
+true_risks <- readRDS("./data/true_risks.RDS")
 psi0 <- lapply(true_risks, function(r) {
     (1 - rowSums(r))[target_times_cont]
-}) %>% do.call(cbind, .)
+}) %>% do.call(cbind, .) %>% as.data.frame() %>% 
+    rename_all(~c("s1", "s0")) %>% 
+    mutate('t' = target_times, 
+           RD = (1 - s1) - (1 - s0),
+           RR = (1 - s1) / (1 - s0),
+           SR = s1 / s0) %>% 
+    pivot_longer(c(s1, s0, RD, RR, SR), 
+                 names_to = "Estimand", values_to = "Truth")
 
 # data ----------------------------------------------------------------------------------------
 
@@ -41,9 +49,10 @@ sim_data <- foreach(i = 1:B) %dopar% {
 }
 
 b <- 1
-while (b + n_cores <= B) {
+while (b <= B) {
     indices <- b:min(B, b + n_cores)
     cat("Simulations", b, "-", tail(indices, 1), "\n")
+    b <- b + n_cores
     
     sim_results[indices] <- foreach(i = indices) %dopar% {
         results <- list()
@@ -304,7 +313,7 @@ while (b + n_cores <= B) {
 
 sim_out <- sim_results[!sapply(sim_results, is.null)]
 saveRDS(sim_out, file = "R/sim_est.RDS")
-sim_out <- lapply(1:length(sim_out), function(i) cbind("iter" = i, sim_out[[i]])) %>% 
+sim_out <- lapply(1:length(sim_out), function(i) cbind("iter" = i, sim_out[[i]]$estimates)) %>% 
     bind_rows() %>%
     mutate(RD = (1 - s1) - (1 - s0),
            RR = (1 - s1) / (1 - s0),
@@ -319,5 +328,26 @@ sim_out <- lapply(1:length(sim_out), function(i) cbind("iter" = i, sim_out[[i]])
     pivot_longer(cols = contains("se"), names_to = c("se_est", "tmp"),
                  names_sep = "_", values_to = "se") %>% dplyr::select(-`tmp`) %>%
     filter(se_est == Estimand) %>% dplyr::select(-se_est)
-sim_sum <- sim_out %>% dplyr::select(-iter) %>% group_by(Estimator, t, Estimand) %>% 
-    summarise_all(list("mean" = mean, "var" = var))
+
+sim_tbl <- left_join(sim_out, psi0) %>% 
+    mutate(`t` = as_factor(`t`), Estimand = as_factor(Estimand), 
+           bias = Truth - Estimate, 
+           MSE = bias^2,
+           coverage = (Estimate + 1.96*se > Truth) & (Estimate - 1.96*se < Truth)) %>% 
+    dplyr::select(-iter) %>% group_by(Estimator, t, Estimand) %>% 
+    mutate(upper = quantile(Estimate, 0.975), lower = quantile(Estimate, 0.025)) %>% 
+    summarise_all(mean) %>% ungroup()
+
+sim_tbl %>% ggplot(aes(x = `t`)) + facet_wrap(~Estimand, scales = "free", nrow = 5) + 
+    geom_errorbar(aes(ymin = lower, ymax = upper, colour = Estimator), 
+                  width = .5, position = position_dodge(.5)) +
+    geom_point(aes(y = Estimate, colour = Estimator), position = position_dodge(0.5)) +
+    geom_label(aes(y = upper, label = paste0(round(coverage, 2)*100, "%"), 
+                   group = Estimator), position = position_dodge(0.5), vjust = -.2) + 
+    geom_segment(aes(y = Truth, yend = Truth, 
+                     x=as.numeric(`t`)-.3, xend = as.numeric(`t`)+.3), 
+                 data = distinct(dplyr::select(sim_tbl, `t`, Estimand, Truth))) + 
+    theme_minimal()
+
+ggsave(filename = "output/contmle-tmle3-survtmle", device = "png", 
+       width = 12, height = 8, units = "in")
