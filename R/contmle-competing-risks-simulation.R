@@ -68,12 +68,12 @@ if (file.exists("./data/true_risks.RDS")) {
                    "T" = T1*`3>1`*(1 - `1>2`) + T2*`1>2`*(1 - `2>3`) + T3*`2>3`*(1 - `3>1`),
                    "J" = `3>1`*(1 - `1>2`) + 2*`1>2`*(1 - `2>3`) + 3*`2>3`*(1 - `3>1`)) %>%
             dplyr::select(`T`, J)
-        true_risks[[paste0("A=", a)]] <- foreach(t = interval, 
-                                                 .combine = rbind, 
+        true_risks[[paste0("A=", a)]] <- foreach(t = interval,
+                                                 .combine = rbind,
                                                  .inorder = T) %dopar% {
                                                      tabulate(outcomes[["J"]][outcomes[["T"]] <= t])
                                                  }
-        true_risks[[paste0("A=", a)]] <- as.data.table(true_risks[[paste0("A=", a)]] / nrow(obs)) %>% 
+        true_risks[[paste0("A=", a)]] <- as.data.table(true_risks[[paste0("A=", a)]] / nrow(obs)) %>%
             rename_all(~paste0("F.j", 1:3, ".a", a))
     }
     rm(outcomes); rm(obs); rm(A); gc()
@@ -81,13 +81,13 @@ if (file.exists("./data/true_risks.RDS")) {
 }
 
 # plot survival curves
-lapply(true_risks, function(r) rename_all(r, ~c("J=1", "J=2", "J=3"))) %>% 
-    bind_rows() %>% mutate(`A` = rep(1:0, each = nrow(true_risks[[1]])), 
-                           `t` = rep(1:nrow(true_risks[[1]]), times = 2)) %>% 
-    pivot_longer(cols = c(`J=1`, `J=2`, `J=3`), names_to = "event", 
-                 values_to = "risk") %>% 
-    ggplot(aes(x = `t`, y = risk, 
-               linetype = as.character(A), colour = event)) + 
+lapply(true_risks, function(r) rename_all(r, ~c("J=1", "J=2", "J=3"))) %>%
+    bind_rows() %>% mutate(`A` = rep(1:0, each = nrow(true_risks[[1]])),
+                           `t` = rep(1:nrow(true_risks[[1]]), times = 2)) %>%
+    pivot_longer(cols = c(`J=1`, `J=2`, `J=3`), names_to = "event",
+                 values_to = "risk") %>%
+    ggplot(aes(x = `t`, y = risk,
+               linetype = as.character(A), colour = event)) +
     geom_line()+ theme_minimal()
 
 
@@ -99,7 +99,7 @@ if (file.exists("./output/contmle_estimates.RDS")) {
     estimates <- foreach(i=1:B,
                          .combine = rbind,
                          .packages = c("data.table", "tidyverse", "survival", "zoo")) %dopar% {
-                             
+
                              obs <- simulate_data(n = n, base_data = base_data)
                              est <- contmle(obs, #-- dataset
                                             target = target, #-- target competing events
@@ -107,34 +107,34 @@ if (file.exists("./output/contmle_estimates.RDS")) {
                                             treat.effect = "ate", #-- target the ate directly
                                             tau = tau, #-- time-point of interest
                                             estimation = list("cause1" = list(fit = "cox",
-                                                                              model = Surv(TIME, EVENT == 1) ~ 
-                                                                                  ARM + SEX + AGE + BMIBL + 
+                                                                              model = Surv(TIME, EVENT == 1) ~
+                                                                                  ARM + SEX + AGE + BMIBL +
                                                                                   SMOKER + STROKSFL + MIFL),
                                                               "cens" = list(fit = "cox",
-                                                                            model = Surv(TIME, EVENT == 0) ~ 
-                                                                                ARM + SEX + AGE + BMIBL + 
-                                                                                SMOKER + STROKSFL + MIFL), 
+                                                                            model = Surv(TIME, EVENT == 0) ~
+                                                                                ARM + SEX + AGE + BMIBL +
+                                                                                SMOKER + STROKSFL + MIFL),
                                                               "cause2" = list(fit = "cox",
-                                                                              model = Surv(TIME, EVENT == 2) ~ 
-                                                                                  ARM + SEX + AGE + BMIBL + 
-                                                                                  SMOKER + STROKSFL + MIFL), 
+                                                                              model = Surv(TIME, EVENT == 2) ~
+                                                                                  ARM + SEX + AGE + BMIBL +
+                                                                                  SMOKER + STROKSFL + MIFL),
                                                               "cause3" = list(fit = "cox",
-                                                                              model = Surv(TIME, EVENT == 3) ~ 
-                                                                                  ARM + SEX + AGE + BMIBL + 
+                                                                              model = Surv(TIME, EVENT == 3) ~
+                                                                                  ARM + SEX + AGE + BMIBL +
                                                                                   SMOKER + STROKSFL + MIFL)
                                             ),
                                             treat.model = ARM ~ SEX + AGE + BMIBL + SMOKER + STROKSFL + MIFL,
                                             sl.models = list(mod1 = list(Surv(TIME, EVENT == 1) ~ ARM),
-                                                             mod2 = list(Surv(TIME, EVENT == 1) ~ 
+                                                             mod2 = list(Surv(TIME, EVENT == 1) ~
                                                                              ARM + SEX + AGE + BMIBL),
-                                                             mod3 = list(Surv(TIME, EVENT == 1) ~ 
-                                                                             ARM + SEX + AGE + BMIBL + 
+                                                             mod3 = list(Surv(TIME, EVENT == 1) ~
+                                                                             ARM + SEX + AGE + BMIBL +
                                                                              SMOKER + STROKSFL + MIFL))
                              )
                              estimates <- bind_rows(unlist(bind_cols(est$init)[1, ]),
                                                     unlist(bind_cols(est$tmle)[1, ]))
-                             estimates <- as.data.table(cbind("run" = i, 
-                                                              "Estimator" = c("init", "TMLE"), 
+                             estimates <- as.data.table(cbind("run" = i,
+                                                              "Estimator" = c("init", "TMLE"),
                                                               estimates))
                              estimates
                          }
@@ -145,8 +145,19 @@ if (file.exists("./output/contmle_estimates.RDS")) {
 # 4. Evaluation / Visualization ---------------------------------------------------------------
 
 
-Psi0 <- cbind("time" = tau, (true_risks[["A=1"]] - true_risks[["A=0"]])[tau, ])
-estimates %>% group_by(Estimator) %>% summarise_all(list(mean = mean, se = var)) %>% 
+Psi0 <- cbind("time" = tau, (true_risks[["A=1"]] - true_risks[["A=0"]])[tau, ]) %>%
+  dplyr::select(-time) %>% rename_all(~c("F1", "F2", "F3")) %>% mutate(S = 1 - F1 - F2 - F3) %>%
+  pivot_longer(c("F1", "F2", "F3", "S"), names_to = "Estimand", values_to = "Truth")
+
+estimates %>% dplyr::select(-run) %>%
+  pivot_longer(c("F1", "F2", "F3", "S"), names_to = "Estimand", values_to = "Estimate") %>%
+  left_join(., Psi0) %>% mutate(Bias = Truth - Estimate,
+                                MSE = (Truth - Estimate)^2) %>%
+  group_by(Estimator, Estimand) %>%
+  mutate(upper95 = quantile(Estimate, 0.975),
+         lower95 = quantile(Estimate, 0.025)) %>% summarise_all(mean)
+
+estimates %>% group_by(Estimator) %>% summarise_all(list(mean = mean, se = var)) %>%
     mutate_at(vars(ends_with("se")), sqrt)
 
 
