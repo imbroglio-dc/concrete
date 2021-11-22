@@ -5,7 +5,7 @@
 
 library(tidyverse); library(readxl); library(skimr); library(data.table); library(here)
 library(doParallel); library(foreach); library(survival); library(zoo)
-setwd("/Shared/Projects/ConCR-TMLE/")
+setwd("Research/Projects/ConCR-TMLE/")
 i_am("./R/contmle-competing-risks-simulation.R")
 source("./R/contmle.R")
 
@@ -30,7 +30,7 @@ base_data <- read_excel("./data/test_leader.xlsx") %>%
 # 0.2 Variables -------------------------------------------------------------------------------
 
 interval <- 1:2e3
-n <- 1e3
+
 
 # 0.3 simulation functions ------------------------------------------------
 
@@ -38,6 +38,8 @@ source("R/functions/sim_functions.R")
 
 
 # 3. Estimation -------------------------------------------------------------------------------
+# for data simulation
+n <- 1e3
 
 # Estimation targets
 tau <- 720
@@ -68,6 +70,7 @@ if (file.exists("./data/true_risks.RDS")) {
                    "T" = T1*`3>1`*(1 - `1>2`) + T2*`1>2`*(1 - `2>3`) + T3*`2>3`*(1 - `3>1`),
                    "J" = `3>1`*(1 - `1>2`) + 2*`1>2`*(1 - `2>3`) + 3*`2>3`*(1 - `3>1`)) %>%
             dplyr::select(`T`, J)
+        # how fine of grid am i looking for @ the interval
         true_risks[[paste0("A=", a)]] <- foreach(t = interval, 
                                                  .combine = rbind, 
                                                  .inorder = T) %dopar% {
