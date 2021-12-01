@@ -1,58 +1,81 @@
 
 
-# data cleaning -------------------------------------------------------------------------------
-
-
-
-
-# parameter checking --------------------------------------------------------------------------
-
-# target time(s)
-# target event(s)
-# binary treatment
-# stopping criteria
-# ...
-
-
-# initial estimation / superlearning ----------------------------------------------------------
-
-## cross validation setup ----
-
-# loop
+concr_tmle <- function(data, target_time, target_event, models, cv_args, ...) 
 {
-## train ----
-
-## predict ----
+  # parameter checking --------------------------------------------------------------------------
+  
+  #
+  # target time(s)
+  # target event(s)
+  # binary treatment
+  # stopping criteria
+  # ...
+  
+  
+  # initial estimation / superlearning ----------------------------------------------------------
+  
+  ## cross validation setup ----
+  # stratifying cv so that folds are balanced for treatment assignment & outcomes
+  strata_ids <- as.numeric(factor(paste0(data$ARM, ":", data$EVENT)))
+  cv_folds <- origami::make_folds(data, origami::folds_vfold, strata_ids = strata_ids)
+  
+  
+  # loop
+  for (i in 1:length(cv_folds))
+  {
+    train_data <- data[cv_folds[[i]]$training_set, -c("id")]
+    val_data <- data[cv_folds[[i]]$validation_set, -c("id")]
+    
+    library_predict <- matrix(nrow = nrow(data), ncol = length(models_j))
+    for (models_j in models) {
+      
+      colnames(library_predict) <- names(models_j)
+      for (model in models_j) {
+        coxph_args <- list("formula" = model, "data" = train_data)
+        model_fit <- do.call(coxph, coxph_args)
+        
+        model_predict <- predict(model_fit, newdata = val_data, type = "lp")
+      }
+    }
+      
+      ## train ----
+      
+      
+      ## predict ----
+      
+    })
+  }
+  
+  ## metalearner ----
+  
+  ## output initial estimates ----
+  
+  
+  
+  
+  # Update step ---------------------------------------------------------------------------------
+  
+  # one-step tmle loop
+  {
+    ## clever covariate (A and C) ----
+    
+    ## clever covariate (Events) ----
+    
+    ## fluctuation
+    
+    ## update
+  }
+  
+  
+  
+  
+  # output --------------------------------------------------------------------------------------
+  
+  # g-comp (sl estimate)
+  # unadjusted cox model
+  # tmle & ic
+  
+  
 }
-
-## metalearner ----
-
-## output initial estimates ----
-
-
-
-
-# Update step ---------------------------------------------------------------------------------
-
-# one-step tmle loop
-{
-## clever covariate (A and C) ----
-
-## clever covariate (Events) ----
-
-## fluctuation
-
-## update
-}
-
-
-
-
-# output --------------------------------------------------------------------------------------
-
-# g-comp (sl estimate)
-# unadjusted cox model
-# tmle & ic
-
 
 
