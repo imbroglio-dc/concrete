@@ -1,6 +1,6 @@
 
 
-concr_tmle <- function(data, target_time, target_event, models, cv_args, ...) 
+concr_tmle <- function(data, target_times, target_events, models, cv_args, ...) 
 {
   # parameter checking --------------------------------------------------------------------------
   
@@ -23,12 +23,13 @@ concr_tmle <- function(data, target_time, target_event, models, cv_args, ...)
   # loop
   for (i in 1:length(cv_folds))
   {
-    train_data <- data[cv_folds[[i]]$training_set, -c("id")]
-    val_data <- data[cv_folds[[i]]$validation_set, -c("id")]
+    train_indices <- cv_folds[[i]]$training_set
+    val_indices <- cv_folds[[i]]$validation_set
+    train_data <- data[train_indices, -c("id")]
+    val_data <- data[val_indices, -c("id")]
     
-    library_predict <- matrix(nrow = nrow(data), ncol = length(models_j))
     for (models_j in models) {
-      
+      library_predict <- matrix(nrow = nrow(data), ncol = length(models_j))
       colnames(library_predict) <- names(models_j)
       for (model in models_j) {
         coxph_args <- list("formula" = model, "data" = train_data)
