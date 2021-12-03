@@ -6,6 +6,7 @@
 library(tidyverse); library(readxl); library(skimr); library(data.table); library(here)
 library(doParallel); library(foreach); library(survival); library(zoo)
 setwd("Research/Projects/ConCR-TMLE/")
+# setwd("/Shared/Projects/ConCR-TMLE/")
 i_am("./R/contmle-competing-risks-simulation.R")
 source("./R/contmle.R")
 
@@ -53,9 +54,9 @@ registerDoParallel(n_cores)
 if (file.exists("./data/true_risks.RDS")) {
     true_risks <- readRDS("./data/true_risks.RDS")
 } else {
+    true_risks <- list("A=1" = NULL, "A=0" = NULL)
     for (a in 1:0) { # for binary treatment only
         obs <- as.data.table(bind_rows(lapply(1:5000, function(b) base_data)))
-        true_risks <- list("A=1" = NULL, "A=0" = NULL)
         A <- rep(a, nrow(obs))
         outcomes <- data.table("T1" = T1_fn(A, obs[["SMOKER"]], obs[["BMIBL"]], t1_coefs,
                                             output = "F_inv.u", u = runif(nrow(obs), 0, 1))$F_inv.u,
@@ -71,16 +72,19 @@ if (file.exists("./data/true_risks.RDS")) {
                    "J" = `3>1`*(1 - `1>2`) + 2*`1>2`*(1 - `2>3`) + 3*`2>3`*(1 - `3>1`)) %>%
             dplyr::select(`T`, J)
         # how fine of grid am i looking for @ the interval
-        true_risks[[paste0("A=", a)]] <- foreach(t = interval, 
-                                                 .combine = rbind, 
-                                                 .inorder = T) %dopar% {
-                                                     tabulate(outcomes[["J"]][outcomes[["T"]] <= t])
-                                                 }
-        true_risks[[paste0("A=", a)]] <- as.data.table(true_risks[[paste0("A=", a)]] / nrow(obs)) %>% 
+        true_risks[[2 - a]] <- foreach(t = interval, 
+                                .combine = rbind, 
+                                .inorder = T) %dopar% 
+            {
+                tabulate(outcomes[["J"]][outcomes[["T"]] <= t])
+            }
+        true_risks[[2 - a]] <- as.data.table(true_risks[[2 - a]] / nrow(obs)) %>% 
             rename_all(~paste0("F.j", 1:3, ".a", a))
+        true_risks <- do.call(cbind, unname(true_risks))
     }
     rm(outcomes); rm(obs); rm(A); gc()
-    saveRDS(true_risks, "./data/true_risks.RDS")
+    write_csv2(x = true_risks, "./data/true_risks_newparams.csv")
+    # saveRDS(true_risks, "./data/true_risks_new.RDS")
 }
 
 # plot survival curves
