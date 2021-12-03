@@ -8,7 +8,7 @@
 ##' @param seed random seed :). 
 ##' @param X design matrix if one of c("coxnet", "cv.glmnet", "glmnet") is used.
 ##' @param Y outcome object (Surv)  if one of c("coxnet", "cv.glmnet", "glmnet") is used.
-##' @param offset offset used to construct poission hal. 
+##' @param offset offset used to construct poisson hal. 
 ##' @param method.risk option to pick different cross-validation schemes for cox models; basically it picks the
 ##' risk set for the partial likelihood. Should be chosen as 'test'.
 ##' @param time.var name of time variable. 

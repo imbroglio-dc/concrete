@@ -90,7 +90,7 @@ T3_fn <- function(params, output = c("h.t", "S.t", "F_inv.u"), t = NULL, u = NUL
 # 2. Simulate Data ----------------------------------------------------------------------------
 
 simulate_data <- function(n = 1e3, assign_A = function(W, n) rbinom(n, 1, 0.5), base_data) {
-  obs <- dplyr::select(sample_n(base_data, size = n), -ARM, -TIME, -EVENT)
+  obs <- dplyr::select(sample_n(base_data, size = n, replace = T), -ARM, -TIME, -EVENT)
   A <- assign_A(obs, n)
   outcomes <- data.table("C_ltfu" = ltfu_fn(A, obs[["AGE"]], ltfu_coefs,
                                             output = "F_inv.u", u = runif(n, 0, 1))$F_inv.u,

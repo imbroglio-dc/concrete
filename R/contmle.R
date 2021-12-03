@@ -487,7 +487,7 @@ contmle <- function(dt,
                         tmp),
                         by = c("time", "A"),
                         all.x = TRUE)
-      bhaz.cox[, hazard := na.locff(hazard), by = "A"]
+      bhaz.cox[, hazard := na.locf(hazard), by = "A"]
       bhaz.cox[, (paste0("dhaz.", fit.delta)) := c(0, diff(hazard)), by = "A"]
       setnames(bhaz.cox, "hazard", paste0("chaz", fit.delta))
     } else {
@@ -528,7 +528,7 @@ contmle <- function(dt,
   ## set names of bhaz.cox to match observed data
   setnames(bhaz.cox, c("time", A.name), c(time.var, A.name))
   
-  # define chaz0.1 - the censoring survival one time-point back: S^c(t- | A, W)
+  # define chaz0.1 - the censoring cumulative hazard one time-point back: Lambda^c(t- | A, W)
   bhaz.cox[, chaz0.1 := c(0, chaz0[-.N])]
   
   # 3. output Kaplan-Meier and/or crude HR --------------------------------------------------
