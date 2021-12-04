@@ -56,4 +56,5 @@ models <- list("A" = a_lrnrs,
                            mod3 = Surv(TIME, EVENT == 3) ~ ARM+ SMOKER + BMIBL + STROKSFL + MIFL, 
                            mod4 = Surv(TIME, EVENT == 3) ~ .))
 
-
+true_risks <- readRDS("./data/true_risks.RDS")
+psi0 <- do.call(cbind, true_risks)[target_times, ]
