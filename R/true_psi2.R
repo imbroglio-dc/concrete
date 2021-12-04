@@ -91,9 +91,9 @@ w_all <-
 #   group_by_all() %>% tally()
 
 # 2d array
-result2 <- data.frame(matrix(0, nrow = 39, ncol = 2))
+result2 <- data.frame(matrix(0, nrow = 39, ncol = 3))
 j = 1
-for (time_var in seq(100,2000, 50)){
+for (time_var in seq(100, 2000, 50)){
   print(j)
   # 3d array
   result <- data.frame(matrix(0, nrow = nrow(w_all), ncol = 3))
