@@ -1,9 +1,20 @@
 
-concr_tmle <- function(data, target_times, target_events, models, cv_args, ...) 
+concr_tmle <- function(data, target_times, target_events, models, cv_args = NULL, 
+                       no.small.steps = 10, verbose = F, ...) 
 {
   # parameter checking --------------------------------------------------------------------------
   
-  #
+  events <- unique(data$EVENT)
+  events <- sort(events[events > 0])
+  
+  PnEIC_norm_fun <- function(x, y) {
+    return(sqrt(sum(unlist(x) * unlist(y))))
+  }
+  
+  PnEIC_wt_fun <- function(PnEIC) {
+    return(PnEIC)
+  }
+  
   # target time(s)
   # target event(s)
   # binary treatment
@@ -112,11 +123,11 @@ concr_tmle <- function(data, target_times, target_events, models, cv_args, ...)
     if (j == "0") {
       Ht[, cox.C := predict(sl_fits[["0"]]$fit, newdata = Ht, type = "risk")]
     } else {
-      Ht[, paste0("cox.j", j) := predict(sl_fits[[j]]$fit, 
+      Ht[, (paste0("cox.j", j)) := predict(sl_fits[[j]]$fit, 
                                          newdata = Ht, type = "risk")]
     }
   }
-  setnames(Ht, "ARM", "A")
+  setnames(Ht, "ARM", "A") # A is the target trts, ARM is the assigned
   setnames(Ht, "TIME", "T_tilde")
   Ht <- merge(data[, c("id", "ARM")], 
               Ht, 
@@ -131,7 +142,9 @@ concr_tmle <- function(data, target_times, target_events, models, cv_args, ...)
   ### clever covariate C component ----
   Ht[, "S.C.a.t-" := exp(-`cumhaz.C.t-` * cox.C)]
   if (min(Ht$`S.C.a.t-`) < 0.05) {
-    warning("targeting a time where probability of being censored >95%, aim lower\n")
+    warning(paste0("targeting a time where probability of being censored >95%,",
+                   "cens survival truncated at min 0.05, but you should really", 
+                   "aim lower\n"))
   }
   Ht[, "Ht.g" := Ht_a / `S.C.a.t-`]
   Ht <- Ht[, -c("Ht_a", "cox.C", "cumhaz.C.t-", "S.C.a.t-")]
@@ -143,59 +156,179 @@ concr_tmle <- function(data, target_times, target_events, models, cv_args, ...)
                                     get(paste0("cox.j", j)))), 
        by = c("id", "A")]
   }
+  if (min(Ht[, S.t]) <= 0) {
+    stop("you're targeting a time when there are no survivors, aim lower\n")
+  }
   Ht[, "S.t-" := c(1, S.t[-.N]), by = c("id", "A")]
   
   ### cause-specific risks ----
   for (j in target_events) {
-    Ht[, paste0("F.j", j, ".t") := cumsum(S.t * get(paste0("bhaz.j", j)) * get(paste0("cox.j", j))), 
-       by = c("id", "A")]
+    Ht[, (paste0("F.j", j, ".t")) := cumsum(`S.t-` * 
+                                            get(paste0("bhaz.j", j)) * 
+                                            get(paste0("cox.j", j))
+    ), 
+    by = c("id", "A")]
   }
   
   
   ### cause-specific risks at target times ----
   ### target event (j), target time (k), cause (l) clever covariate ----
   for (k in target_times) {
+    Ht[, Ht.g := Ht.g * (TIME <= k) * (TIME <= T_tilde), (ARM == A)]
     for (j in target_events) {
       #### event j risk at target time k ----
       Ht[, fjtau := get(paste0("F.j", j, ".t"))[TIME == k], by = c("id", "A")]
-      for (l in target_events) {
-        Ht[, hjlt := 1] # why is this the default?
+      for (l in events) {
+        Ht[, hjlt := 1] # why was 1 the default, a 0 should squash oversights no?
         #### event component ----
-        Ht[S.t > 0, hjlt := (l == j) - (fjtau - get(paste0("F.j", j, ".t"))) / S.t, 
-           by = c("id", "A")]
-        #### full clever covariate term ----
-        Ht[S.t > 0, hjlt := hjlt * Ht.g * (TIME <= k) * (TIME <= T_tilde) * (ARM == A), 
-           by = c("id", "A")]
+        Ht[, hjlt := (l == j) - (fjtau - get(paste0("F.j", j, ".t"))) / S.t]
         setnames(Ht, "hjlt", paste0("h.j", j, ".l", l, ".t", k))
-      }#### mean treated and control event j risk at target time k ----
+      } #### mean treated/control event j risk at target time k ----
       Ht[, paste0("Psi.j", j, ".t", k) := mean(fjtau), by = "A"]
       setnames(Ht, "fjtau", paste0("F.j", j, ".t", k))
     }
   }
   
   ## initial estimator (g-computation) ----
-  Psi_init <- c("A", grep("Psi", colnames(Ht), value = T))
-  Psi_init <- Ht[, ..Psi_init][, lapply(.SD, unique), by = "A"]
-  Psi_init <- melt(Psi_init, "A", variable.name = "dummy")[, c("Psi", "J", "t") := tstrsplit(dummy, "\\.\\w")][, -c("dummy")]
-  Psi_init <- dcast(Psi_init, `t` ~ ..., value.var = "value")
-  setnames(Psi_init, 2:ncol(Psi_init), 
-           do.call(paste0, expand.grid("Psi.a", 0:1, ".j", target_events)))
-  setcolorder(Psi_init, c("t", grep("a1", colnames(Psi_init), value = T)))
-  Psi_init <- Psi_init[, `t` := as.numeric(`t`)][order(`t`)]
+  Psi_init <- Ht[, mget(c("A", grep("Psi.+", colnames(Ht), value = T)))]
+  Psi_init <- Psi_init[, lapply(.SD, unique), by = "A"]
+  Psi_init <- melt(Psi_init, id.vars = "A")
+  Psi_init[, c("dummy", "event", "time") := tstrsplit(variable, "\\..")]
+  Psi_init <- Psi_init[, -c("variable", "dummy")]
+  Psi_init <- dcast(Psi_init, A + time ~ event, value.var = "value")
+  Psi_init[, S := do.call(sum, mget(paste0(1:3))), by = c("A", "time")]
+  Psi_init <- Psi_init[, lapply(.SD, as.numeric)][order(time, A)]
   
   
   # Update step ---------------------------------------------------------------------------------
   
-  # one-step tmle loop
-  {
-    ## EIC ----
-    Ht_eic <- copy(Ht[, .(id = unique(id))])
+  ## EIC ----
+  Ht_eic <- data.table(id = data$id)
+  for (k in target_times) {
+    for (j in target_events) {
+      Ht[, EIC := 0]
+      for (l in events) {
+        Ht[, EIC := EIC + get(paste0("h.j", j, ".l", l, ".t", k)) * Ht.g * 
+             ((TIME == T_tilde ) * (EVENT == l) - 
+                get(paste0("cox.j", l)) * get(paste0("bhaz.j", l)))]
+      }
+      Ht_eic <- merge(Ht_eic, 
+                      dcast(Ht[, .(EIC = sum(EIC), 
+                                   Fjt = unique(get(paste0("F.j", j, ".t", k))), 
+                                   Psijt = unique(get(paste0("Psi.j", j, ".t", k)))), 
+                               by = c("id", "A")][, EIC := EIC + Fjt - Psijt], 
+                            id ~ A, value.var = "EIC"), 
+                      by = "id")
+      setnames(Ht_eic, "0", paste0("EIC.a0.j", j, ".t", k))
+      setnames(Ht_eic, "1", paste0("EIC.a1.j", j, ".t", k))
+    }
+  }
+  
+  init_ic <- list("ic" = Ht_eic[, -c("id")], 
+                  "pnEIC" = colMeans(Ht_eic[, -c("id")]),
+                  "seEIC" = sqrt(diag(var(Ht_eic[, -c("id")]))))
+  
+  PnEIC <- init_ic$pnEIC
+  PnEIC <- as.data.table(cbind("A" = 1:0,
+                               rbind(PnEIC[grep("a1", names(PnEIC))], 
+                                     PnEIC[grep("a0", names(PnEIC))])))
+  eica <- do.call(paste0, expand.grid("PnEIC.j", target_events, ".t", target_times))
+  setnames(PnEIC, 2:ncol(PnEIC), eica)
+  
+  PnEIC_wtd <- PnEIC_wt_fun(PnEIC)
+  
+  Ht <- merge(Ht, PnEIC_wtd, by = "A")
+  PnEIC_norm <- PnEIC_norm_fun(PnEIC, PnEIC_wtd)
+  
+  ## one-step tmle loop (one-step) ----
+  
+  ## 5.2 set update epsilon down-scaling factor --------------------------------
+  onestep_eps <- 0.1
+  gc()
+  
+  for (step in 1:no.small.steps) {
+    cat("starting step", step, "with update epsilon =", onestep_eps, "\n")
+    PnEIC_prev <- PnEIC
+    PnEIC_wtd_prev <- PnEIC_wtd
+    PnEIC_norm_prev <- PnEIC_norm
+    
+    ## make backups ----
+    ## save current cause-specific hazards and clever covs in case the update
+    ## makes things worse
+    for (j in target_events) { # loop over target events
+      for (k in target_times) { # loop over target times
+        for (l in events) { # nested loop over events
+          Ht[, (paste0("h.j", j, ".l", l, ".t", k, ".tmp")) :=
+               get(paste0("h.j", j, ".l", l, ".t", k))]
+        }
+      }
+      Ht[, (paste0("cox.j", j, ".tmp")) := get(paste0("cox.j", j))]
+    }
+    
+    ## 5.1 calculate update step direction -------------------------------------
+    
+    for (l in events) { # loop over event hazards
+      Ht[, (paste0("delta.j", l, ".dx")) := 0] # fluctuation of causes-specific hazard
+      for (j in target_events) { # loop over target events
+        for (k in target_times) { # loop over target times
+          Ht[, (paste0("delta.j", l, ".dx")) :=
+               get(paste0("delta.j", l, ".dx")) + (TIME <= k) * Ht.g *
+               get(paste0("h.j", j, ".l", l, ".t", k)) * 
+               get(paste0("PnEIC.j", j, ".t", k)) / PnEIC_norm]
+        }
+      }
+    }
+    
+    ## 5.3 update cause specific hazards ----------------------------------------
+    Ht[, S.t := 1]
+    for (l in events) { # loop over competing events
+      Ht[, (paste0("cox.j", l)) := get(paste0("cox.j", l)) *
+           exp(onestep_eps * get(paste0("delta.j", l, ".dx")))]
+      #### truncation cox fit +- 500 why ? -----
+      Ht[, (paste0("cox.j", l)) := pmax(-500, pmin(500, get(paste0("cox.j", l))))]
+      # Does changing the order of event updates matter? -------------------------------
+      Ht[, S.t := S.t * exp(-cumsum(get(paste0("bhaz.j", l)) * 
+                                      get(paste0("cox.j", l)))), 
+         by = c("id", "A")]
+      # when does cox go to Infinity? -------
+      if (any(is.infinite(Ht[, get(paste0("cox.j", l))])))
+        stop(paste0("cox.fit for j=", j, " went to infinity. wtf happened?\n"))
+      if (min(Ht[, S.t]) <= 0)
+        stop(paste0("Survival at some time is leq 0. wtf happened?\n"))
+    }
+    Ht[, "S.t-" := c(1, S.t[-.N]), by = c("id", "A")]
+    
+    ## update clever covariates ----
+    for (j in target_events) {
+      Ht[, (paste0("F.j", j, ".t")) := cumsum(`S.t-` * 
+                                              get(paste0("bhaz.j", j)) * 
+                                              get(paste0("cox.j", j))), 
+         by = c("id", "A")]
+      for (k in target_times) {
+        # Ht[, (paste0("S.t", k)) := S.t[TIME == k], by = c("id", "A")]
+        Ht[, fjtau := get(paste0("F.j", j, ".t"))[TIME == k], by = c("id", "A")]
+        for (l in events) {
+          Ht[, hjlt := 1] #### ASK HELENE: why is 1 the default? ---------
+          #### event component ----
+          Ht[, hjlt := (l == j) - (fjtau - get(paste0("F.j", j, ".t"))) / S.t]
+          
+          Ht[round(S.t, 8) == 0, hjlt := 0 - (l == j)] ##### ASK HELENE WHY -------
+          
+          Ht[, (paste0("h.j", j, ".l", l, ".t", k)) := hjlt]
+        } #### mean treated/control event j risk at target time k ----
+        Ht[, (paste0("Psi.j", j, ".t", k)) := mean(fjtau), by = "A"]
+        Ht[, (paste0("F.j", j, ".t", k)) := fjtau]
+      }
+    }
+    Ht <- Ht[, -c("hjlt", "fjtau")]
+    ## recalculate eic -----
+    Ht_eic <- data.table(id = data$id)
     for (k in target_times) {
       for (j in target_events) {
         Ht[, EIC := 0]
-        for (l in target_events) {
-          Ht[, EIC := EIC + get(paste0("h.j", j, ".l", l, ".t", k)) *  
-               ((TIME == T_tilde ) * (EVENT == j) - 
+        for (l in events) {
+          Ht[, EIC := EIC + get(paste0("h.j", j, ".l", l, ".t", k)) * Ht.g * 
+               ((TIME == T_tilde ) * (EVENT == l) - 
                   get(paste0("cox.j", l)) * get(paste0("bhaz.j", l)))]
         }
         Ht_eic <- merge(Ht_eic, 
@@ -210,372 +343,99 @@ concr_tmle <- function(data, target_times, target_events, models, cv_args, ...)
       }
     }
     
-    init_ic <- list("ic" = copy(Ht_eic), 
-                    "se" = tail(apply(Ht_eic, 2, function(eic) {
-                      sqrt(mean(eic^2)/nrow(Ht_eic))
-                    }), -1))
+    ic <- list("ic" = Ht_eic, 
+               "pnEIC" = colMeans(Ht_eic[, -c("id")]),
+               "seEIC" = sqrt(diag(var(Ht_eic[, -c("id")]))))
     
-    PnEIC <- mean(colMeans(Ht_eic[, -c("id")]))
+    PnEIC <- ic$pnEIC
+    PnEIC <- as.data.table(cbind("A" = 1:0,
+                                 rbind(PnEIC[grep("a1", names(PnEIC))], 
+                                       PnEIC[grep("a0", names(PnEIC))])))
+    eica <- do.call(paste0, expand.grid("PnEIC.j", target_events, ".t", target_times))
+    setnames(PnEIC, 2:ncol(PnEIC), eica)
     
-    ## update steps (one-step) ----
-    for (step in 1:no.small.steps) { 
-      # Need to switch L and J? ---------
-      ## making duplicate columns for cause-specific hazards and clever covs
+    PnEIC_wtd <- PnEIC_wt_fun(PnEIC)
+    PnEIC_norm <- PnEIC_norm_fun(PnEIC, PnEIC_wtd)
+    
+    if (PnEIC_norm_prev <= PnEIC_norm) {
+      warning(paste0("update overshot! one-step update epsilon of ", 
+                     onestep_eps, " will be halved\n"))
+      onestep_eps <- onestep_eps / 2
+      ## Revert to previous cshaz & clevcovs if update made things worse
       for (j in target_events) { # loop over target events
-        mat[, (paste0("cox.j", j, ".tmp")) := get(paste0("cox.j", j))]
         for (k in target_times) { # loop over target times
-          if (target.S) {
-            mat[, (paste0("h", ".j", j, ".t", k, ".tmp")) :=
-                  get(paste0("h", ".j", j, ".t", k))]
-          }
-          for (l in target_events) { # nested loop over events
-            mat[, (paste0("h.j", j, ".l", l, ".t", k, ".tmp")) :=
-                  get(paste0("h.j", j, ".l", l, ".t", k))]
+          for (l in events) { # nested loop over events
+            Ht[, (paste0("h.j", j, ".l", l, ".t", k)) :=
+                 get(paste0("h.j", j, ".l", l, ".t", k, ".tmp"))]
           }
         }
+        Ht[, (paste0("cox.j", j)) := get(paste0("cox.j", j, ".tmp"))]
       }
       
-      if (target.S) {
-        for (each in outcome.index) {
-          fit.delta <- estimation[[each]][["event"]]
-          mat[, (paste0("delta", fit.delta, ".dx")) := 0]
-          for (kk in 1:length(tau)) {
-            mat[, (paste0("delta", fit.delta, ".dx")) :=
-                  get(paste0("delta", fit.delta, ".dx")) +
-                  (get(time.var) <= tau[kk]) * Ht * ((get(
-                    paste0("Ht", ".lambda", fit.delta, ".", kk)
-                  )) * Pn.eic2[kk]) / Pn.eic.norm]
-          }
-        }
-      } else { 
-        ## 5.1 calculate update step direction? -------------------------------------
-        
-        for (each in outcome.index) { # loop over event hazards
-          fit.delta <- estimation[[each]][["event"]]
-          mat[, (paste0("delta", fit.delta, ".dx")) := 0] # fluctuation of cs-haz
-          for (each2 in outcome.index[target]) { # loop over target events
-            fit.delta2 <- estimation[[each2]][["event"]]
-            for (kk in 1:length(tau)) { # loop over target times
-              mat[, (paste0("delta", fit.delta, ".dx")) :=
-                    get(paste0("delta", fit.delta, ".dx")) + 
-                    (get(time.var) <= tau[kk]) * Ht * 
-                    ((get( paste0( "Ht", fit.delta2, ".lambda", fit.delta, ".", kk ))) *
-                       Pn.eic2[each2 == outcome.index[target]][[1]][kk]) / Pn.eic.norm]
-            }
-          }
-        }
-        
-      }
+      PnEIC <- PnEIC_prev
+      PnEIC_wtd <- PnEIC_wtd_prev
+      PnEIC_norm <- PnEIC_norm_prev
+    } else {
+      # update PnEIC columns in Ht with updated values
+      ht_eic_cols <- grep("PnEIC", colnames(Ht), value = T)
+      Ht <- Ht[, !..ht_eic_cols]
+      Ht[PnEIC, on = .(A = A), (ht_eic_cols) := mget(sprintf("i.%s", ht_eic_cols))]
+      gc() # otherwise memory blows up
       
+      summ_eic <- melt(ic$ic, id.vars = "id")
+      summ_eic[, c("EIC", "A", "J", "T") := tstrsplit(variable, "\\.")]
+      summ_eic <- summ_eic[, -c("variable", "EIC")]
+      summ_eic <- dcast(summ_eic, id + A + `T` ~ J, value.var = "value")[
+        , S := do.call(sum, mget(paste0("j", 1:3))), 
+        by = c("id", "A", "T")]
+      summ_eic <- dcast(summ_eic, id ~ ..., 
+                        value.var = c("j1", "j2", "j3", "S"), 
+                        sep = ".")
       
-      ## 5.2 set update epsilon down-scaling factor ----------------------------------------
-      # why not just use deps.size?
-      deps <- deps.size
+      onestep_stop <- abs(colMeans(summ_eic[, -"id"])) <= 
+        sqrt(colMeans(summ_eic[, -"id"]^2)) / (log(nrow(data)))
       
-      ## 5.3 update cause specific hazards ----------------------------------------
-      mat[, surv.t := 1]
-      for (each in outcome.index) { # loop over target events
-        fit.delta <- estimation[[each]][["event"]]
-        mat[, (paste0("fit.cox", fit.delta)) :=
-              get(paste0("fit.cox", fit.delta)) *
-              exp(deps * get(paste0("delta", fit.delta, ".dx")))]
-        mat[get(paste0("fit.cox", fit.delta)) > 500, 
-            (paste0("fit.cox", fit.delta)) := 500]
-        # Does changing the order of event updates matter? -------------------------------
-        mat[, surv.t := surv.t * exp(-cumsum(get(paste0("dhaz", fit.delta)) *
-                                               get(paste0("fit.cox", fit.delta)))),
-            by = c("id", A.name)]
-        mat[get(paste0("fit.cox", fit.delta)) == Inf, surv.t := 0]
-      }
-      mat[, surv.t1 := c(0, surv.t[-.N]), by = c("id", A.name)]
-      for (kk in 1:length(tau)) {
-        mat[, (paste0("surv.tau", kk)) :=
-              surv.t[get(time.var) == max(get(time.var)[get(time.var) <= tau[kk]])],
-            by = c("id", A.name)]
-      }
-      for (each in outcome.index[target]) {
-        fit.delta <- estimation[[each]][["event"]]
-        mat[, (paste0("F", fit.delta, ".t")) := cumsum(surv.t * get(paste0("dhaz", fit.delta)) *
-                                                         get(paste0("fit.cox", fit.delta))),
-            by = c("id", A.name)]
-        for (kk in 1:length(tau)) {
-          mat[, (paste0("F", fit.delta, ".tau", kk)) :=
-                get(paste0("F", fit.delta, ".t"))[get(time.var) == max(get(time.var)[
-                  get(time.var) <= tau[kk]])], by = c("id", A.name)]
-          for (each2 in outcome.index) {
-            fit.delta2 <- estimation[[each2]][["event"]]
-            if (fit.delta == fit.delta2) {
-              mat[surv.t > 0, (paste0("Ht", fit.delta, ".lambda", fit.delta2, ".", kk)) :=
-                    -(1 - (get(paste0("F", fit.delta, ".tau", kk)) - 
-                             get(paste0("F", fit.delta, ".t"))) / surv.t)]
-              mat[round(surv.t, 8) == 0, 
-                  (paste0("Ht", fit.delta, ".lambda", fit.delta2, ".", kk)) := -1]
-            } else {
-              mat[surv.t > 0, (paste0("Ht", fit.delta, ".lambda", fit.delta2, ".", kk)) :=
-                    (get(paste0("F", fit.delta, ".tau", kk)) - 
-                       get(paste0("F", fit.delta, ".t"))) / surv.t]
-              mat[round(surv.t, 8) == 0, 
-                  (paste0("Ht", fit.delta, ".lambda", fit.delta2, ".", kk)) := 0]
-            }
-          }
-        }
-      }
-      if (target.S) {
-        for (each2 in outcome.index) {
-          fit.delta2 <- estimation[[each2]][["event"]]
-          for (kk in 1:length(tau)) {
-            mat[, (paste0("Ht", ".lambda", fit.delta2, ".", kk)) := 0]
-            for (each in outcome.index) {
-              fit.delta <- estimation[[each]][["event"]]
-              mat[, (paste0("Ht", ".lambda", fit.delta2, ".", kk)) := 
-                    get(paste0("Ht", ".lambda", fit.delta2, ".", kk)) -
-                    get(paste0("Ht", fit.delta, ".lambda", fit.delta2, ".", kk))]
-            }
-          }
-        }
-      }
-      
-      Pn.eic <- Pn.eic.fun(mat)
-      Pn.eic2 <- Pn.eic2.fun(Pn.eic)
-      Pn.eic.norm <- Pn.eic.norm.fun(Pn.eic2, Pn.eic)
-      
-      if (Pn.eic.norm.prev <= Pn.eic.norm) {
-        if (cr) {
-          for (each in outcome.index) {
-            fit.delta <- estimation[[each]][["event"]]
-            mat[, (paste0("fit.cox", fit.delta)) := get(paste0("fit.cox", fit.delta, ".tmp"))]
-            for (kk in 1:length(tau)) {
-              if (target.S)
-                mat[, (paste0("Ht", ".lambda", fit.delta, ".", kk)) :=
-                      get(paste0("Ht", ".lambda", fit.delta, ".", kk, ".tmp"))]
-              for (each2 in outcome.index[target]) {
-                fit.delta2 <- estimation[[each2]][["event"]]
-                mat[, (paste0("Ht", fit.delta2, ".lambda", fit.delta, ".", kk)) :=
-                      get(paste0("Ht", fit.delta2, ".lambda", fit.delta, ".", kk, ".tmp"))]
-              }
-            }
-          }
-        }
-        
-        Pn.eic <- Pn.eic.fun(mat)
-        Pn.eic2 <- Pn.eic2.fun(Pn.eic)
-        
-        Pn.eic.norm <- Pn.eic.norm.fun(Pn.eic2, Pn.eic)
-        deps.size <- 0.5 * deps.size # 0.1 * deps.size
-        
-      } else {
-        Pn.eic.norm.prev <- Pn.eic.norm
-        
-        if (target.S) {
-          Pn.eic3 <-
-            sapply(1:length(Pn.eic), function(kk)
-              Pn.eic[[kk]] / (ifelse(
-                any(unlist(S.se.init) == 0), S.se.init[kk] + 0.001, S.se.init[kk]
-              ) * sqrt(n)))
-        } else {
-          Pn.eic3 <-
-            lapply(1:length(Pn.eic), function(kk)
-              Pn.eic[[kk]] / (ifelse(any(unlist(init.ic) == 0), 
-                                     init.ic[[kk]] + 0.001, 
-                                     init.ic[[kk]]
-              ) * sqrt(n)))
-        }
-      }
-      
-      if (target.S) {
-        Pn.eic3 <-
-          sapply(1:length(Pn.eic), function(kk)
-            Pn.eic[[kk]] / (ifelse(
-              any(unlist(S.se.init) == 0), S.se.init[kk] + 0.001, S.se.init[kk]
-            ) * sqrt(n)))
-      } else {
-        Pn.eic3 <-
-          lapply(1:length(Pn.eic), function(kk)
-            Pn.eic[[kk]] / (ifelse(
-              any(unlist(init.ic) == 0), init.ic[[kk]] + 0.001, init.ic[[kk]]
-            ) * sqrt(n)))
-      }
-      
-      if (cr &
-          length(target) == length(outcome.index) & !target.S) {
-        #--- here in fact want to check that we solve survival eic well enough!
-        #--- i.e., we add it to our vector of Pn.eic3;
-        Pn.eic3[[length(Pn.eic3) + 1]] <-
-          sapply(1:length(Pn.eic3[[1]]), function(jj) {
-            sum(sapply(Pn.eic, function(xx)
-              xx[[jj]]))
-          }) / (S.se.init * sqrt(n))
-        check.sup.norm <- max(abs(unlist(Pn.eic3))) <= (criterion)
-      } else {
-        check.sup.norm <- max(abs(unlist(Pn.eic3))) <= (criterion)
-      }
-      
-      if (no.update.if.solved) {
-        # if (target.S) {
-        #    Pn.eic3 <- sapply(1:length(Pn.eic), function(kk) Pn.eic[[kk]] / 
-        #                        (ifelse(any(unlist(S.se.init) == 0), S.se.init[kk] + 0.001, 
-        #                                S.se.init[kk])*sqrt(n)))
-        # } else {
-        #    Pn.eic3 <- lapply(1:length(Pn.eic), function(kk) Pn.eic[[kk]] / 
-        #                        (ifelse(any(unlist(init.ic) == 0), init.ic[[kk]] + 0.001, 
-        #                                init.ic[[kk]])*sqrt(n)))
-        # }
-        
-        if (length(target) > 1) {
-          Pn.eic2 <- lapply(1:length(Pn.eic2), function(kk) {
-            tmp <- Pn.eic2[[kk]]
-            tmp[abs(Pn.eic3[[kk]]) <= criterion] <- 0
-            return(tmp)
-          })
-        } else {
-          Pn.eic2[abs(Pn.eic3) <= criterion] <- 0
-        }
-        #Pn.eic.norm <- Pn.eic.norm.fun(Pn.eic2, Pn.eic)
-        
-        if (all(unlist(Pn.eic2) == 0))
-          check.sup.norm <-
-            TRUE
-        else
-          Pn.eic.norm <- Pn.eic.norm.fun(Pn.eic2, Pn.eic)
-        print(Pn.eic2)
-        
-      }
-      
-      if (check.sup.norm |
-          step == no.small.steps) {
-        # (left.criterion <= criterion) {
+      if (all(onestep_stop) | step == no.small.steps) {
         if (step == no.small.steps) {
           message("Warning: Algorithm did not converge")
         }
         
-        if (verbose)
+        if (verbose) {
           print(paste0("converged", " at ", step, "th step"))
-        if (verbose)
-          print(paste0("eic = ", Pn.eic.fun(mat)))
-        
-        #-- 12c -- compute sd:
-        if (cr) {
-          if (treat.effect[1] == "stochastic") {
-            final.fit <- lapply(target, function(each) {
-              sapply(1:length(tau), function(kk) {
-                mean(rowSums(sapply(a, function(aa)
-                  (
-                    mat[get(A.name) == aa, pi.star[1] *
-                          get(paste0("F", estimation[[outcome.index[each]]][["event"]],
-                                     ".tau", kk))[1],
-                        by = "id"][, 2][[1]]
-                  ))))
-              })
-            })
-          } else {
-            final.fit <- lapply(outcome.index[target], function(each) {
-              sapply(1:length(tau), function(kk) {
-                mean(rowSums(sapply(a, function(aa)
-                  (2 * (aa == a[1]) - 1) * (mat[get(A.name) == aa,
-                                                get(paste0("F", estimation[[each]][["event"]],
-                                                           ".tau", kk))[1],
-                                                by = "id"][, 2][[1]]))))
-              })
-            })
-          }
-          names(final.fit) <-
-            paste0("F", sapply(outcome.index[target], function(each)
-              estimation[[each]][["event"]]))
-          final.ic <-
-            eval.ic(mat, final.fit, target.index = outcome.index[target])
+          print(paste0("PnEIC = ", colMeans(summ_eic[, -"id"])))
         }
         
-        final.list <-
-          lapply(1:length(final.fit), function(each.index) {
-            out <- rbind(tmle.est = final.fit[[each.index]],
-                         tmle.se = final.ic[[each.index]])
-            colnames(out) <- paste0("tau=", tau)
-            return(out)
-          })
+        ## format output ----
+        Psi_tmle <- Ht[, mget(c("A", grep("Psi.+", colnames(Ht), value = T)))]
+        Psi_tmle <- Psi_tmle[, lapply(.SD, unique), by = "A"]
+        Psi_tmle <- melt(Psi_tmle, id.vars = "A")
+        Psi_tmle[, c("dummy", "event", "time") := tstrsplit(variable, "\\..")]
+        Psi_tmle <- Psi_tmle[, -c("variable", "dummy")]
+        Psi_tmle <- dcast(Psi_tmle, A + time ~ event, value.var = "value")
+        Psi_tmle[, S := do.call(sum, mget(paste0(1:3))), by = c("A", "time")]
+        Psi_tmle <- Psi_tmle[, lapply(.SD, as.numeric)][order(time, A)]
         
-        names(final.list) <-
-          paste0("F", sapply(outcome.index[target], function(each)
-            estimation[[each]]["event"]))
+        tmle_ic <- summ_eic[, -c("id")]
+        tmle_se <- sqrt(diag(var(tmle_ic)) / nrow(data))
         
-        if (length(target) == length(outcome.index) &
-            length(outcome.index) > 1) {
-          S.se <-
-            sapply(tau, function(tt)
-              sqrt(mean(rowSums(
-                sapply(1:length(outcome.index), function(target11) {
-                  unlist(
-                    eval.ic( mat,
-                             unlist(lapply(final.list, function(xx)
-                               xx["tmle.est", paste0("tau=", tt)]
-                             )),
-                             target.index = outcome.index[target11],
-                             tau.values = tt,
-                             survival = TRUE
-                    )
-                  )
-                })
-              )^2) / n))
-          S.fit <- sapply(tau, function(tt)
-            (treat.effect != "ate") - sum(sapply(final.list, function(fl)
-              fl["tmle.est", paste0("tau=", tt)])))
-          final.S <- rbind(S.fit, S.se)
-          colnames(final.S) <- paste0("tau=", tau)
-          rownames(final.S) <- c("tmle.est", "tmle.se")
-          final.list$S <- final.S
-          if (target.S) {
-            tmle.list$tmle <- final.list[names(final.list) == "S"]
-          } else {
-            tmle.list$tmle <- final.list
-          }
-        } else {
-          tmle.list$tmle <- final.list
-        }
-        
-        if (!second.round) {
-          if (check.sup)
-            tmle.list$check.sup.norm <- list(
-              check.sup.norm = check.sup.norm,
-              lhs = max(abs(unlist(Pn.eic3))),
-              rhs = criterion / sqrt(length(target) * length(tau))
-            )
-          tmle.list$convergenced.at.step <- step
-          
-          if (!push.criterion)
-            break
-          else
-            criterion <- criterion / sqrt(n)
-          second.round <- TRUE
-        } else {
-          if (target.S) {
-            tmle.list$tmle.second.round <- final.list[names(final.list) == "S"]
-          } else {
-            tmle.list$tmle.second.round <- final.list
-          }
-          if (check.sup)
-            tmle.list$check.sup.norm.second.round <- list(
-              check.sup.norm =
-                max(abs(unlist(Pn.eic3))) <= (criterion),
-              lhs = max(abs(unlist(Pn.eic3))),
-              rhs = criterion
-            )
-          tmle.list$convergenced.at.step.second.round <- step
-          break
-        }
+        break
       }
     }
-    
   }
+
+# output --------------------------------------------------------------------------------------
+
+# g-comp (sl estimate)
+# unadjusted cox model
+# tmle & ic
   
-  
-  
-  
-  # output --------------------------------------------------------------------------------------
-  
-  # g-comp (sl estimate)
-  # unadjusted cox model
-  # tmle & ic
-  
+  return(list(estimates = list("tmle" = Psi_tmle, 
+                               "g-comp" = Psi_init), 
+              ic = tmle_ic, 
+              se = tmle_se))
   
 }
+
+
 
 

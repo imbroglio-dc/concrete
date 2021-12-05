@@ -976,7 +976,7 @@ contmle <- function(dt,
   }
   ### 4.3.2 cause-specific, conditional CIFs -------------------------------------------
   if (cr) {
-    for (each in outcome.index) { # looping over each target event
+    for (each in outcome.index) { # looping over each target event j
       fit.delta <- estimation[[each]][["event"]]
       mat[, (paste0("F", fit.delta, ".t")) := cumsum(surv.t * get(paste0("dhaz", fit.delta)) *
                                                        get(paste0("fit.cox", fit.delta))),
@@ -986,7 +986,7 @@ contmle <- function(dt,
               get(paste0("F", fit.delta, ".t"))[get(time.var) == 
                                                   max(get(time.var)[get(time.var) <= tau[kk]])],
             by = c("id", A.name)]
-        for (each2 in outcome.index) { ### 4.3.3 the competing events part of clever covariates ----
+        for (each2 in outcome.index) { ### 4.3.3 the competing events part of clever covariates l ----
           fit.delta2 <- estimation[[each2]][["event"]]
           if (fit.delta == fit.delta2) {
             mat[surv.t > 0, (paste0("Ht", fit.delta, ".lambda", fit.delta2, ".", kk)) :=
@@ -1076,10 +1076,10 @@ contmle <- function(dt,
                tau.values = tau,
                survival = FALSE,
                tau.all = tau) {
-        outer <- lapply(target.index, function(each) { # loop over target times
+        outer <- lapply(target.index, function(each) { # loop over target events
           fit.delta <- estimation[[each]][["event"]]
           each.index <- (1:length(target.index))[target.index == each]
-          sapply(1:length(tau.values), function(kk) {
+          sapply(1:length(tau.values), function(kk) { # loop over target times
             k2 <- (1:length(tau.all))[tau.all == max(tau.all[tau.all <= tau.values[kk]])]
             out <- 0
             for (each2 in outcome.index) { # loop over events
@@ -1294,16 +1294,16 @@ contmle <- function(dt,
                               cr.index = outcome.index,
                               tau.values = tau,
                               tau.all = tau) {
-      outer <- lapply(target.index, function(each) { # loop over events
+      outer <- lapply(target.index, function(each) { # loop over target events (j)
         fit.delta <- estimation[[each]][["event"]]
-        sapply(1:length(tau.values), function(kk) { # loop over target times
+        sapply(1:length(tau.values), function(kk) { # loop over target times (k)
           k2 <- (1:length(tau.all))[tau.all == max(tau.all[tau.all <= tau.values[kk]])]
           # k2 <- which(tau.all  ==  max(tau.all  <=  tau.values[kk]))
           # or just sort the tau's and we don't have to be so complex
           # sum(tau.all <= tau.values[kk])
           
           out <- 0
-          for (each2 in cr.index) {
+          for (each2 in cr.index) { # loop over competing events (l)
             fit.delta2 <- estimation[[each2]][["event"]]
             out2 <- mat[(get(time.var) <= tau.values[kk]) & (get(time.var) <= time.obs),
                         sum((get(A.name) == A.obs) * (get(time.var) <= time.obs) * Ht *

@@ -21,7 +21,7 @@ base_data <- readxl::read_excel("./data/test_leader.xlsx") %>%
   dplyr::select(ARM, TIME, everything(), -subjid, -time_days, -event) %>%
   as.data.table()
 
-data <- simulate_data(base_data = base_data)
+data <- simulate_data(n = 1e3, base_data = base_data)
 
 
 
@@ -40,21 +40,23 @@ target_times <- seq(from = 100, to = 1600, by = 100)
 
 models <- list("A" = a_lrnrs, 
                "0" = list(mod1 = Surv(TIME, EVENT == 0) ~ ARM,
-                           mod2 = Surv(TIME, EVENT == 0) ~ ARM + AGE,
-                           mod3 = Surv(TIME, EVENT == 0) ~ ARM + AGE + SMOKER + STROKSFL, 
+                           # mod2 = Surv(TIME, EVENT == 0) ~ ARM + AGE,
+                           # mod3 = Surv(TIME, EVENT == 0) ~ ARM + AGE + SMOKER + STROKSFL, 
                            mod4 = Surv(TIME, EVENT == 0) ~ .), 
                "1" = list(mod1 = Surv(TIME, EVENT == 1) ~ ARM,
-                           mod2 = Surv(TIME, EVENT == 1) ~ ARM + SMOKER + BMIBL,
-                           mod3 = Surv(TIME, EVENT == 1) ~ ARM*SMOKER + I(BMIBL>30)*ARM, 
+                           # mod2 = Surv(TIME, EVENT == 1) ~ ARM + SMOKER + BMIBL,
+                           # mod3 = Surv(TIME, EVENT == 1) ~ ARM*SMOKER + I(BMIBL>30)*ARM, 
                            mod4 = Surv(TIME, EVENT == 1) ~ .), 
                "2" = list(mod1 = Surv(TIME, EVENT == 2) ~ ARM,
-                           mod2 = Surv(TIME, EVENT == 2) ~ ARM + STROKSFL + MIFL,
-                           mod3 = Surv(TIME, EVENT == 2) ~ ARM*STROKSFL + ARM*MIFL + MIFL:STROKSFL, 
+                           # mod2 = Surv(TIME, EVENT == 2) ~ ARM + STROKSFL + MIFL,
+                           # mod3 = Surv(TIME, EVENT == 2) ~ ARM*STROKSFL + ARM*MIFL + MIFL:STROKSFL, 
                            mod4 = Surv(TIME, EVENT == 2) ~ .), 
                "3" = list(mod1 = Surv(TIME, EVENT == 3) ~ ARM,
-                           mod2 = Surv(TIME, EVENT == 3) ~ ARM + SMOKER + BMIBL,
-                           mod3 = Surv(TIME, EVENT == 3) ~ ARM+ SMOKER + BMIBL + STROKSFL + MIFL, 
+                           # mod2 = Surv(TIME, EVENT == 3) ~ ARM + SMOKER + BMIBL,
+                           # mod3 = Surv(TIME, EVENT == 3) ~ ARM + SMOKER + BMIBL + STROKSFL + MIFL, 
                            mod4 = Surv(TIME, EVENT == 3) ~ .))
 
-true_risks <- readRDS("./data/true_risks.RDS")
-psi0 <- do.call(cbind, true_risks)[target_times, ]
+psi0 <- do.call(cbind, readRDS("./data/true_risks.RDS"))[target_times, ]
+
+out <- concr_tmle(data, target_times, target_events, models) 
+
