@@ -1227,7 +1227,20 @@ contmle <- function(dt,
     })
     names(init.list) <- paste0("F", sapply(outcome.index[target], function(each)
       estimation[[each]]["event"]))
+    
     if (length(target) == length(outcome.index)) { ## what if not all events are targeted? ------------------------------------------------
+      # print(rowSums(sapply(1:length(outcome.index), function(target11) {
+      #   unlist(
+      #     eval.ic(
+      #       mat,
+      #       unlist(lapply(init.list, function(xx)
+      #         xx["init.est", paste0("tau=", tt)])),
+      #       target.index = outcome.index[target11],
+      #       tau.values = tt,
+      #       survival = TRUE
+      #     )
+      #   )
+      # })))
       S.se.init <- sapply(tau, function(tt) {
         sqrt(
           mean(

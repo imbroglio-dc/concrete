@@ -109,6 +109,7 @@ if (file.exists("./output/contmle_estimates.RDS")) {
                              
                              obs <- simulate_data(n = n, base_data = base_data)
                              est <- contmle(obs, #-- dataset
+                                            one.step=T,
                                             target = target, #-- target competing events
                                             iterative = FALSE, #-- one-step tmle to target \simultaneously
                                             treat.effect = "ate", #-- target the ate directly
