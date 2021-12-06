@@ -1,11 +1,18 @@
 
 # setup ---------------------------------------------------------------------------------------
 
+library(readxl)
 library(tidyverse); library(sl3); library(tmle3); library(survtmle); library(MOSS)
 library(data.table); library(foreach); library(doParallel); library(doRNG); library(parallel)
 
 ## Edit to suit local working directory structure ---------------------------------------------
-setwd("/Shared/Projects/ConCR-TMLE/")
+try(setwd("/Shared/Projects/ConCR-TMLE/"),silent=TRUE)
+try(setwd("~/research/SoftWare/test-tmle-surival/ConCR-TMLE/"),silent=TRUE)
+source("R/functions/sim_functions.R")
+source(file = "R/functions/my_sl_functions.R")
+source(file = "R/functions/my_MOSS_hazard_methods.R")
+source(file = "R/functions/my_survtmle_functions.R")
+source(file = "R/contmle.R")
 
 # source("./R/contmle-competing-risks-simulation.R")
 ## just need base_data and true_risks from above
@@ -57,11 +64,7 @@ if (file.exists("./data/true_risks.RDS")) {
     saveRDS(true_risks, "./data/true_risks.RDS")
 }
 
-source(file = "R/functions/my_sl_functions.R")
-source(file = "R/functions/my_MOSS_hazard_methods.R")
-source(file = "R/functions/my_survtmle_functions.R")
-source(file = "R/functions/sim_functions.R")
-source(file = "R/contmle.R")
+
 set.seed(0)
 
 # simulation parameters -----------------------------------------------------------------------
