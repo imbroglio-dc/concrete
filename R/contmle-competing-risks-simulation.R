@@ -42,17 +42,17 @@ source("R/functions/sim_functions.R")
 tau <- 720
 target <- 1:3
 B <- 1000
-n_cores <- 25
+n_cores <- 10
 registerDoParallel(n_cores)
 
 # 3.1 True Psi --------------------------------------------------------------------------------
 ## True risks approximated by computing risks in a very large sample
-if (file.exists("./data/true_risks.RDS")) {
-  true_risks <- readRDS("./data/true_risks.RDS")
+if (file.exists("./data/true_risks.csv")) {
+  true_risks <- read.csv("./data/true_risks.csv")
 } else {
+  true_risks <- list("A=1" = NULL, "A=0" = NULL)
   for (a in 1:0) { # for binary treatment only
     obs <- as.data.table(bind_rows(lapply(1:5000, function(b) base_data)))
-    true_risks <- list("A=1" = NULL, "A=0" = NULL)
     A <- rep(a, nrow(obs))
     outcomes <- data.table("T1" = T1_fn(A, obs[["SMOKER"]], obs[["BMIBL"]], t1_coefs,
                                         output = "F_inv.u", u = runif(nrow(obs), 0, 1))$F_inv.u,
@@ -67,6 +67,8 @@ if (file.exists("./data/true_risks.RDS")) {
              "T" = T1*`3>1`*(1 - `1>2`) + T2*`1>2`*(1 - `2>3`) + T3*`2>3`*(1 - `3>1`),
              "J" = `3>1`*(1 - `1>2`) + 2*`1>2`*(1 - `2>3`) + 3*`2>3`*(1 - `3>1`)) %>%
       dplyr::select(`T`, J)
+    rm(obs); rm(A); gc()
+    
     true_risks[[paste0("A=", a)]] <- foreach(t = interval,
                                              .combine = rbind,
                                              .inorder = T) %dopar% {
@@ -75,19 +77,30 @@ if (file.exists("./data/true_risks.RDS")) {
     true_risks[[paste0("A=", a)]] <- as.data.table(true_risks[[paste0("A=", a)]] / nrow(obs)) %>%
       rename_all(~paste0("F.j", 1:3, ".a", a))
   }
-  rm(outcomes); rm(obs); rm(A); gc()
-  saveRDS(true_risks, "./data/true_risks.RDS")
+  rm(outcomes);
+  true_risks <- rbind(
+    data.table(A = 1, "time" = 1:nrow(true_risks[["A=1"]]), true_risks[["A=1"]]), 
+    data.table(A = 0, "time" = 1:nrow(true_risks[["A=0"]]), true_risks[["A=0"]]), 
+    use.names=F)
+  setnames(true_risks, 3:5, paste0("F.j", 1:3))
+  true_risks[, "S.t" := 1 - F.j1 - F.j2 - F.j3]
+  write_csv(true_risks, "data/true_risks.csv")
 }
 
 # plot survival curves
-lapply(true_risks, function(r) rename_all(r, ~c("J=1", "J=2", "J=3"))) %>%
-  bind_rows() %>% mutate(`A` = rep(1:0, each = nrow(true_risks[[1]])),
-                         `t` = rep(1:nrow(true_risks[[1]]), times = 2)) %>%
-  pivot_longer(cols = c(`J=1`, `J=2`, `J=3`), names_to = "event",
-               values_to = "risk") %>%
-  ggplot(aes(x = `t`, y = risk,
-             linetype = as.character(A), colour = event)) +
-  geom_line()+ theme_minimal()
+# lapply(true_risks, function(r) rename_all(r, ~c("J=1", "J=2", "J=3"))) %>%
+#   bind_rows() %>% mutate(`A` = rep(1:0, each = nrow(true_risks[[1]])),
+#                          `t` = rep(1:nrow(true_risks[[1]]), times = 2)) %>%
+#   pivot_longer(cols = c(`J=1`, `J=2`, `J=3`), names_to = "event",
+#                values_to = "risk") %>%
+#   ggplot(aes(x = `t`, y = risk,
+#              linetype = as.character(A), colour = event)) +
+#   geom_line()+ theme_minimal()
+
+melt(true_risks, id.vars = c("A", "time"), variable.name = "Parameter") %>% 
+  mutate(A = as.character(A)) %>% ggplot() + 
+  geom_line(aes(x = time, y = value, colour = Parameter, linetype = A)) + 
+  theme_minimal()
 
 
 # 3.2 contmle Estimation ----------------------------------------------------------------------

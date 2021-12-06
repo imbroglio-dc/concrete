@@ -2,11 +2,11 @@
 # 0. parameters -----------------------------------------------------------
 # first two terms in coefs are B and k respectively for weibull hazard = B * k * x^(k - 1)
 interval <- 1:2e3
-ltfu_coefs <- c(8e-5, 1, 1.5, 1.1)
+ltfu_coefs <- c(1.5e-4, 1, 1.5, 1.1)
 eos_coefs <- c("eos_start_time" = 1460, "eos_end_time" = 2000)
-t1_coefs <- c(1e-4, 1, 1.2, 1.3, 1.2, 1.2)
-t2_coefs <- c(9e-6, 1.3, 1.5, 1.5, 1.2)
-t3_coefs <- c(1.8e-5, 1.2)
+t1_coefs <- c(1.2e-4, 1, 1.2, 1.3, 1.2, 1.2)
+t2_coefs <- c(1.8e-5, 1.3, 1.5, 1.5, 1.2)
+t3_coefs <- c(2.4e-5, 1.2)
 
 # 1. Event Process Models ---------------------------------------------------------------------
 
