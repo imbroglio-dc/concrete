@@ -35,9 +35,9 @@ base_data <- read_excel("./data/test_leader.xlsx") %>%
 if (file.exists("./data/true_risks.RDS")) {
     true_risks <- readRDS("./data/true_risks.RDS")
 } else {
+    true_risks <- list("A=1" = NULL, "A=0" = NULL)
     for (a in 1:0) { # for binary treatment only
         obs <- as.data.table(bind_rows(lapply(1:5000, function(b) base_data)))
-        true_risks <- list("A=1" = NULL, "A=0" = NULL)
         A <- rep(a, nrow(obs))
         outcomes <- data.table("T1" = T1_fn(A, obs[["SMOKER"]], obs[["BMIBL"]], t1_coefs,
                                             output = "F_inv.u", u = runif(nrow(obs), 0, 1))$F_inv.u,
@@ -61,7 +61,13 @@ if (file.exists("./data/true_risks.RDS")) {
             rename_all(~paste0("F.j", 1:3, ".a", a))
     }
     rm(outcomes); rm(obs); rm(A); gc()
-    saveRDS(true_risks, "./data/true_risks.RDS")
+    true_risks <- rbind(
+        data.table(A = 1, "time" = 1:nrow(true_risks[["A=1"]]), true_risks[["A=1"]]), 
+        data.table(A = 0, "time" = 1:nrow(true_risks[["A=0"]]), true_risks[["A=0"]]), 
+        use.names=F)
+    setnames(true_risks, 3:5, paste0("F.j", 1:3))
+    true_risks[, "S.t" := 1 - F.j1 - F.j2 - F.j3]
+    write_csv(true_risks, "data/true_risks.csv")
 }
 
 

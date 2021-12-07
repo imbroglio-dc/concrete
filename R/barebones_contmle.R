@@ -1,6 +1,6 @@
 
 concr_tmle <- function(data, target_times, target_events, models, cv_args = NULL, 
-                       no.small.steps = 10, verbose = F, ...) 
+                       no.small.steps = 30, onestep_eps = 0.5, verbose = FALSE, ...) 
 {
   # parameter checking --------------------------------------------------------------------------
   
@@ -151,6 +151,9 @@ concr_tmle <- function(data, target_times, target_events, models, cv_args = NULL
   
   ### event-free survival ----
   Ht[, S.t := 1]
+  
+  ## expand out bhaz and cox to js, then do by = c("id", "A", "J")
+  
   for (j in target_events) {
     Ht[, S.t := S.t * exp(-cumsum(get(paste0("bhaz.j", j)) * 
                                     get(paste0("cox.j", j)))), 
@@ -243,7 +246,6 @@ concr_tmle <- function(data, target_times, target_events, models, cv_args = NULL
   ## one-step tmle loop (one-step) ----
   
   ## 5.2 set update epsilon down-scaling factor --------------------------------
-  onestep_eps <- 0.1
   gc()
   
   for (step in 1:no.small.steps) {
@@ -393,7 +395,7 @@ concr_tmle <- function(data, target_times, target_events, models, cv_args = NULL
                         sep = ".")
       
       onestep_stop <- abs(colMeans(summ_eic[, -"id"])) <= 
-        sqrt(colMeans(summ_eic[, -"id"]^2)) / (log(nrow(data)))
+        sqrt(colMeans(summ_eic[, -"id"]^2)) / ( sqrt(nrow(data)) * log(nrow(data)))
       
       if (all(onestep_stop) | step == no.small.steps) {
         if (step == no.small.steps) {

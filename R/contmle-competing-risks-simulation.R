@@ -48,7 +48,7 @@ registerDoParallel(n_cores)
 # 3.1 True Psi --------------------------------------------------------------------------------
 ## True risks approximated by computing risks in a very large sample
 if (file.exists("./data/true_risks.csv")) {
-  true_risks <- read.csv("./data/true_risks.csv")
+  true_risks <- as.data.table(read.csv("./data/true_risks.csv"))
 } else {
   true_risks <- list("A=1" = NULL, "A=0" = NULL)
   for (a in 1:0) { # for binary treatment only

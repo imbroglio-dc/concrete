@@ -5,6 +5,26 @@ library(tidyverse); library(sl3); library(tmle3); library(survtmle); library(MOS
 library(data.table); library(foreach); library(doParallel); library(doRNG); library(parallel)
 library(survival); library(zoo)
 
+source(file = "R/functions/my_sl_functions.R")
+source(file = "R/functions/my_MOSS_hazard_methods.R")
+source(file = "R/functions/my_survtmle_functions.R")
+source(file = "R/functions/sim_functions.R")
+source(file = "R/functions/contmle.R")
+source(file = "R/barebones_contmle.R")
+
+
+# simulation parameters -----------------------------------------------------------------------
+
+B <- 200
+n_cores <- 8
+cl <- makeForkCluster(n_cores)
+registerDoParallel(cl)
+target_times_cont <- 1:4 * 360
+target_events <- 1:3
+sim_results <- vector("list", B)
+b <- 1
+
+
 ## Edit to suit local working directory structure ---------------------------------------------
 setwd("/Shared/Projects/ConCR-TMLE/")
 
@@ -24,10 +44,11 @@ base_data <- readxl::read_excel("./data/test_leader.xlsx") %>%
     dplyr::select(ARM, TIME, everything(), -subjid, -time_days, -event) %>%
     as.data.table()
 
+
 ## get true_risks ----
 ## True risks approximated by computing risks in a very large sample
 if (file.exists("./data/true_risks.csv")) {
-    true_risks <- read.csv("./data/true_risks.csv")
+    true_risks <- as.data.table(read.csv("./data/true_risks.csv"))
 } else {
     true_risks <- list("A=1" = NULL, "A=0" = NULL)
     for (a in 1:0) { # for binary treatment only
@@ -39,55 +60,56 @@ if (file.exists("./data/true_risks.csv")) {
                                             output = "F_inv.u", u = runif(nrow(obs), 0, 1))$F_inv.u,
                                "T3" = T3_fn(t3_coefs, output = "F_inv.u",
                                             u = runif(nrow(obs), 0, 1))$F_inv.u)
-        outcomes <- outcomes %>%
-            mutate("1>2" = (T1 - T2) > 0,
-                   "2>3" = (T2 - T3) > 0,
-                   "3>1" = (T3 - T1) > 0,
-                   "T" = T1*`3>1`*(1 - `1>2`) + T2*`1>2`*(1 - `2>3`) + T3*`2>3`*(1 - `3>1`),
-                   "J" = `3>1`*(1 - `1>2`) + 2*`1>2`*(1 - `2>3`) + 3*`2>3`*(1 - `3>1`)) %>%
-            dplyr::select(`T`, J)
-        true_risks[[paste0("A=", a)]] <- foreach(t = interval,
-                                                 .combine = rbind,
-                                                 .inorder = T) %dopar% {
-                                                     tabulate(outcomes[["J"]][outcomes[["T"]] <= t])
-                                                 }
-        true_risks[[paste0("A=", a)]] <- as.data.table(true_risks[[paste0("A=", a)]] / nrow(obs)) %>%
-            rename_all(~paste0("F.j", 1:3, ".a", a))
+        rm(obs); gc()
+        outcomes[, "1>2" := T1 > T2]
+        outcomes[, "2>3" := T2 > T3]
+        outcomes[, "3>1" := T3 > T1]
+        outcomes[, "J" := `3>1`*(1 - `1>2`) + 2*`1>2`*(1 - `2>3`) + 3*`2>3`*(1 - `3>1`)]
+        outcomes[, "T" := T1*(J == 1) + T2*(J == 2) + T3*(J == 3)]
+        outcomes <- outcomes[, c("J", "T")]
+        risk <- as.data.table(foreach(t = interval,
+                                      .combine = rbind,
+                                      .inorder = T) %dopar% {
+                                          return(tabulate(outcomes[["J"]][outcomes[["T"]] <= t]))
+                                      })
+        if (!exists("true_risks")) {
+            true_risks <- risk[, lapply(.SD, function(x) x / length(A))]
+            setnames(true_risks, 1:3, do.call(paste0, expand.grid("F.j", 1:3, ".a", a)))
+        } else {
+            risk <- risk[, lapply(.SD, function(x) x / length(A))]
+            setnames(risk, 1:3, do.call(paste0, expand.grid("F.j", 1:3, ".a", a)))
+            true_risks <- cbind(true_risks, risk)
+        }
+        rm(risk); rm(outcomes); rm(A); gc()
     }
-    rm(outcomes); rm(obs); rm(A); gc()
-    true_risks <- rbind(
-        data.table(A = 1, "time" = 1:nrow(true_risks[["A=1"]]), true_risks[["A=1"]]), 
-        data.table(A = 0, "time" = 1:nrow(true_risks[["A=0"]]), true_risks[["A=0"]]), 
-        use.names=F)
-    setnames(true_risks, 3:5, paste0("F.j", 1:3))
-    true_risks[, "S.t" := 1 - F.j1 - F.j2 - F.j3]
+    true_risks <- 
+        rbind(cbind(J = 1, "time" = interval,
+                    true_risks[, mget(grep("j1", colnames(true_risks), value = T))]), 
+              cbind(J = 2,  "time" = interval,
+                    true_risks[, mget(grep("j2", colnames(true_risks), value = T))]), 
+              cbind(J = 3,  "time" = interval,
+                    true_risks[, mget(grep("j3", colnames(true_risks), value = T))]), 
+              use.names = FALSE)
+    setnames(true_risks, 2:3, c("F.a1", "F.a0"))
+    
     write_csv(true_risks, "data/true_risks.csv")
 }
 
-source(file = "R/functions/my_sl_functions.R")
-source(file = "R/functions/my_MOSS_hazard_methods.R")
-source(file = "R/functions/my_survtmle_functions.R")
-source(file = "R/functions/sim_functions.R")
-source(file = "R/contmle.R")
-source(file = "R/barebones_contmle.R")
-set.seed(0)
 
-# simulation parameters -----------------------------------------------------------------------
+melt(true_risks, id.vars = c("J", "time"), variable.name = "Parameter") %>% 
+    filter(Parameter %in% c("F.a1", "F.a0")) %>% 
+    mutate(J = as.character(J)) %>% ggplot() + 
+    geom_line(aes(x = time, y = value, colour = Parameter, linetype = J)) + 
+    theme_minimal()
 
-B <- 200
-n_cores <- 4
-registerDoParallel(n_cores)
-registerDoRNG(0)
-target_times_cont <- 1:4 * 360
-target_events <- 1:3
-sim_results <- vector("list", B)
-b <- 1
 
 # true risks ----------------------------------------------------------------------------------
 
-psi0 <- NULL
+psi0 <- true_risks[time %in% target_times_cont,]
 
 # generate data -------------------------------------------------------------------------------
+
+registerDoRNG(123456789)
 sim_data <- foreach(i = 1:B) %dopar% {
     return(simulate_data(n = 1e3, base_data = base_data) %>%
                mutate(ARM = as.numeric(ARM)))
@@ -96,57 +118,51 @@ sim_data <- foreach(i = 1:B) %dopar% {
 
 # estimation ----------------------------------------------------------------------------------
 
+screeners <- "All"
+sl_glmnets <- create.Learner("SL.glmnet", tune = list("alpha" = c(1)), 
+                             name_prefix = "glmnet", detailed_names = T)
+
+sl_lib_g <- expand.grid(c("SL.glm"), screeners)
+sl_lib_g <- lapply(1:nrow(sl_lib_g), function(i) as.character(unlist(sl_lib_g[i, ])))
+
+sl_lib_censor <- expand.grid(c("SL.glm", "SL.glmnet"), screeners)
+sl_lib_censor <- lapply(1:nrow(sl_lib_censor),
+                        function(i) as.character(unlist(sl_lib_censor[i, ])))
+
+sl_lib_failure <- expand.grid(c("SL.glm", "SL.glmnet"), screeners)
+sl_lib_failure <- lapply(1:nrow(sl_lib_failure),
+                         function(i) as.character(unlist(sl_lib_failure[i, ])))
 
 while (b <= B) {
-    indices <- b:min(B, b + 5*(n_cores))
+    indices <- b:min(B, b + 1*(n_cores))
     cat("Simulations", b, "-", tail(indices, 1), "\n")
-    b <- b + 5*(n_cores)
+    b <- b + 1*(n_cores)
     
     sim_results[indices] <- foreach(i = indices) %dopar% {
-        results <- list()
-        
-        obs <- sim_data[[1]] %>% 
-            mutate(TIME_1mo = ceiling(TIME / 30), 
-                   TIME_3mo = ceiling(TIME / (30 * 3)), 
-                   TIME_6mo = ceiling(TIME / (30 * 6)))
-        
+        obs <- sim_data[[i]]
         ftimes_cont <- obs$TIME
-        
         adjust_vars <- dplyr::select(obs, -c(grep("TIME", colnames(obs), value = T), 
                                              "EVENT", "ARM", "id"))
         
         
         # survtmle ----------------------------------------------------------------------------
         
-        screeners <- "All"
-        sl_glmnets <- create.Learner("SL.glmnet", tune = list("alpha" = c(0.5, 1)), 
-                                     name_prefix = "glmnet", detailed_names = T)
-        
-        sl_lib_g <- expand.grid(c("SL.glm"), screeners)
-        sl_lib_g <- lapply(1:nrow(sl_lib_g), function(i) as.character(unlist(sl_lib_g[i, ])))
-        
-        sl_lib_censor <- expand.grid(c("SL.glm", sl_glmnets$names), screeners)
-        sl_lib_censor <- lapply(1:nrow(sl_lib_censor),
-                                function(i) as.character(unlist(sl_lib_censor[i, ])))
-        
-        sl_lib_failure <- expand.grid(c("SL.glm", sl_glmnets$names), screeners)
-        sl_lib_failure <- lapply(1:nrow(sl_lib_failure),
-                                 function(i) as.character(unlist(sl_lib_failure[i, ])))
-        
         for (timescale in c(1, 3, 6)) {
             target_times <- target_times_cont / (30 * timescale)
             ftimes <- ceiling(obs$TIME / (30 * timescale))
             
-            sl_fit <- my_init_sl_fit(
-                T_tilde = ftimes,
-                Delta = as.numeric(obs$EVENT),
-                A = as.numeric(obs$ARM),
-                W = adjust_vars,
-                t_max = max(target_times),
-                sl_failure = sl_lib_failure,
-                sl_censoring = sl_lib_censor,
-                sl_treatment = "SL.glm",
-                cv.Control = list(V = 10))
+            sl_fit <- suppressMessages(suppressWarnings(
+                my_init_sl_fit(
+                    T_tilde = ftimes,
+                    Delta = as.numeric(obs$EVENT),
+                    A = as.numeric(obs$ARM),
+                    W = adjust_vars,
+                    t_max = max(target_times),
+                    sl_failure = sl_lib_failure,
+                    sl_censoring = sl_lib_censor,
+                    sl_treatment = "SL.glm",
+                    cv.Control = list(V = 10))
+            ))
             
             haz_sl <- list(sl_fit$density_failure_1$clone(),
                            sl_fit$density_failure_0$clone())
@@ -159,218 +175,117 @@ while (b <= B) {
             # glm_trt <- paste0(colnames(adjust_vars), collapse = " + ")
             rm(sl_fit); gc()
             
-            tmle_sl <- surv_tmle(ftime = ftimes,
-                                 ftype = obs$EVENT,
-                                 targets = target_times,
-                                 trt = obs$ARM,
-                                 t0 = max(target_times), adjustVars = adjust_vars,
-                                 SL.ftime = SL_ftime, SL.ctime = sl_G_dC,
-                                 SL.trt = sl_lib_g, # glm.trt = glm_trt,
-                                 returnIC = T, returnModels = T,
-                                 ftypeOfInterest = target_events, 
-                                 trtOfInterest = c(1, 0),
-                                 maxIter = 10, method = "hazard")
+            survtmle_fit <- suppressMessages(suppressWarnings(
+                surv_tmle(ftime = ftimes,
+                          ftype = obs$EVENT,
+                          targets = target_times,
+                          trt = obs$ARM, 
+                          t0 = max(target_times), adjustVars = adjust_vars,
+                          SL.ftime = SL_ftime, SL.ctime = sl_G_dC,
+                          SL.trt = sl_lib_g, # glm.trt = glm_trt,
+                          returnIC = T, returnModels = T,
+                          ftypeOfInterest = target_events, 
+                          trtOfInterest = c(1, 0), verbose = FALSE,
+                          maxIter = 10, method = "hazard")
+            ))
             
-            tmle_sl_out <- suppressWarnings(
-                cbind(A = rep(0:1, times = length(target_events)), 
-                      J = rep(target_events, each = 2), 
-                      tmle_sl$est) %>% as.data.table() %>% 
-                    melt(., id.var = c("A", "J"), variable = "time") %>% 
+            survtmle_out <- suppressWarnings(
+                cbind(estimand = rep(paste0("F", target_events), each = 2), 
+                      A = rep(0:1, times = length(target_events)), 
+                      as.data.table(survtmle_fit$est)) %>% 
+                    melt(., id.var = c("A", "estimand"), variable = "time") %>% 
                     .[, time := rep(target_times_cont, 
                                     each = length(target_events) * 2)] %>% 
-                    as_tibble() %>%
-                    cbind(Estimator = "survtmle", 
+                    cbind(estimator = "survtmle", 
                           timescale = paste0(timescale, "mo"), 
                           .)
             )
-            setnames(tmle_sl_out, "value", "RiskEst")
-            tmle_sl_out <- suppressWarnings(
-                cbind("A" = rep(0:1, each = length(target_times_cont) * length(target_events)), 
-                      "J" = rep(target_events, each = length(target_times_cont), times = 2), 
-                      "time" = rep(target_times_cont, times = length(target_events) * 2),
-                      "se" = sqrt(diag(tmle_sl$var))) %>%
-                    as.data.frame() %>% full_join(tmle_sl_out, .)
-            )
-            if (is.null(results$estimates)) {
-                results$estimates <- tmle_sl_out
+            
+            survtmle_out <- 
+                rbind(cbind(estimator = "glm_gcomp", as.data.table(survtmle_fit$init_est)), 
+                      cbind(estimator = "survtmle", as.data.table(survtmle_fit$est))) %>% 
+                cbind(estimand = rep(paste0("F", target_events), each = 2), 
+                      A = rep(0:1, times = length(target_events)), 
+                      .) %>% 
+                melt(., id.var = c("estimator", "estimand", "A"), variable = "time") %>% 
+                .[, time := rep(target_times_cont, 
+                                each = length(target_events) * 4)] %>% 
+                cbind(timescale = paste0(timescale, "mo"), 
+                      .)
+            
+            setnames(survtmle_out, "value", "estimate")
+            setcolorder(survtmle_out, c('estimator', 'timescale', 'estimand', 'A', 'time'))
+            
+            if (!exists("results")) {
+                results <- copy(survtmle_out)
             } else {
-                results$estimates <- rbind(results$estimates, tmle_sl_out)
+                results <- rbind(results, copy(survtmle_out))
             }
         }
         
-        
-        # # tmle3 -------------------------------------------------------------------------------
-        # k_grid <- 1:max(obs$TIME)
-        # 
-        # all_times <- lapply(k_grid, function(t_current) {
-        #     df_time <- copy(obs)
-        #     
-        #     df_time$N <- as.numeric(t_current == obs$TIME & obs$EVENT == 1)
-        #     df_time$A_c <- as.numeric(t_current == obs$TIME & obs$EVENT == 0)
-        #     df_time$pre_failure <- as.numeric(t_current <= obs$TIME)
-        #     df_time$t <- t_current
-        #     df_time$X <- 1:nrow(df_time)
-        #     
-        #     return(df_time)
-        # })
-        # 
-        # df_long <- rbindlist(all_times)
-        # 
-        # node_list <- list(
-        #     W = c("GEOGR1", "SEX", "AGE", "CREATBL", "HBA1CBL", "MIFL",
-        #           "SMOKER", "STROKSFL", "BMIBL", "ETHNIC", "EGFMDRBC"),
-        #     A = "ARM",
-        #     T_tilde = "TIME",
-        #     Delta = "EVENT",
-        #     time = "t",
-        #     N = "N",
-        #     A_c = "A_c",
-        #     id = "X",
-        #     pre_failure = "pre_failure"
-        # )
-        # 
-        # learners <- list(
-        #     glmnet = make_learner(Lrnr_glmnet),
-        #     glm = make_learner(Lrnr_glm),
-        #     gam = make_learner(Lrnr_gam),
-        #     rf = make_learner(Lrnr_ranger)
-        # )
-        # lrnr_glm <- make_learner(Lrnr_glm)
-        # 
-        # sl_A <- Lrnr_sl$new(lrnr_glm)
-        # sl_Y <- Lrnr_sl$new(learners)
-        # 
-        # learner_list <- list(A = sl_A, N = sl_Y, A_c = sl_Y)
-        # var_types <- list(T_tilde = Variable_Type$new("continuous"),
-        #                   t = Variable_Type$new("continuous"),
-        #                   Delta = Variable_Type$new("binomial"))
-        # 
-        # survival_spec1 <- tmle_survival(
-        #     treatment_level = 1, control_level = 0,
-        #     variable_types = var_types, target_times = target_times
-        # )
-        # survival_spec0 <- tmle_survival(
-        #     treatment_level = 0, control_level = 1,
-        #     variable_types = var_types, target_times = target_times
-        # )
-        # 
-        # tmle_task1 <- survival_spec1$make_tmle_task(df_long, node_list)
-        # tmle_task0 <- survival_spec0$make_tmle_task(df_long, node_list)
-        # 
-        # initial_likelihood1 <- survival_spec1$make_initial_likelihood(tmle_task1, learner_list)
-        # initial_likelihood0 <- survival_spec0$make_initial_likelihood(tmle_task0, learner_list)
-        # 
-        # up1 <- tmle3_Update_survival$new(
-        #     maxit = 25,
-        #     cvtmle = TRUE,
-        #     convergence_type = "scaled_var",
-        #     delta_epsilon = 1e-2,
-        #     fit_method = "l2",
-        #     use_best = TRUE,
-        #     verbose = TRUE
-        # )
-        # up0 <- tmle3_Update_survival$new(
-        #     maxit = 25,
-        #     cvtmle = TRUE,
-        #     convergence_type = "scaled_var",
-        #     delta_epsilon = 1e-2,
-        #     fit_method = "l2",
-        #     use_best = TRUE,
-        #     verbose = TRUE
-        # )
-        # 
-        # targeted_likelihood1 <- Targeted_Likelihood$new(initial_likelihood1, updater = up1)
-        # targeted_likelihood0 <- Targeted_Likelihood$new(initial_likelihood0, updater = up0)
-        # 
-        # tmle_params1 <- survival_spec1$make_params(tmle_task1, targeted_likelihood1)
-        # tmle_params0 <- survival_spec0$make_params(tmle_task0, targeted_likelihood0)
-        # 
-        # # max(abs(colMeans(tmle_params1[[1]]$estimates(tmle_task, "validation")$IC[, 1:10])))
-        # # debugonce(tmle_params[[1]]$estimates)
-        # 
-        # tmle_fit_manual1 <- fit_tmle3(
-        #     tmle_task1, targeted_likelihood1, tmle_params1,
-        #     targeted_likelihood1$updater
-        # )
-        # 
-        # tmle_fit_manual0 <- fit_tmle3(
-        #     tmle_task0, targeted_likelihood0, tmle_params0,
-        #     targeted_likelihood0$updater
-        # )
-        # 
-        # # conv <- apply(abs(do.call(rbind,up$EDs)),1,max)
-        # results$estimates <-
-        #     data.frame("Estimator" = "tmle3",
-        #                "t" = target_times,
-        #                "s0" = tmle_fit_manual0$estimates[[1]]$psi[target_times],
-        #                "s1" = tmle_fit_manual1$estimates[[1]]$psi[target_times],
-        #                "se0" = sqrt(diag(var(tmle_fit_manual0$estimates[[1]]$IC)) /
-        #                                 nrow(obs))[target_times],
-        #                "se1" = sqrt(diag(var(tmle_fit_manual1$estimates[[1]]$IC)) /
-        #                                 nrow(obs))[target_times]) %>%
-        #     bind_rows(results$estimates, .)
-        # 
-        # 
         # contmle discretized scale ------------------------------------------------------------
         
-        for (timescale in c("cont", 1, 3, 6)) {
+        
+        for (timescale in c("cont", 3, 6)) {
             if (timescale == "cont") {
                 obs$TIME <- ftimes_cont
                 target_times <- target_times_cont
             } else {
-                obs$TIME <- ftimes_cont / (30 * timescale)
-                target_times <- target_times_cont / (30 * timescale)
+                obs$TIME <- ftimes_cont / (30 * as.numeric(timescale))
+                target_times <- target_times_cont / (30 * as.numeric(timescale))
             }
-            est <- lapply(1:0, function(a) {
-                contmle(obs, 
-                        target = target_events, 
-                        iterative = F, one.step = T, 
-                        treat.effect = as.character(a), 
-                        tau = target_times, 
-                        estimation = list("cause1" = list(fit = "cox",
-                                                          model = Surv(TIME, EVENT == 1) ~
-                                                              ARM + SEX + AGE + BMIBL +
-                                                              SMOKER + STROKSFL + MIFL),
-                                          "cause2" = list(fit = "cox",
-                                                          model = Surv(TIME, EVENT == 2) ~
-                                                              ARM + SEX + AGE + BMIBL +
-                                                              SMOKER + STROKSFL + MIFL), 
-                                          "cause3" = list(fit = "cox",
-                                                          model = Surv(TIME, EVENT == 3) ~
-                                                              ARM + SEX + AGE + BMIBL +
-                                                              SMOKER + STROKSFL + MIFL),
-                                          "cens" = list(fit = "cox",
-                                                        model = Surv(TIME, EVENT == 0) ~
-                                                            ARM + SEX + AGE + BMIBL +
-                                                            SMOKER + STROKSFL + MIFL)
-                        ),
-                        treat.model = ARM ~ SEX + AGE + BMIBL + SMOKER + STROKSFL + MIFL, 
-                        sl.models = list(mod1 = list(Surv(TIME, EVENT == 1) ~ ARM),
-                                         mod2 = list(Surv(TIME, EVENT == 1) ~
-                                                         ARM + SEX + AGE + BMIBL),
-                                         mod3 = list(Surv(TIME, EVENT == 1) ~
-                                                         ARM + SEX + AGE + BMIBL +
-                                                         SMOKER + STROKSFL + MIFL))
-                )
-            })
-            timescale_contmle_out <- ifelse(timescale == "cont", "cont", paste0(timescale, "mo"))
-            contmle_out <- as.data.frame(t(est[[1]]$tmle)) %>%
-                cbind("Estimator" = "contmle", 
-                      timescale = timescale_contmle_out, 
-                      "t" = target_times_cont, .) %>%
-                rename_all(~c("Estimator", "t", "s1", "se1")) %>%
-                cbind(t(est[[2]]$tmle)) %>%
-                rename_all(~c("Estimator", "t", "s1", "se1", "s0", "se0")) %>%
-                mutate_at(c("s1", "s0"), ~ 1 - .) %>%
-                dplyr::select(colnames(results$estimates))
             
-            if(is.null(results$estimates)) {
-                results$estimates <- contmle_out
+            logreg <- make_learner(Lrnr_glm)
+            lasso <- make_learner(Lrnr_glmnet) # alpha default is 1
+            ridge <- Lrnr_glmnet$new(alpha = 0)
+            e_net <- make_learner(Lrnr_glmnet, alpha = 0.5)
+            a_lrnrs <- make_learner(Stack, logreg, lasso, ridge, e_net)
+            
+            models <- list("A" = a_lrnrs, 
+                           "0" = list(mod1 = Surv(TIME, EVENT == 0) ~ ARM,
+                                      mod2 = Surv(TIME, EVENT == 0) ~ ARM + AGE,
+                                      mod3 = Surv(TIME, EVENT == 0) ~ ARM + AGE + SMOKER + STROKSFL,
+                                      mod4 = Surv(TIME, EVENT == 0) ~ .), 
+                           "1" = list(mod1 = Surv(TIME, EVENT == 1) ~ ARM,
+                                      mod2 = Surv(TIME, EVENT == 1) ~ ARM + SMOKER + BMIBL,
+                                      # mod3 = Surv(TIME, EVENT == 1) ~ ARM*SMOKER + I(BMIBL>30)*ARM, 
+                                      mod4 = Surv(TIME, EVENT == 1) ~ .), 
+                           "2" = list(mod1 = Surv(TIME, EVENT == 2) ~ ARM,
+                                      mod2 = Surv(TIME, EVENT == 2) ~ ARM + STROKSFL + MIFL,
+                                      # mod3 = Surv(TIME, EVENT == 2) ~ ARM*STROKSFL + ARM*MIFL + MIFL:STROKSFL, 
+                                      mod4 = Surv(TIME, EVENT == 2) ~ .), 
+                           "3" = list(mod1 = Surv(TIME, EVENT == 3) ~ ARM,
+                                      mod2 = Surv(TIME, EVENT == 3) ~ ARM + SMOKER + BMIBL,
+                                      mod3 = Surv(TIME, EVENT == 3) ~ ARM + SMOKER + BMIBL + STROKSFL + MIFL,
+                                      mod4 = Surv(TIME, EVENT == 3) ~ .))
+            timescale_contmle_out <- ifelse(timescale == "cont", "cont", 
+                                            paste0(timescale, "mo"))
+            
+            contmle_est <- concr_tmle(obs, target_times, target_events, models)
+            tmle_out <- rbind(cbind('estimator' = 'contmle', 
+                                    as.data.table(contmle_est$estimates$tmle[, -"S"])), 
+                              cbind('estimator' = 'cox_gcomp', 
+                                    as.data.table(contmle_est$estimates$`g-comp`[, -"S"]))) %>% 
+                melt(., id.vars = c("estimator", "A", "time")) %>%
+                .[, timescale := timescale_contmle_out]
+            setnames(tmle_out, c("variable", "value"), c("estimand", "estimate"))
+            setcolorder(tmle_out, c('estimator', 'timescale', 'estimand', 'A', 'time'))
+            
+            if (!exists("results")) {
+                results <- copy(tmle_out)
             } else {
-                results$estimates <- bind_rows(results$estimates, contmle_out)
+                results <- rbind(results, copy(tmle_out))
             }
-            
         }
+        
+        # return ------------------------------------------------------------------
+        results <- dcast(results, ... ~ A, value.var = "estimate") %>%
+            .[, RR := `1` / `0`] %>%
+            .[, RD := `1` - `0`] %>%
+            .[, SR := (1 - `1`) / (1 - `0`)]
+        setnames(results, c("estimand", "0", "1"), c("J", "F.a0", "F.a1"))
+        
+        return(results)
     }
 }
 
