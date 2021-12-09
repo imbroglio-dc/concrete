@@ -15,7 +15,7 @@ source(file = "R/barebones_contmle.R")
 
 # simulation parameters -----------------------------------------------------------------------
 
-B <- 200
+B <- 40
 n_cores <- 8
 cl <- makeForkCluster(n_cores)
 registerDoParallel(cl)
@@ -279,18 +279,25 @@ while (b <= B) {
         }
         
         # return ------------------------------------------------------------------
-        results <- dcast(results, ... ~ A, value.var = "estimate") %>%
+        wide_results <- dcast(results, ... ~ A, value.var = "estimate") %>%
             .[, RR := `1` / `0`] %>%
             .[, RD := `1` - `0`] %>%
             .[, SR := (1 - `1`) / (1 - `0`)]
-        setnames(results, c("estimand", "0", "1"), c("J", "F.a0", "F.a1"))
+        setnames(wide_results, c("estimand", "0", "1"), c("J", "F.a0", "F.a1"))
         
-        return(results)
+        # sim_est <- rbind(sim_est, copy(results))
+        
+        return(wide_results)
     }
 }
 
-sim_out <- sim_results[!sapply(sim_results, is.null)]
-saveRDS(sim_out, file = "R/sim_est.RDS")
+sim_results
+
+sim_out <- bind_rows(sim_results[!sapply(sim_results, is.null)])
+write_csv(sim_out, file = "output/survtmle_contmle_40.csv")
+
+
+
 sim_out <- lapply(1:length(sim_out), function(i) cbind("iter" = i, sim_out[[i]]$estimates)) %>%
     bind_rows() %>%
     mutate(RD = (1 - s1) - (1 - s0),

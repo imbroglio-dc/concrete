@@ -75,7 +75,8 @@ sim_data <- foreach(i = 1:B) %dopar% {
 target_times_cont <- 1:4 * 360
 target_events <- 1:3
 
-cont_fit <- foreach(data = sim_data[1:8]) %dopar% {
+fit_cont <- foreach(data = sim_data[1:40], 
+                    .combine = rbind) %dopar% {
   out <- concr_tmle(data, target_times_cont, target_events, models)
   tmle_out <- out$estimates$tmle[, -"S"] %>% melt(., id.vars = c("A", "time")) %>%
     dcast(., time + variable ~ A, value.var = "value") %>%
@@ -87,7 +88,8 @@ cont_fit <- foreach(data = sim_data[1:8]) %dopar% {
   return(tmle_out)
 }
 
-fit_1mo <- c(fit_1mo, lapply(sim_data[1:10], function(data) {
+fit_1mo <- foreach(data = sim_data[1:40], 
+                   .combine = rbind) %dopar% {
   dat <- copy(data)[, TIME := ceiling(TIME / 30)]
   out <- concr_tmle(dat, target_times_cont / 30, target_events, models)
   tmle_out <- out$estimates$tmle[, -"S"] %>% melt(., id.vars = c("A", "time")) %>%
@@ -98,9 +100,10 @@ fit_1mo <- c(fit_1mo, lapply(sim_data[1:10], function(data) {
   setnames(tmle_out, c("variable", "0", "1"), c("J", "F.a0", "F.a1"))
   setcolorder(tmle_out, c("J", "time", "F.a1", "F.a0"))
   return(tmle_out)
-}))
+}
 
-fit_3mo <- c(fit_3mo, lapply(sim_data[1:30], function(data) {
+fit_3mo <- foreach(data = sim_data[1:40], 
+                   .combine = rbind) %dopar% {
   dat <- copy(data)[, TIME := ceiling(TIME / 30 / 3)]
   out <- concr_tmle(dat, target_times_cont / 30 / 3, target_events, models)
   tmle_out <- out$estimates$tmle[, -"S"] %>% melt(., id.vars = c("A", "time")) %>%
@@ -111,9 +114,10 @@ fit_3mo <- c(fit_3mo, lapply(sim_data[1:30], function(data) {
   setnames(tmle_out, c("variable", "0", "1"), c("J", "F.a0", "F.a1"))
   setcolorder(tmle_out, c("J", "time", "F.a1", "F.a0"))
   return(tmle_out)
-}))
+}
 
-fit_6mo <- c(fit_6mo, lapply(sim_data[1:30], function(data) {
+fit_6mo <- foreach(data = sim_data[1:40], 
+                   .combine = rbind) %dopar% {
   dat <- copy(data)[, TIME := ceiling(TIME / 30 / 6)]
   out <- concr_tmle(dat, target_times_cont / 30 / 6, target_events, models)
   tmle_out <- out$estimates$tmle[, -"S"] %>% melt(., id.vars = c("A", "time")) %>%
@@ -124,5 +128,7 @@ fit_6mo <- c(fit_6mo, lapply(sim_data[1:30], function(data) {
   setnames(tmle_out, c("variable", "0", "1"), c("J", "F.a0", "F.a1"))
   setcolorder(tmle_out, c("J", "time", "F.a1", "F.a0"))
   return(tmle_out)
-}))
+}
 
+
+fit_1mo
