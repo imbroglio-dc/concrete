@@ -26,12 +26,22 @@ base_data <- readxl::read_excel("./data/test_leader.xlsx") %>%
 data <- simulate_data(n = 1e3, base_data = base_data)
 
 
-
 # sl parameters ----------------------------------------------------------------------
 
-target_events <- 1:3
-target_times <- 1:4 * 360
-target_times_cont <- 1:4 * 360
+EventTime = data$TIME
+EventType = data$EVENT
+Treatment = data$ARM
+CovDataTable = data[, -c("EVENT", "TIME", "ARM", "ID")]
+CovTrtTime = NULL
+ID = data$ID
+TargetTimes = 500*1:3
+TargetEvents = sort(unique(data[EVENT > 0, get("EVENT")]))
+
+CVArgs = NULL
+NumUpdateSteps = 50
+OneStepEps = 1
+PropScoreCutoff = 0.05
+Verbose = T
 
 logreg <- make_learner(Lrnr_glm)
 lasso <- make_learner(Lrnr_glmnet) # alpha default is 1
@@ -39,136 +49,101 @@ ridge <- Lrnr_glmnet$new(alpha = 0)
 e_net <- make_learner(Lrnr_glmnet, alpha = 0.5)
 a_lrnrs <- make_learner(Stack, logreg, lasso, ridge, e_net)
 
-models <- list("A" = a_lrnrs,
-               "0" = list(mod1 = Surv(TIME, EVENT == 0) ~ ARM,
-                          mod2 = Surv(TIME, EVENT == 0) ~ ARM + AGE,
-                          mod3 = Surv(TIME, EVENT == 0) ~ ARM + AGE + SMOKER + STROKSFL,
-                          mod4 = Surv(TIME, EVENT == 0) ~ .),
-               "1" = list(mod1 = Surv(TIME, EVENT == 1) ~ ARM,
-                          mod2 = Surv(TIME, EVENT == 1) ~ ARM + SMOKER + BMIBL,
-                          # mod3 = Surv(TIME, EVENT == 1) ~ ARM*SMOKER + I(BMIBL>30)*ARM,
-                          mod4 = Surv(TIME, EVENT == 1) ~ .),
-               "2" = list(mod1 = Surv(TIME, EVENT == 2) ~ ARM,
-                          mod2 = Surv(TIME, EVENT == 2) ~ ARM + STROKSFL + MIFL,
-                          # mod3 = Surv(TIME, EVENT == 2) ~ ARM*STROKSFL + ARM*MIFL + MIFL:STROKSFL,
-                          mod4 = Surv(TIME, EVENT == 2) ~ .),
-               "3" = list(mod1 = Surv(TIME, EVENT == 3) ~ ARM,
-                          mod2 = Surv(TIME, EVENT == 3) ~ ARM + SMOKER + BMIBL,
-                          mod3 = Surv(TIME, EVENT == 3) ~ ARM + SMOKER + BMIBL + STROKSFL + MIFL,
-                          mod4 = Surv(TIME, EVENT == 3) ~ .))
+Models <- list("A" = a_lrnrs,
+               "0" = list(mod1 = Surv(Time, Event == 0) ~ Trt,
+                          mod2 = Surv(Time, Event == 0) ~ Trt + AGE,
+                          mod3 = Surv(Time, Event == 0) ~ Trt + AGE + SMOKER + STROKSFL,
+                          mod4 = Surv(Time, Event == 0) ~ .),
+               "1" = list(mod1 = Surv(Time, Event == 1) ~ Trt,
+                          mod2 = Surv(Time, Event == 1) ~ Trt + SMOKER + BMIBL,
+                          # mod3 = Surv(Time, Event == 1) ~ Trt*SMOKER + I(BMIBL>30)*Trt,
+                          mod4 = Surv(Time, Event == 1) ~ .),
+               "2" = list(mod1 = Surv(Time, Event == 2) ~ Trt,
+                          mod2 = Surv(Time, Event == 2) ~ Trt + STROKSFL + MIFL,
+                          # mod3 = Surv(Time, Event == 2) ~ Trt*STROKSFL + Trt*MIFL + MIFL:STROKSFL,
+                          mod4 = Surv(Time, Event == 2) ~ .),
+               "3" = list(mod1 = Surv(Time, Event == 3) ~ Trt,
+                          mod2 = Surv(Time, Event == 3) ~ Trt + SMOKER + BMIBL,
+                          mod3 = Surv(Time, Event == 3) ~ Trt + SMOKER + BMIBL + STROKSFL + MIFL,
+                          mod4 = Surv(Time, Event == 3) ~ .))
 
 
 # run doConCRTmle -----------------------------------------------------------------------------
 
 debugonce(doConCRTmle)
-doConCRTmle(EventTime = data$TIME, EventType = data$EVENT, Treatment = data$ARM,
-            CovDataTable = data[, -c("EVENT", "TIME", "ARM", "id")], Time = NULL,
-            ID = data$id, TargetTimes = sort(unique(data[EVENT > 0, get("TIME")])),
-            TargetEvents = sort(unique(data[EVENT > 0, get("EVENT")])),
-            Models = models, CVArgs = NULL, NumUpdateSteps = 25, OnestepEps = 0.1,
-            Verbose = T)
+doConCRTmle(EventTime, EventType, Treatment, CovDataTable, CovTrtTime, ID, TargetTimes,
+            TargetEvents, Models, CVArgs, NumUpdateSteps, OnestepEps, PropScoreCutoff, Verbose)
 
 
-# # time slicing simulation analysis ---------------------------------------------------------
-#
-# cl8 <- makeForkCluster(8)
-# registerDoParallel(cl8)
-# registerDoRNG(123456789)
-# B <- 50
-# sim_data <- foreach(i = 1:B) %dopar% {
-#   return(simulate_data(n = 1e3, base_data = base_data) %>%
-#            mutate(ARM = as.numeric(ARM)))
-# }
-#
-#
-# cont_fit <- c(cont_fit, foreach(data = sim_data[41:75]) %dopar% {
-#   out <- concr_tmle(data, target_times_cont, target_events, models)
-#   tmle_out <- out$estimates$tmle[, -"S"] %>% melt(., id.vars = c("A", "time")) %>%
-#     dcast(., time + variable ~ A, value.var = "value") %>%
-#     .[, RR := `1` / `0`] %>%
-#     .[, RD := `1` - `0`] %>%
-#     .[, SR := (1 - `1`) / (1 - `0`)]
-#   setnames(tmle_out, c("variable", "0", "1"), c("J", "F.a0", "F.a1"))
-#   setcolorder(tmle_out, c("J", "time", "F.a1", "F.a0"))
-#   return(tmle_out)
-# })
-#
-# fit_1mo <- c(fit_1mo, foreach(data = sim_data[41:75]) %dopar% {
-#   dat <- copy(data)[, TIME := ceiling(TIME / 30)]
-#   out <- concr_tmle(dat, target_times_cont / 30, target_events, models)
-#   tmle_out <- out$estimates$tmle[, -"S"] %>% melt(., id.vars = c("A", "time")) %>%
-#     dcast(., time + variable ~ A, value.var = "value") %>%
-#     .[, RR := `1` / `0`] %>%
-#     .[, RD := `1` - `0`] %>%
-#     .[, SR := (1 - `1`) / (1 - `0`)]
-#   setnames(tmle_out, c("variable", "0", "1"), c("J", "F.a0", "F.a1"))
-#   setcolorder(tmle_out, c("J", "time", "F.a1", "F.a0"))
-#   return(tmle_out)
-# })
-#
-# fit_3mo <- c(fit_3mo, foreach(data = sim_data[41:75]) %dopar% {
-#   dat <- copy(data)[, TIME := ceiling(TIME / 30 / 3)]
-#   out <- concr_tmle(dat, target_times_cont / 30 / 3, target_events, models)
-#   tmle_out <- out$estimates$tmle[, -"S"] %>% melt(., id.vars = c("A", "time")) %>%
-#     dcast(., time + variable ~ A, value.var = "value") %>%
-#     .[, RR := `1` / `0`] %>%
-#     .[, RD := `1` - `0`] %>%
-#     .[, SR := (1 - `1`) / (1 - `0`)]
-#   setnames(tmle_out, c("variable", "0", "1"), c("J", "F.a0", "F.a1"))
-#   setcolorder(tmle_out, c("J", "time", "F.a1", "F.a0"))
-#   return(tmle_out)
-# })
-#
-# fit_6mo <- c(fit_6mo, foreach(data = sim_data[41:75]) %dopar% {
-#   dat <- copy(data)[, TIME := ceiling(TIME / 30 / 6)]
-#   out <- concr_tmle(dat, target_times_cont / 30 / 6, target_events, models)
-#   tmle_out <- out$estimates$tmle[, -"S"] %>% melt(., id.vars = c("A", "time")) %>%
-#     dcast(., time + variable ~ A, value.var = "value") %>%
-#     .[, RR := `1` / `0`] %>%
-#     .[, RD := `1` - `0`] %>%
-#     .[, SR := (1 - `1`) / (1 - `0`)]
-#   setnames(tmle_out, c("variable", "0", "1"), c("J", "F.a0", "F.a1"))
-#   setcolorder(tmle_out, c("J", "time", "F.a1", "F.a0"))
-#   return(tmle_out)
-# })
-#
-# sim_out <- list("continuous" = cont_fit,
-#                 "1_month" = fit_1mo,
-#                 "3_month" = fit_3mo,
-#                 "6_month" = fit_6mo)
-#
-# sim_out <- bind_rows(lapply(1:length(sim_out), function(i) {
-#   output <- as.data.table(bind_rows(sim_out[[i]]))
-#   output[, time := rep(target_times_cont, each = 3, times = 40)]
-#
-#   output <- melt(output[, lapply(.SD, mean), by = c("J", "time")],
-#                  id.vars = c("J", "time"), variable.name = 'param',
-#                  value.name = "estimate") %>%
-#     merge(.,
-#           melt(output[, lapply(.SD, function(d) quantile(d, 0.975)), by = c("J", "time")],
-#                id.vars = c("J", "time"), variable.name = 'param', value.name = "upper")) %>%
-#     merge(.,
-#           melt(output[, lapply(.SD, function(d) quantile(d, 0.025)), by = c("J", "time")],
-#                id.vars = c("J", "time"), variable.name = 'param', value.name = "lower")) %>%
-#     cbind("timescale" = names(sim_out)[i], .)
-#   return(output)
-# }))
-#
-# sim_out <- as.data.table(true_risks)[time %in% target_times_cont, ] %>%
-#   mutate(J = as.factor(J)) %>%
-#   melt(., id.vars = c("J", "time"), value.name = "truth", variable.name = "param") %>%
-#   merge(sim_out, ., by = c("J", "time", "param"))
-#
-#
-# sim_out %>% filter(param %in% c("F.a1", "F.a0")) %>%
-#   mutate(time = as.factor(time)) %>%
-#   ggplot(aes(x = time, y = estimate, linetype = J, colour = timescale)) +
-#   theme_minimal() + facet_wrap(param~J, scales = "free") +
-#   geom_errorbar(aes(ymin = lower, ymax = upper), position = position_dodge2(0.5)) +
-#   geom_point(position = position_dodge2(1)) +
-#   geom_segment(aes(x = as.numeric(time) - 0.5, xend = as.numeric(time) + 0.5,
-#                    y = truth, yend = truth), alpha = 0.3, colour = 'blue')
+# Helene's data sim ---------------------------------------------------------
+library(tidyverse); library(data.table); library(zoo); library(survival); library(prodlim)
+lapply(paste0("../contTMLE/R/", list.files("../contTMLE/R/")), source)
 
+formatContmle <- function(contmleOutput) {
+  tmleOutput <-
+    data.table(
+      "J" = rep(names(contmleOutput$tmle), each = 2),
+      "val" = c("ATE", "se"),
+      do.call(rbind, contmleOutput$tmle)
+    )
+  tmleOutput <- melt(tmleOutput, id.vars = c("J", "val"))
+  setnames(tmleOutput, "variable", "time")
+  tmleOutput[, J := gsub("F", "", J)]
+  tmleOutput[, time := as.numeric(gsub("tau=", "", time))]
+  tmleOutput <-
+    dcast(tmleOutput, J + time ~ val, value.var = "value")
+}
 
+B <- 100
+seeds <- seq(123456, length.out = B)
+results <- vector("list", length = B)
+for (i in 1:B) {
+  set.seed(seeds[i])
+  dt3 <- sim.data2(1e3, setting = 2, no.cr = 3, competing.risk = TRUE)
 
-# psi
+  logreg <- make_learner(Lrnr_glm)
+  lasso <- make_learner(Lrnr_glmnet) # alpha default is 1
+  ridge <- Lrnr_glmnet$new(alpha = 0)
+  e_net <- make_learner(Lrnr_glmnet, alpha = 0.5)
+  a_lrnrs <- make_learner(Stack, logreg, lasso, ridge, e_net)
+
+  Models <- list("A" = a_lrnrs,
+                 "0" = list(mod1 = Surv(Time, Event == 0) ~ Trt*L1 + L1 + L2 + L3),
+                 "1" = list(mod1 = Surv(Time, Event == 1) ~ Trt + L1 + L3),
+                 "2" = list(mod1 = Surv(Time, Event == 2) ~ Trt + L1 + L2 + L3),
+                 "3" = list(mod1 = Surv(Time, Event == 3) ~ Trt + L1 + L2))
+
+  concreteOutput <- doConCRTmle(EventTime = dt3$time, EventType = dt3$delta, Treatment = dt3$A,
+                                CovDataTable = dt3[, c("L1", "L2", "L3")], CovTrtTime = NULL,
+                                ID = dt3$id, TargetTimes = 0.3*1:3, Models = Models,
+                                TargetEvents = sort(unique(dt3[delta > 0, get("delta")])),
+                                CVArgs = NULL, NumUpdateSteps = 50, OneStepEps = 1,
+                                PropScoreCutoff = 0.05, Verbose = T)
+  results[[i]] <- cbind(fn = "doConCRTmle", getATE(concreteOutput))
+
+  run <- contmle(
+    dt3, #-- dataset
+    target = 1:3, #-- go after cause 1 and cause 2 specific risks
+    iterative = FALSE, #-- use one-step tmle to target F1 and F2 simultaneously
+    treat.effect = "ate", #-- target the ate directly
+    tau = 0.3 * 1:3, #-- time-point of interest
+    estimation = list(
+      "cens" = list(fit = "cox",
+                    model = Surv(time, delta == 0) ~ L1 + L2 + L3 + A*L1),
+      "cause1" = list(fit = "cox",
+                      model = Surv(time, delta == 1) ~ A + L1 + L3),
+      "cause2" = list(fit = "cox",
+                      model = Surv(time, delta == 2) ~ A + L1 + L2 + L3),
+      "cause3" = list(fit = "cox",
+                      model = Surv(time, delta == 3) ~ A + L1 + L2))
+  )
+
+  results[[i]] <- rbind(results[[i]],
+                        cbind(fn = "contmle",
+                              formatContmle(run)))
+}
+
+bind_rows(results) %>%
+  group_by(J, time, fn) %>%
+  summarise(mean_ATE = mean(ATE), mean_se = mean(se))
+
