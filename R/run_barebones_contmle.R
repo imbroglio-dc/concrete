@@ -38,8 +38,8 @@ TargetTimes = 500*1:3
 TargetEvents = sort(unique(data[EVENT > 0, get("EVENT")]))
 
 CVArgs = NULL
-NumUpdateSteps = 50
-OneStepEps = 1
+NumUpdateSteps = 100
+OneStepEps = 0.5
 PropScoreCutoff = 0.05
 Verbose = T
 
@@ -78,6 +78,7 @@ doConCRTmle(EventTime, EventType, Treatment, CovDataTable, CovTrtTime, ID, Targe
 # Helene's data sim ---------------------------------------------------------
 library(tidyverse); library(data.table); library(zoo); library(survival); library(prodlim)
 lapply(paste0("../contTMLE/R/", list.files("../contTMLE/R/")), source)
+source("R/functions/contmle.R")
 
 formatContmle <- function(contmleOutput) {
   tmleOutput <-
@@ -117,8 +118,8 @@ for (i in 1:B) {
                                 CovDataTable = dt3[, c("L1", "L2", "L3")], CovTrtTime = NULL,
                                 ID = dt3$id, TargetTimes = 0.3*1:3, Models = Models,
                                 TargetEvents = sort(unique(dt3[delta > 0, get("delta")])),
-                                CVArgs = NULL, NumUpdateSteps = 50, OneStepEps = 1,
-                                PropScoreCutoff = 0.05, Verbose = T)
+                                CVArgs = NULL, NumUpdateSteps = NumUpdateSteps,
+                                OneStepEps = OneStepEps, PropScoreCutoff = 0.05, Verbose = T)
   results[[i]] <- cbind(fn = "doConCRTmle", getATE(concreteOutput))
 
   run <- contmle(

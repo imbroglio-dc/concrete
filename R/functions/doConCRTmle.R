@@ -338,17 +338,16 @@ doConCRTmle <- function(EventTime, EventType, Treatment, CovDataTable, CovTrtTim
     ## make backups ----
     ## save current cause-specific hazards and clever covs in case the update
     ## makes things worse
-    for (j in TargetEvents) { # loop over target events
-      for (k in TargetTimes) { # loop over target times
-        for (l in Events) { # nested loop over all events
-          Ht[, (paste0("h.j", j, ".l", l, ".t", k, ".tmp")) :=
-               get(paste0("h.j", j, ".l", l, ".t", k))]
-        }
-      }
-      Ht[, (paste0("cox.j", j, ".tmp")) := get(paste0("cox.j", j))]
-    }
+
+    OldCols <- grep("(h\\.j)|(cox\\.j)", colnames(Ht), value = TRUE)
+    Ht.old <- Ht[, mget(OldCols)]
 
     ## 5.1 calculate update step direction -------------------------------------
+
+    getUpdateStepDir <- function(l, j, k) {
+
+    }
+    Ht[, (paste0("delta.j", Events, ".dx ")) := lapply(Events, function(l) 0)]
 
     for (l in Events) { # loop over event hazards
       Ht[, (paste0("delta.j", l, ".dx")) := 0] # fluctuation of causes-specific hazard
@@ -449,15 +448,7 @@ doConCRTmle <- function(EventTime, EventType, Treatment, CovDataTable, CovTrtTim
                      OneStepEps, " will be halved\n"))
       OneStepEps <- OneStepEps / 2
       ## Revert to previous cshaz & clevcovs if update made things worse
-      for (j in TargetEvents) { # loop over target Events
-        for (k in TargetTimes) { # loop over target times
-          for (l in Events) { # nested loop over Events
-            Ht[, (paste0("h.j", j, ".l", l, ".t", k)) :=
-                 get(paste0("h.j", j, ".l", l, ".t", k, ".tmp"))]
-          }
-        }
-        Ht[, (paste0("cox.j", j)) := get(paste0("cox.j", j, ".tmp"))]
-      }
+      Ht[, (OldCols) := Ht.old[, mget(OldCols)]]
 
       PnEIC <- PnEIC_prev
       PnEIC_wtd <- PnEIC_wtd_prev
@@ -467,7 +458,6 @@ doConCRTmle <- function(EventTime, EventType, Treatment, CovDataTable, CovTrtTim
       ht_eic_cols <- grep("PnEIC", colnames(Ht), value = T)
       Ht <- Ht[, !..ht_eic_cols]
       Ht[PnEIC, on = .(A = A), (ht_eic_cols) := mget(sprintf("i.%s", ht_eic_cols))]
-      gc() # otherwise memory blows up
 
       summ_eic <- melt(ic$ic, id.vars = "ID")
       summ_eic[, c("dummy", "A", "J", "T") := tstrsplit(variable, "\\.(a|j|t)")]
@@ -488,18 +478,14 @@ doConCRTmle <- function(EventTime, EventType, Treatment, CovDataTable, CovTrtTim
       if (Verbose)
         cat(signif(abs(colMeans(summ_eic[, -"ID"])) /
                      (sqrt(colMeans(summ_eic[, -"ID"]^2)) /
-                     ( sqrt(nrow(Data)) * log(nrow(Data)))), 2), "\n")
+                        ( sqrt(nrow(Data)) * log(nrow(Data)))), 2), "\n")
 
 
       if (all(onestep_stop) | step == NumUpdateSteps) {
-        if (step == NumUpdateSteps) {
-          message("Warning: Algorithm did not converge")
-        }
-
-        if (Verbose) {
-          print(paste0("converged", " at ", step, "th step"))
-          print(paste0("PnEIC = ", colMeans(summ_eic[, -"ID"])))
-        }
+        if (Verbose)
+          ifelse(all(onestep_stop),
+                 message("converged at step ", step),
+                 warning("Warning: Algorithm did not converge by step ", step))
 
         ## format output ----
         Psi_tmle <- Ht[, mget(c("A", grep("Psi.+", colnames(Ht), value = T)))]

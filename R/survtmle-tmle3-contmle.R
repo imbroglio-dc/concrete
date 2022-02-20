@@ -241,8 +241,8 @@ while (b <= B) {
             SL.ctime = sl_G_dC,
             SL.trt = sl_lib_g,
             # glm.trt = glm_trt,
-            returnIC = T,
-            returnModels = T,
+            returnIC = TRUE,
+            returnModels = TRUE,
             ftypeOfInterest = 1,
             trtOfInterest = c(1, 0),
             maxIter = 25,
@@ -284,19 +284,8 @@ while (b <= B) {
         df_long <- rbindlist(all_times)
 
         node_list <- list(
-            W = c(
-                "GEOGR1",
-                "SEX",
-                "AGE",
-                "CREATBL",
-                "HBA1CBL",
-                "MIFL",
-                "SMOKER",
-                "STROKSFL",
-                "BMIBL",
-                "ETHNIC",
-                "EGFMDRBC"
-            ),
+            W = c("GEOGR1", "SEX", "AGE", "CREATBL", "HBA1CBL", "MIFL", "SMOKER",
+                  "STROKSFL", "BMIBL", "ETHNIC", "EGFMDRBC"),
             A = "ARM",
             T_tilde = "TIME",
             Delta = "EVENT",
