@@ -508,7 +508,6 @@ doConCRTmle <- function(EventTime, EventType, Treatment, CovDataTable, CovTrtTim
         Psi_tmle[, c("dummy", "event", "time") := tstrsplit(variable, "\\.(j|t)")]
         Psi_tmle <- Psi_tmle[, -c("variable", "dummy")]
         Psi_tmle <- dcast(Psi_tmle, A + time ~ event, value.var = "value")
-        browser()
         Psi_tmle[, S := 1 - do.call(sum, mget(paste0(1:3))), by = c("A", "time")]
         Psi_tmle <- Psi_tmle[, lapply(.SD, as.numeric)][order(time, A)]
 
