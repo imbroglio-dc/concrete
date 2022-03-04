@@ -7,8 +7,8 @@ library(MOSS); library(survtmle); library(survival); library(zoo)
 library(tidyverse); library(foreach); library(doRNG); library(doParallel)
 library(data.table); library(tlverse); library(sl3); library(origami)
 setwd(dir = "/Shared/Projects/ConCR-TMLE/")
-lapply(paste0("R/functions/", list.files("R/functions/")), source)
-source("./R/functions/doConCRTmle.R")
+lapply(paste0("R/", list.files("R/")), source)
+source("./R/doConCRTmle.R")
 
 # data cleaning -------------------------------------------------------------------------------
 base_data <- readxl::read_excel("./data/test_leader.xlsx") %>%
