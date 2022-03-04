@@ -280,7 +280,7 @@ doConCRTmle <- function(EventTime, EventType, Treatment, CovDataTable, CovTrtTim
   Psi_init[, c("dummy", "event", "time") := tstrsplit(variable, "\\.(j|t)")]
   Psi_init <- Psi_init[, -c("variable", "dummy")]
   Psi_init <- dcast(Psi_init, A + time ~ event, value.var = "value")
-  Psi_init[, S := do.call(sum, mget(paste0(1:3))), by = c("A", "time")]
+  Psi_init[, S := do.call(sum, mget(Events)), by = c("A", "time")]
   Psi_init <- Psi_init[, lapply(.SD, as.numeric)][order(time, A)]
 
 
@@ -466,10 +466,10 @@ doConCRTmle <- function(EventTime, EventType, Treatment, CovDataTable, CovTrtTim
       summ_eic[, J := paste0("j", get("J"))]
       summ_eic[, "T" := paste0("t", get("T"))]
       summ_eic <- dcast(summ_eic, ID + A + `T` ~ J, value.var = "value")[
-        , S := do.call(sum, mget(paste0("j", 1:3))),
+        , S := do.call(sum, mget(paste0("j", Events))),
         by = c("ID", "A", "T")]
       summ_eic <- dcast(summ_eic, ID ~ ...,
-                        value.var = c("j1", "j2", "j3", "S"),
+                        value.var = c(paste0("j", Events), "S"),
                         sep = ".")
 
       onestep_stop <- abs(colMeans(summ_eic[, -"ID"])) <=
@@ -494,7 +494,7 @@ doConCRTmle <- function(EventTime, EventType, Treatment, CovDataTable, CovTrtTim
         Psi_tmle[, c("dummy", "event", "time") := tstrsplit(variable, "\\.(j|t)")]
         Psi_tmle <- Psi_tmle[, -c("variable", "dummy")]
         Psi_tmle <- dcast(Psi_tmle, A + time ~ event, value.var = "value")
-        Psi_tmle[, S := 1 - do.call(sum, mget(paste0(1:3))), by = c("A", "time")]
+        Psi_tmle[, S := 1 - do.call(sum, mget(paste0(Events))), by = c("A", "time")]
         Psi_tmle <- Psi_tmle[, lapply(.SD, as.numeric)][order(time, A)]
 
         tmle_ic <- summ_eic[, -c("ID")]
