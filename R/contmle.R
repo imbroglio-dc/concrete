@@ -1119,7 +1119,7 @@ contmle <- function(dt,
         if (Sigma) {
           if (survival & length(outcome.index) == length(target)) {
             outer2 <- Reduce("+", lapply(outer, function(xx)
-              - xx))
+              -xx))
           } else {
             outer2 <- do.call("cbind", outer)
           }

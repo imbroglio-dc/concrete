@@ -4,6 +4,7 @@
 #' @param EventTime
 #' @param EventType
 #' @param Treatment
+#' @param Intervention
 #' @param CovDataTable
 #' @param ID
 #' @param TargetTimes
@@ -12,86 +13,95 @@
 #' @param CVArgs
 #' @param NumUpdateSteps
 #' @param OneStepEps
-#' @param PropScoreCutoff
+#' @param MinNuisanceDenom
 #' @param Verbose
-#' @param ...
 #'
 #' @return
 #' @export
 #'
 #' @examples
-doConCRTmle <- function(EventTime, EventType, Treatment, CovDataTable,
+doConCRTmle <- function(EventTime, EventType, Treatment, Intervention, CovDataTable,
                         ID = NULL, TargetTimes = sort(unique(EventTime)),
                         TargetEvents = NULL, Models, CVArgs = NULL, NumUpdateSteps = 25,
-                        OneStepEps = 0.1, PropScoreCutoff = 0.05, Verbose = FALSE, ...)
+                        OneStepEps = 0.1, MinNuisanceDenom = 0.05, PropScoreBackend = "sl3",
+                        Verbose = FALSE, GComp = FALSE, ...)
 {
   # check & format parameters  ----------------------------------------------------------------
-  args <- checkConCRTmleArgs(EventTime, EventType, Treatment, CovDataTable,
-                             ID, TargetTimes, TargetEvents, Models, CVArgs, NumUpdateSteps,
-                             OneStepEps, Verbose)
-  Data <- args$Data
+  # args <- checkConCRTmleArgs(EventTime, EventType, Treatment, CovDataTable,
+  #                            ID, TargetTimes, TargetEvents, Models, CVArgs, NumUpdateSteps,
+  #                            OneStepEps, Verbose)
+  Data <- data.table("ID" = ID,
+                     "Time" = EventTime,
+                     "Event" = EventType,
+                     "Trt" = Treatment,
+                     CovDataTable)
   Events <- sort(unique(Data$Event))
   Events <- Events[Events > 0]
 
+  # For user input: data + formula ----
+  # try use prodlim::EventHistory.frame
+  # x=EventHistory.frame(Hist(time,Status,cens.code="censored")~age+sex+intervention(trt)+stage,data=pbc,specials="intervention")
+  # names(x)
+
+  # OBS: learners can either work with the original data or with the design matrix (dummies)
+
+  if (is.list(Intervention)) {
+    RegsOfInterest <- lapply(Intervention, function(intervene) {
+      if (is.function(intervene)) {
+        RegName <- do.call(intervene, list(Treatment, CovDataTable))
+        if (is.null(attr(RegName, "g.star"))) {
+          attr(RegName, "g.star") <- as.numeric(Treatment == RegName)
+          warning("no g.star input, defaulting to the indicator that observed Treatment == desired RegName")
+        }
+        return(RegName)
+      }
+      else stop("Intervention must be a list of functions. See doConCRTmle documentation")
+    })
+  }
+
   # helper functions  -------------------------------------------------------------------------
 
-  PnEIC_norm_fun <- function(x, y) {
+  PnEICNorm_fun <- function(x, y) {
     return(sqrt(sum(unlist(x) * unlist(y))))
   }
 
-  PnEIC_wt_fun <- function(PnEIC) {
+  PnEIC_wt_fun <- function(PnEIC, Sigma = NULL) {
+    ## INCOMPLETE - work needed to match contmle()
+    if (!is.null(Sigma)) {
+      SigmaInv <- try(solve(Sigma))
+      if (any(class(SigmaInv) == "try-error")) {
+        SigmaInv <- solve(Sigma + diag(x = 1e-6, nrow = nrow(Sigma)))
+        warning("regularization of Sigma needed for inversion")
+      }
+      PnEIC <- PnEIC %*% SigmaInv
+    }
     return(PnEIC)
   }
 
   # initial estimation ------------------------------------------------------------------------
-  InitEsts <- getInitialEstimates(Data, CovdataTable, Models, PropScoreCutoff, TargetTimes)
+  InitEsts <- getInitialEstimates(Data, CovdataTable, Models, MinNuisanceDenom, TargetTimes,
+                                  RegsOfInterest, PropScoreBackend)
 
-  # initialize clever covariate table ---------------------------------------------------------
-  ClevCovTbl <- getInitialCleverCov(InitEsts[["PropScore"]], InitEsts[["SupLrnFits"]],
-                                    InitEsts[["Hazards"]], TargetEvents, TargetTimes, Events)
-
-  ## initial estimator (g-computation) ----
-  A_Fjk <- expand.grid(list("J" = TargetEvents, "K" = TargetTimes))
-  A_Fjk <- c("A", apply(A_Fjk, 1, function(r) paste0("F.j", r["J"], ".t", r["K"])))
-  Psi_init <- ClevCovTbl[, lapply(.SD, mean), .SDcols = A_Fjk, by = "A"][, -1]
-
-  formatPsi <- function(Psi) {
-    # Psi_init <- ClevCovTbl[, mget(c("A", grep("Psi.+", colnames(ClevCovTbl), value = T)))]
-    # Psi_init <- Psi_init[, lapply(.SD, unique), by = "A"]
-    Psi <- melt(Psi, id.vars = "A")
-    Psi[, c("event", "time") := tstrsplit(variable, "\\.(j|t)", keep = 2:3, )]
-    Psi <- dcast(Psi, A + time ~ event, value.var = "value")
-    # Psi[, S := do.call(sum, mget(Events)), by = c("A", "time")]
-    Psi <- Psi[, lapply(.SD, as.numeric)][order(time, A)]
-  }
+  # get initial EIC (possibly with GComp Estimate) ---------------------------------------------
+  InitEIC <- getEIC(PropScores = InitEsts[["PropScores"]],
+                    SupLrnFits = InitEsts[["SupLrnFits"]],
+                    Hazards = InitEsts[["Hazards"]],
+                    TargetEvents, TargetTimes, Events,
+                    RegsOfInterest, MinNuisanceDenom, GComp)
 
 
-  # Update step ---------------------------------------------------------------------------------
+  ## initial estimator (g-computation) --------------------------------------------------------
+  GCompEst <- InitEIC[["SummEIC"]][, c("A", "Time", "Event", "Psi")]
+
+  # Update step -------------------------------------------------------------------------------
 
   ## EIC ----
-  IC <- getEIC(ClevCovTbl, TargetTimes, TargetEvents, Events)
-
-  PnEIC <- IC$pnEIC
-
-  PnEIC_wtd <- PnEIC_wt_fun(PnEIC)
-
-  ClevCovTbl <- merge(ClevCovTbl, PnEIC_wtd, by = "A")
-  PnEIC_norm <- PnEIC_norm_fun(PnEIC, PnEIC_wtd)
-
-  PnEIC <- as.data.table(cbind("A" = 1:0,
-                               rbind(PnEIC[grep("a1", names(PnEIC))],
-                                     PnEIC[grep("a0", names(PnEIC))])))
-  setnames(PnEIC, 2:ncol(PnEIC),
-           do.call(paste0, expand.grid("PnEIC.j", TargetEvents, ".t", TargetTimes)))
-
   ## one-step tmle loop (one-step) ----
 
   for (step in 1:NumUpdateSteps) {
     if (Verbose)
       cat("starting step", step, "with update epsilon =", OneStepEps, "\n")
-    PnEIC_prev <- PnEIC
-    PnEIC_wtd_prev <- PnEIC_wtd
-    PnEIC_norm_prev <- PnEIC_norm
+    IC_prev <- IC
 
     ## make backups ----
     ## save current cause-specific hazards and clever covs in case the update
@@ -102,8 +112,33 @@ doConCRTmle <- function(EventTime, EventType, Treatment, CovDataTable,
 
     ## 5.1 calculate update step direction -------------------------------------
 
-    getUpdateStepDir <- function(l, j, k) {
+    getUpdateStepDir <- function(l, TargetEvents, TargetTimes, IC) {
+      h.jlk <- expand.grid(paste0("h.j", TargetEvents, ".l", l), paste0(".t", TargetTimes))
+      h.jlk <- do.call(paste0, h.jlk)
 
+      ClevCovCols.l <- c("ID", "A", "Time", "Ht.g", h.jlk)
+      ClevCov.l <- ClevCovTbl[, .SD, .SDcols = ClevCovCols.l]
+      for (a in RegsOfInterest)
+        ClevCov.l[A == a, ]
+
+      ClevCov.l <- dcast(ClevCov.l, ... ~ A, value.var = c(h.jlk, "Ht.g"), sep = ".a")
+      ClevCov.l <- melt(ClevCov.l, id.vars = c("A", "Time", "Ht.g"))
+      ClevCov.l[, c("j", "k") := tstrsplit(variable, "\\.(j|l|t)", keep = c(2, 4))]
+
+      lapply(TargetEvents, function(j) {
+        sapply(TargetTimes, function(k) {
+          ClevCovCols.ljk <- c("A", "Time", "Ht.g", paste0("h.j", j, ".l", l, ".t", k))
+          ClevCovTbl[, list("A" = A, "delta.l.dx" = ), .SDcols = ClevCovCols.ljk]
+        })
+      })
+
+      for (j in TargetEvents) { # loop over target Events
+        for (k in TargetTimes) { # loop over target times
+          ClevCovTbl[Time <= k, delta.l := delta.l + Ht.g *
+                       get(paste0("h.j", j, ".l", l, ".t", k)) *
+                       get(paste0("PnEIC.j", j, ".t", k)) / PnEICNorm]
+        }
+      }
     }
     ClevCovTbl[, (paste0("delta.j", Events, ".dx ")) := lapply(Events, function(l) 0)]
 
@@ -111,25 +146,26 @@ doConCRTmle <- function(EventTime, EventType, Treatment, CovDataTable,
       ClevCovTbl[, (paste0("delta.j", l, ".dx")) := 0] # fluctuation of causes-specific hazard
       for (j in TargetEvents) { # loop over target Events
         for (k in TargetTimes) { # loop over target times
-          ClevCovTbl[, (paste0("delta.j", l, ".dx")) := get(paste0("delta.j", l, ".dx")) +
-               (Time <= k) * Ht.g *
-               get(paste0("h.j", j, ".l", l, ".t", k)) *
-               get(paste0("PnEIC.j", j, ".t", k)) / PnEIC_norm]
+          ClevCovTbl[Time <= k, (paste0("delta.j", l, ".dx")) := get(paste0("delta.j", l, ".dx")) +
+                       Ht.g *
+                       get(paste0("h.j", j, ".l", l, ".t", k)) *
+                       get(paste0("PnEIC.j", j, ".t", k)) / PnEICNorm]
         }
       }
     }
+
 
     ## 5.3 update cause specific hazards ----------------------------------------
     ClevCovTbl[, S.t := 1]
     for (l in Events) { # loop over competing Events
       ClevCovTbl[, (paste0("Cox.j", l)) := get(paste0("Cox.j", l)) *
-           exp(OneStepEps * get(paste0("delta.j", l, ".dx")))]
+                   exp(OneStepEps * get(paste0("delta.j", l, ".dx")))]
       #### truncation cox fit +- 500 why ? -----
       ClevCovTbl[, (paste0("Cox.j", l)) := pmax(-500, pmin(500, get(paste0("Cox.j", l))))]
       # Does changing the order of event updates matter? -------------------------------
       ClevCovTbl[, S.t := S.t * exp(-cumsum(get(paste0("BaseHaz.j", l)) *
-                                      get(paste0("Cox.j", l)))),
-         by = c("ID", "A")]
+                                              get(paste0("Cox.j", l)))),
+                 by = c("ID", "A")]
       # when does cox go to Infinity? -------
       if (any(is.infinite(ClevCovTbl[, get(paste0("Cox.j", l))])))
         stop(paste0("Cox.fit for j=", j, " went to infinity. wtf happened?\n"))
@@ -141,9 +177,9 @@ doConCRTmle <- function(EventTime, EventType, Treatment, CovDataTable,
     ## update clever covariates ----
     for (j in TargetEvents) {
       ClevCovTbl[, (paste0("F.j", j, ".t")) := cumsum(`LagS.t` *
-                                                get(paste0("BaseHaz.j", j)) *
-                                                get(paste0("Cox.j", j))),
-         by = c("ID", "A")]
+                                                        get(paste0("BaseHaz.j", j)) *
+                                                        get(paste0("Cox.j", j))),
+                 by = c("ID", "A")]
       for (k in TargetTimes) {
         # ClevCovTbl[, (paste0("S.t", k)) := S.t[Time == k], by = c("ID", "A")]
         ClevCovTbl[, fjtau := get(paste0("F.j", j, ".t"))[Time == k], by = c("ID", "A")]
@@ -168,15 +204,15 @@ doConCRTmle <- function(EventTime, EventType, Treatment, CovDataTable,
         ClevCovTbl[, EIC := 0]
         for (l in Events) {
           ClevCovTbl[, EIC := EIC + get(paste0("h.j", j, ".l", l, ".t", k)) * Ht.g *
-               (Time <= k) * (Time <= T.tilde) * (Trt == A) *
-               ((Time == T.tilde) * (Event == l) -
-                  get(paste0("Cox.j", l)) * get(paste0("BaseHaz.j", l)))]
+                       (Time <= k) * (Time <= T.tilde) * (Trt == A) *
+                       ((Time == T.tilde) * (Event == l) -
+                          get(paste0("Cox.j", l)) * get(paste0("BaseHaz.j", l)))]
         }
         EicTbl <- merge(EicTbl,
                         dcast(ClevCovTbl[, .(EIC = sum(EIC),
-                                     Fjt = unique(get(paste0("F.j", j, ".t", k))),
-                                     Psijt = unique(get(paste0("Psi.j", j, ".t", k)))),
-                                 by = c("ID", "A")][, EIC := EIC + Fjt - Psijt],
+                                             Fjt = unique(get(paste0("F.j", j, ".t", k))),
+                                             Psijt = unique(get(paste0("Psi.j", j, ".t", k)))),
+                                         by = c("ID", "A")][, EIC := EIC + Fjt - Psijt],
                               ID ~ A, value.var = "EIC"),
                         by = "ID")
         setnames(EicTbl, "0", paste0("EIC.a0.j", j, ".t", k))
@@ -195,12 +231,12 @@ doConCRTmle <- function(EventTime, EventType, Treatment, CovDataTable,
     eica <- do.call(paste0, expand.grid("PnEIC.j", TargetEvents, ".t", TargetTimes))
     setnames(PnEIC, 2:ncol(PnEIC), eica)
 
-    PnEIC_wtd <- PnEIC_wt_fun(PnEIC)
-    PnEIC_norm <- PnEIC_norm_fun(PnEIC, PnEIC_wtd)
+    WtdPnEIC <- PnEIC_wt_fun(PnEIC)
+    PnEICNorm <- PnEICNorm_fun(PnEIC, WtdPnEIC)
     if (Verbose)
-      cat("Step", step, "mean EIC norm = ", PnEIC_norm, "\n")
+      cat("Step", step, "mean EIC norm = ", PnEICNorm, "\n")
 
-    if (PnEIC_norm_prev <= PnEIC_norm) {
+    if (PnEICNorm_prev <= PnEICNorm) {
       step <- step - 1
       warning(paste0("update overshot! one-step update epsilon of ",
                      OneStepEps, " will be halved\n"))
@@ -209,8 +245,8 @@ doConCRTmle <- function(EventTime, EventType, Treatment, CovDataTable,
       ClevCovTbl[, (OldCols) := ClevCovTbl.old[, mget(OldCols)]]
 
       PnEIC <- PnEIC_prev
-      PnEIC_wtd <- PnEIC_wtd_prev
-      PnEIC_norm <- PnEIC_norm_prev
+      WtdPnEIC <- WtdPnEIC_prev
+      PnEICNorm <- PnEICNorm_prev
     } else {
       # update PnEIC columns in ClevCovTbl with updated values
       ht_eic_cols <- grep("PnEIC", colnames(ClevCovTbl), value = T)
@@ -321,7 +357,10 @@ checkConCRTmleArgs <- function(EventTime, EventType, Treatment, CovDataTable,
   }
 
   Events <- sort(unique(Data$Event))
+  if (length(Models != length(Events)))
+    stop("Models must be provided for every observed event or censoring type")
   Events <- Events[Events > 0]
+
 
   if (is.null(TargetEvents))
     TargetEvents <- Events
@@ -342,179 +381,10 @@ checkConCRTmleArgs <- function(EventTime, EventType, Treatment, CovDataTable,
   # binary treatment
   # stopping criteria
   # ...
-
   return(list(Data = Data))
 }
 
-getInitialEstimates <- function(Data, CovdataTable, Models, PropScoreCutoff,
-                               TargetTimes) {
-  ## cross validation setup ----
-  # stratifying cv so that folds are balanced for treatment assignment & outcomes
-  StrataIDs <- as.numeric(factor(paste0(Data[["Trt"]], ":", Data[["Event"]])))
-  CVFolds <- origami::make_folds(n = Data, fold_fun = origami::folds_vfold,
-                                 strata_ids = StrataIDs)
-
-  ## PropScore score ----
-  TrtTask <- sl3::make_sl3_Task(
-    data = Data[, -c("Time", "Event", "ID")],
-    covariates = colnames(CovDataTable),
-    outcome = "Trt"
-  )
-
-  TrtSL <- sl3::Lrnr_sl$new(learners = Models[["A"]],
-                            folds = CVFolds)
-  TrtFit <- TrtSL$train(TrtTask)
-  PropScore <- TrtFit$predict()
-
-  if (min(PropScore) < PropScoreCutoff | max(PropScore) > 1 - PropScoreCutoff) {
-    warning("practical positivity violation likely, truncating PropScore +-", PropScoreCutoff, "\n")
-    PropScore[PropScore < PropScoreCutoff] <- PropScoreCutoff
-    PropScore[PropScore > (1 - PropScoreCutoff)] <- 1 - PropScoreCutoff
-  }
-
-  ## hazards: Events & censoring ----
-  SupLrnModels <- list()
-  for (j in grep("\\d+", names(Models), value = T)) {
-    Models_j <- Models[[j]]
-    SupLrnLibRisk <- data.table::data.table(matrix(NaN, nrow = nrow(Data), ncol = length(Models_j)))
-    colnames(SupLrnLibRisk) <- names(Models_j)
-
-    for (Fold_v in CVFolds) {
-      TrainIndices <- Fold_v[["training_set"]]
-      ValidIndices <- Fold_v[["validation_set"]]
-      TrainData <- Data[TrainIndices, -c("ID")]
-      ValidData <- Data[ValidIndices, ][order(-Time)]
-
-      for (i in 1:length(Models_j)) {
-        ## train model ----
-        CoxphArgs <- list("formula" = Models_j[[i]], "data" = TrainData)
-        ModelFit <- do.call(survival::coxph, CoxphArgs)
-
-        ## validation loss (-log partial likelihood) ----
-        ValidData[, FitLP := predict(ModelFit, type = "lp", newdata = ValidData)]
-        ValidData[, AtRisk := cumsum(exp(FitLP))]
-        ValidData[AtRisk == 0, AtRisk := 1]
-        ValidData[, names(Models_j)[i] := (Event == j) * (FitLP - log(AtRisk))]
-      }
-      SupLrnLibRisk[ValidIndices, names(Models_j) := subset(ValidData, select = names(Models_j))]
-    }
-    ## metalearner (discrete selector) ----
-    SupLrnModels[[j]] <- list("SupLrnCVRisks" = -colSums(SupLrnLibRisk),
-                              "SupLrnModel" = Models_j[[which.min(-colSums(SupLrnLibRisk))]])
-  }
-
-  ## fit sl selection ----
-
-  SupLrnFits <- lapply(SupLrnModels, function(SLMod) {
-    ## fit sl model ----
-    ModelFit <- do.call(survival::coxph, list("formula" = SLMod$SupLrnModel, "data" = Data))
-    Hazards <- rbind(data.table(time = 0, hazard = 0),
-                     suppressWarnings(setDT(basehaz(ModelFit, centered = TRUE))))
-    colnames(Hazards) <- c("Time", "SupLrnHaz")
-    return(list("fit" = ModelFit, "BaseHaz" = Hazards))
-  })
-
-  ## output initial estimates ----
-  HazTimes <- unique(c(TargetTimes, Data[["Time"]]))
-  HazTimes <- HazTimes[HazTimes <= max(TargetTimes)]
-
-  Hazards <- data.table("Time" = c(0, HazTimes))[order(Time)]
-  Hazards <- rbind(cbind(Hazards, A = 0), cbind(Hazards, A = 1))
-
-  ## baseline hazards ----
-  for (j in grep("\\d+", names(Models), value = T)) {
-    Hazards <- merge(Hazards, SupLrnFits[[j]][["BaseHaz"]], by = "Time", all.x = T)
-    Hazards[, SupLrnHaz := zoo::na.locf(SupLrnHaz), by = "A"]
-    if (j == "0") {
-      Hazards[, SupLrnHaz := c(0, SupLrnHaz[-.N]), by = "A"]
-      setnames(Hazards, "SupLrnHaz", "LagCumHaz.C.t")
-    } else {
-      # hazards[, paste0("cumBaseHaz.j", j) := haz]
-      Hazards[, SupLrnHaz := c(0, diff(SupLrnHaz)), by = "A"]
-      setnames(Hazards, "SupLrnHaz", paste0("BaseHaz.j", j))
-    }
-  }
-  return(list("Hazards" = Hazards, "PropScore" = PropScore, "SupLrnFits" = SupLrnFits))
-}
-
-# initialize clever covariates
-getInitialCleverCov <- function(PropScore, SupLrnFits, Hazards, TargetEvents, TargetTimes, Events) {
-  ## clever covariate data.table ClevCovTbl
-  ClevCovTbl <- rbind(cbind(Data, A = 1), cbind(Data, A = 0))
-  setcolorder(ClevCovTbl, c("ID", "Trt", "Time", "Event"))
-
-  ## clever covariate A component ----
-  ClevCovTbl[A == 1, Ht.a := 1 / PropScore]
-  ClevCovTbl[A == 0, Ht.a := 1 / (1 - PropScore)]
-
-  ## clever covariate hazard components ----
-  # A = target trt, Trt = assigned trt; Time = eval time, T.tilde = observed event time
-  setnames(ClevCovTbl, c("A", "Trt"), c("Trt", "A"))
-  for (j in grep("\\d+", names(Models), value = T)) {
-    if (j == "0") {
-      ClevCovTbl[, Cox.C := predict(SupLrnFits[["0"]]$fit, newdata = ClevCovTbl, type = "risk")]
-    } else {
-      ClevCovTbl[, (paste0("Cox.j", j)) := predict(SupLrnFits[[j]][["fit"]], newdata = ClevCovTbl, type = "risk")]
-    }
-  }
-  setnames(ClevCovTbl, c("A", "Trt", "Time"), c("Trt", "A", "T.tilde"))
-
-  ClevCovTblColNames <- c("ID", "Trt", "A", "T.tilde", "Event", "Ht.a",
-                  grep("Cox", colnames(ClevCovTbl), value = T))
-  ClevCovTbl <- ClevCovTbl[, ClevCovTblColNames, with = FALSE]
-  ClevCovTbl <- merge(ClevCovTbl, Hazards, by = "A", allow.cartesian = T)[order(ID, Time, A)]
-  setcolorder(ClevCovTbl, c("ID", "Time", "A"))
-
-  ### clever covariate C component ----
-  ClevCovTbl[, "LagS.C.a.t" := exp(-LagCumHaz.C.t * Cox.C)]
-  if (min(ClevCovTbl[["LagS.C.a.t"]]) < 0.05) {
-    warning(paste0("targeting a time where probability of being censored >95%,",
-                   "cens survival truncated at min 0.05, but you should really",
-                   "aim lower\n"))
-  }
-  ClevCovTbl[, "Ht.g" := Ht.a / LagS.C.a.t]
-  ClevCovTbl <- ClevCovTbl[, -c("Ht.a", "Cox.C", "LagCumHaz.C.t", "LagS.C.a.t")]
-
-  ### event-free survival ----
-  ClevCovTbl[, S.t := 1]
-  for (j in TargetEvents) {
-    S.t_BaseHaz.j_Cox.j <- c("S.t", paste0("BaseHaz.j", j), paste0("Cox.j", j))
-    ClevCovTbl[, S.t := .SD[["S.t"]] * exp(-cumsum(.SD[[2]] * .SD[[3]])),
-       .SDcols = S.t_BaseHaz.j_Cox.j, by = c("ID", "A")]
-    # ClevCovTbl[, S.t := S.t * exp(-cumsum(get(paste0("BaseHaz.j", j)) * get(paste0("Cox.j", j)))),
-    #    by = c("ID", "A")]
-  }
-  if (min(ClevCovTbl[, S.t]) <= 0) {
-    stop("you're targeting a time when there are no survivors, aim lower\n")
-  }
-  ClevCovTbl[, "LagS.t" := c(1, S.t[-.N]), by = c("ID", "A")]
-
-  ### cause-specific risks ----
-  for (j in TargetEvents) {
-    LagS.t_BaseHaz.j_Cox.j <- c("LagS.t", paste0("BaseHaz.j", j), paste0("Cox.j", j))
-    ClevCovTbl[, (paste0("F.j", j, ".t")) := cumsum(.SD[["LagS.t"]] * .SD[[2]] * .SD[[3]]),
-       .SDcols = LagS.t_BaseHaz.j_Cox.j, by = c("ID", "A")]
-  }
-
-  ### cause-specific risks at target times ----
-  ### target event (j), target time (k), cause (l) clever covariate ----
-  for (k in TargetTimes) {
-    for (j in TargetEvents) {
-      #### event j risk at target time k ----
-      Fjt_Time <- c(paste0("F.j", j, ".t"), "Time")
-      ClevCovTbl[, (paste0("F.j", j, ".t", k)) := .SD[[1]][.SD[[2]] == k], .SDcols = Fjt_Time, by = c("ID", "A")]
-      for (l in Events) {
-        h.jlk <- paste0("h.j", j, ".l", l, ".t", k)
-        Fjk_Fj <- c(paste0("F.j", j, ".t", k), paste0("F.j", j, ".t"))
-        ClevCovTbl[, (h.jlk) := 1] # why was 1 the default, a 0 should squash oversights no?
-        ClevCovTbl[, (h.jlk) := (l == j) - (.SD[[1]] - .SD[[2]]) / S.t, .SDcols = Fjk_Fj]
-      }
-    }
-  }
-  return(ClevCovTbl)
-}
-
-getEIC <- function(ClevCovTbl, TargetTimes, TargetEvents, Events) {
+getClevCovs <- function(ClevCovTbl, TargetTimes, TargetEvents, Events) {
   EicTbl <- data.table(ID = unique(ClevCovTbl[["ID"]]))
   for (k in TargetTimes) {
     for (j in TargetEvents) {
@@ -534,7 +404,18 @@ getEIC <- function(ClevCovTbl, TargetTimes, TargetEvents, Events) {
       EicTbl <- merge(EicTbl, EIC.jk, by = "ID")
     }
   }
-  return(list("ic" = EicTbl[, -c("ID")],
-              "pnEIC" = colMeans(EicTbl[, -c("ID")]),
-              "seEIC" = sqrt(diag(var(EicTbl[, -c("ID")])))))
+  SummEIC <- cbind("Summ" = c("PnEIC", "seEIC"),
+                   as.data.table(rbind(colMeans(EicTbl[, -c("ID")]),
+                                       sqrt(diag(var(EicTbl[, -c("ID")]))))))
+  SummEIC <- melt(SummEIC, id.vars = "Summ")
+  SummEIC[, c("A", "j", "k") := tstrsplit(variable, "\\.*(a|j|t)", keep = 2:4)]
+  SummEIC <- dcast(SummEIC, A + j + k ~ Summ, value.var = "value")
+
+  WtdPnEIC <- PnEIC_wt_fun(SummEIC[["PnEIC"]])
+  PnEICNorm <- PnEICNorm_fun(SummEIC[["PnEIC"]], WtdPnEIC)
+  SummEIC[, "WtdPnEIC" := WtdPnEIC]
+
+  return(list("IC" = EicTbl[, -c("ID")],
+              "SummEIC" = SummEIC,
+              "PnEICNorm" = PnEICNorm))
 }

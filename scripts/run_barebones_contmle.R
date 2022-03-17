@@ -78,7 +78,7 @@ doConCRTmle(EventTime, EventType, Treatment, CovDataTable, CovTrtTime, ID, Targe
 # Helene's data sim ---------------------------------------------------------
 library(tidyverse); library(data.table); library(zoo); library(survival); library(prodlim)
 lapply(paste0("../contTMLE/R/", list.files("../contTMLE/R/")), source)
-source("R/functions/contmle.R")
+source("./R/contmle.R")
 
 formatContmle <- function(contmleOutput) {
   tmleOutput <-
@@ -100,7 +100,8 @@ seeds <- seq(123456, length.out = B)
 results <- vector("list", length = B)
 for (i in 1:B) {
   set.seed(seeds[i])
-  dt3 <- sim.data2(1e3, setting = 2, no.cr = 3, competing.risk = TRUE)
+  dt3 <- sim.data2(1e3, setting = 2, no.cr = 1, competing.risk = TRUE)
+  dt3$delta[dt3$delta == 2] <- 1
 
   logreg <- make_learner(Lrnr_glm)
   lasso <- make_learner(Lrnr_glmnet) # alpha default is 1
