@@ -1,81 +1,115 @@
 # get EICs
-getEIC <- function(PropScores, SupLrnFits, Hazards, TargetEvents, TargetTimes, Events,
-                   RegsOfInterest, MinNuisanceDenom, GComp = F) {
+getEIC <- function(Estimates, Data, RegsOfInterest, Censored, TargetEvents, TargetTimes, Events, MinNuisance, GComp = F) {
     Targets <- expand.grid("Time" = TargetTimes, "Event" = TargetEvents)
+    EvalTimes <- attr(Estimates, "times")
+    T.tilde <- Data[["Time"]]
+    Delta <- Data[["Event"]]
 
-    ICs <- lapply(names(RegsOfInterest), function(RegName) {
-        PredFits <- getPredFits(RegName, RegsOfInterest, PropScores, Data, SupLrnFits)
+    ICs <- lapply(Estimates, function(RegimeEsts) {
+        NuisanceWeight <- sapply(1:length(RegimeEsts[["PropScore"]]), function(i) {
+            RegimeEsts[["PropScore"]][i] * RegimeEsts[["Survival"]][["LaggedCensSurv"]][, i]})
+        NuisanceWeight <- 1 / truncNuisanceDenom(NuisanceWeight, MinNuisance)
+        GStar <- attr(PropScore, "g.star")
+        Hazards <- RegimeEsts[["Hazards"]]
+        TotalSurv <- RegimeEsts[["Survival"]][["TotalSurv"]]
 
-        Censored <- !is.null(Hazards[["LagCumHaz.C.t"]])
+        IC.a <- getICs(GStar, Hazards, TotalSurv, NuisanceWeight, Targets, Events, EvalTimes, GComp)
+
+        getICs <- function(GStar, Hazards, TotalSurv, NuisanceWeight, Targets,
+                           Events, EvalTimes, GComp) {
+
+            IC.a <- lapply(1:length(PropScore), function(i) {
+                Hazards.i <- lapply(Hazards, function(haz) haz[, i])
+                Surv.i <- TotalSurv[, i]
+                Risks.i <- lapply(Hazards, function(haz) cumsum(Surv.i * haz))
+                LagSc.i <- LaggedCensSurv[, i]
+
+                if (GStar[i] == 0) # 1(A == a*)
+                    return(cbind(Targets, "IC" = 0,
+                                 "F" = apply(Targets, 1, function(target) {
+                                     tau <- target[["Time"]]
+                                     j <- target[["Event"]]
+                                     return(Risks.i[[as.character(j)]][EvalTimes == tau])
+                                 })))
+
+                IC.jk <- t(apply(Targets, 1, function(target) {
+                    t.tilde <- T.tilde[i]
+                    tau <- target[["Time"]]
+                    time.cutoff <- min(tau, t.tilde) ## 1(t \leq tau) * 1(t \leq t.tilde)
+                    j <- target[["Event"]]
+                    F.j.tau <- Risks.i[[as.character(j)]][EvalTimes == tau]
+
+                    Surv.ik <- Surv.i[EvalTimes <= time.cutoff]
+                    haz.J.ik <- lapply(Hazards.i, function(r) r[EvalTimes <= time.cutoff])
+                    F.j.t <- Risks.i[[as.character(j)]][EvalTimes <= time.cutoff]
+
+                    IC.jk <- sum(sapply(Events, function(l) {
+                        h.jk <- GStar[i] * NuisanceWeight[i] * ((l == j) - (F.j.tau - F.j.t) / Surv.ik)
+
+                        IC.ljk <- sum(h.jk * ((EvalTimes == t.tilde) * (Delta[i] == l) - haz.J.ik[[as.character(l)]]))
+                        ## the second component ( ... + F_j(tau | a, L) - Psi ) is done outside
+                        return(IC.ljk)
+                    }))
+                    return(c("IC" = IC.jk, "F" = F.j.tau))
+                }))
+                IC.jk <- cbind(Targets, IC.jk)
+                return(IC.jk)
+            })
+            return(list("IC" = IC.a, "NuisanceWeights" = NuisanceWeights))
+        }
+
         # loop over individuals
-        IC.a <- lapply(1:nrow(PredFits), function(i) {
-            Subj <- PredFits[i, ]
-            SubjRisk <- getSubjRisk(Subj, Hazards, MinNuisanceDenom, Events, Targets, Censored)
-            SubjIC.a <- getSubjICs(Subj, SubjRisk, Hazards, MinNuisanceDenom, Events, Targets, Censored)
-            # browser()
-            # if (GComp) {
-            #     GCompEst <- getGComp(SubjRisk, TargetTimes)
-            #     return(list("IC" = SubjIC.a, "GComp" = GCompEst))
-            # } else {
-            #     return(list("IC" = SubjIC.a))
-            # }
+        IC.a <- lapply(1:length(PropScore), function(i) {
+            SubjPropScore <- PropScore[i]
+            Subjg.star <- g.star[i]
+            SubjHazards <- lapply(Hazards, function(haz) haz[, i])
+            SubjTotalSurv <- TotalSurv[, i]
+            SubjLaggedCensSurv <- LaggedCensSurv[, i]
+
+            SubjRisk <- getSubjRisk(SubjPropScore, SubjHazards, SubjTotalSurv, SubjLaggedCensSurv,
+                                    MinNuisance, Events, Targets, Censored)
+
+            SubjIC.a <- getSubjICs(SubjPropScore, SubjHazards, SubjTotalSurv, SubjLaggedCensSurv,
+                                   MinNuisance, Events, Targets, Censored)
+            return(list("IC" = SubjIC.a, "Ht.g" = SubjRisk[["Ht.g"]], "S.t" = SubjRisk[["S.t"]]))
         })
 
         output <- list()
+        output[["PredFits"]] <- PredFits
+        output[["Ht.g"]] <- as.data.table(do.call(cbind, lapply(IC.a, function(i) i[["Ht.g"]])))
+        output[["S.t"]] <- as.data.table(do.call(cbind, lapply(IC.a, function(i) i[["S.t"]])))
+
         IC.a <- as.data.table(do.call(rbind, lapply(1:length(IC.a),
-                                                    function(i) cbind("ID" = i, IC.a[[i]]))))
+                                                    function(i) cbind("ID" = i, IC.a[[i]][["IC"]]))))
         IC.a[, IC := IC + `F` - mean(`F`), by = c("Time", "Event")]
         tmp <- IC.a[, list(-1, -sum(IC), 1 - sum(`F`)), by = c("Time", "ID")]
         setnames(tmp, c(paste0("V", 1:3)), c("Event", "IC", "F"))
-        IC.a <- rbind(IC.a, tmp)
-
-        output[["EIC"]] <- cbind("A" = RegName, IC.a)
+        output[["EIC"]] <- rbind(IC.a, tmp)
 
         output[["SummEIC"]] <- output[["EIC"]][, list(mean(IC), mean(`F`), sqrt(var(IC)/.N)),
                                                by = c("Time", "Event")]
         setnames(output[["SummEIC"]], paste0("V", 1:3), c("PnEIC", "Psi", "sePsi.IC"))
-        output[["SummEIC"]] <- cbind("A" = RegName, output[["SummEIC"]])
+
         return(output)
     })
+            names(ICs) <- names(RegsOfInterest)
 
-    return(list("EIC" = do.call(rbind, lapply(ICs, function(a) a[["EIC"]])),
-                "SummEIC" = do.call(rbind, lapply(ICs, function(a) a[["SummEIC"]]))))
+            out <- list("EIC" = lapply(ICs, function(a) a[["EIC"]]),
+                        "SummEIC" = lapply(ICs, function(a) a[["SummEIC"]]),
+                        "PredFits" = lapply(ICs, function(a) a[["PredFits"]]))
+            return(ICs)
 }
 
-getPredFits <- function(RegName, RegsOfInterest, PropScores, Data, SupLrnFits) {
-    PredFits <- as.data.table(cbind(Data, "A" = RegsOfInterest[[RegName]]))
-    PredFits[, g.star := attr(RegsOfInterest[[RegName]], "g.star")]
 
-    ## clever covariate hazard components ----
-    setnames(PredFits, c("A", "Trt"), c("Trt", "A"))
-    for (j in grep("\\d+", names(SupLrnFits), value = T)) {
-        if (j == "0") {
-            PredFits[, Cox.C := predict(SupLrnFits[["0"]]$fit, newdata = PredFits, type = "risk")]
-        } else {
-            PredFits[, (paste0("Cox.j", j)) := predict(SupLrnFits[[j]][["fit"]],
-                                                       newdata = PredFits, type = "risk")]
-        }
-    }
-    # A = target trt, Trt = assigned trt; Time = eval time, T.tilde = observed event time
-    setnames(PredFits, c("A", "Trt", "Time"), c("Trt", "A", "T.tilde"))
-
-    PredFitsColNames <- c("ID", "Trt", "A", "g.star","T.tilde", "Event",
-                          grep("Cox", colnames(PredFits), value = T))
-    PredFits <- PredFits[, PredFitsColNames, with = FALSE]
-
-    PredFits[, Ht.a := 1 / PropScores[[RegName]]]
-    return(PredFits[])
-}
-
-getSubjRisk <- function(Subj, Hazards, MinNuisanceDenom, Events, Targets, Censored) {
+getSubjRisk <- function(Subj, Hazards, MinNuisance, Events, Targets, Censored) {
     ### clever covariate nuisance component ----
     Ht.g <- Subj[["Ht.a"]]
     if (Censored)
         Ht.g <- Ht.g / exp(-Hazards[["LagCumHaz.C.t"]] * Subj[["Cox.C"]])
 
     truncated <- FALSE
-    if (max(Ht.g) > 1 / MinNuisanceDenom) {
-        Ht.g <- 1 / truncNuisanceDenom(1/Ht.g, MinNuisanceDenom)
+    if (max(Ht.g) > 1 / MinNuisance) {
+        Ht.g <- 1 / truncNuisanceDenom(1/Ht.g, MinNuisance)
         truncated <- TRUE
     }
 
@@ -91,7 +125,6 @@ getSubjRisk <- function(Subj, Hazards, MinNuisanceDenom, Events, Targets, Censor
     }))
     SubjRisk <- as.data.table(do.call(cbind, list(Hazards[["Time"]], Ht.g, S.t, SubjRisk)))
     colnames(SubjRisk) <- c("Time", "Ht.g", "S.t", paste0("F.j", Events, ".t"))
-
     ## SURVIVAL + RISKS DON'T SUM TO 1 - because naive implementation, fix? ----
     return(SubjRisk)
 }
@@ -103,7 +136,8 @@ getGComp <- function(SubjRisk, Targets) {
     return(SubjRisk[Time %in% TargetTimes, -c("Ht.g")])
 }
 
-getSubjICs <- function(Subj, SubjRisk, Hazards, MinNuisanceDenom, Events, Targets, Censored) {
+getSubjICs <- function(SubjPropScore, SubjHazards, SubjTotalSurv, SubjLaggedCensSurv,
+                       MinNuisance, Events, Targets, Censored) {
     if (Subj[["g.star"]] == 0) # 1(A == a*)
         return(cbind(Targets, "IC" = 0,
                      "F" = apply(Targets, 1, function(target) {

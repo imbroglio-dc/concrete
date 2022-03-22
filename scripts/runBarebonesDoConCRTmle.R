@@ -47,7 +47,7 @@ Intervention <- list(
         return(regime)
     })
 
-Models <- list("A" = a_lrnrs,
+Models <- list("Trt" = a_lrnrs,
                "0" = list(mod1 = Surv(Time, Event == 0) ~ Trt,
                           mod3 = Surv(Time, Event == 0) ~ Trt*age + Trt*sex),
                "1" = list(mod1 = Surv(Time, Event == 1) ~ Trt,

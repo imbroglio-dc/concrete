@@ -1,14 +1,15 @@
 
-getPropScores <- function(Data, CovDataTable, Models, MinNuisanceDenom, RegsOfInterest,
+getPropScores <- function(Data, CovDataTable, Models, MinNuisance, RegsOfInterest,
                           PropScoreBackend, CVFolds) {
     if (PropScoreBackend == "sl3") {
-        PropScores <- getSl3PropScores(Data, CovDataTable, Models, MinNuisanceDenom, RegsOfInterest, CVFolds)
+        PropScores <- getSl3PropScores(Data, CovDataTable, Models, MinNuisance, RegsOfInterest, CVFolds)
     } else {
         stop("functionality for propensity score calculation not using sl3 has not yet been implemented")
     }
+    return(PropScores)
 }
 
-getSl3PropScores <- function(Data, CovDataTable, Models, MinNuisanceDenom, RegsOfInterest, CVFolds) {
+getSl3PropScores <- function(Data, CovDataTable, Models, MinNuisance, RegsOfInterest, CVFolds) {
     ## PropScore score ----
     TrtTask <- sl3::make_sl3_Task(
         data = Data[, -c("Time", "Event", "ID")],
@@ -16,7 +17,7 @@ getSl3PropScores <- function(Data, CovDataTable, Models, MinNuisanceDenom, RegsO
         outcome = "Trt"
     )
 
-    TrtSL <- sl3::Lrnr_sl$new(learners = Models[["A"]], folds = CVFolds)
+    TrtSL <- sl3::Lrnr_sl$new(learners = Models[["Trt"]], folds = CVFolds)
     TrtFit <- TrtSL$train(TrtTask)
 
     PropScores <- lapply(RegsOfInterest, function(a) {
@@ -31,21 +32,22 @@ getSl3PropScores <- function(Data, CovDataTable, Models, MinNuisanceDenom, RegsO
         } else {
             stop("support for non-numeric, non-vector regimes of interest is not yet implemented.")
         }
+        attr(PropScore, "g.star") <- attr(a, "g.star")
         return(PropScore)
     })
-    return(PropScores)
+    return(list("PropScores" = PropScores, "TrtFit" = TrtFit))
 }
 
-truncNuisanceDenom <- function(NuisanceDenom, MinNuisanceDenom) {
-    if (is.function(MinNuisanceDenom))
-        warning("Functionality for applying a MinNuisanceDenom function is not yet implemented")
-    if (is.numeric(MinNuisanceDenom) & length(MinNuisanceDenom) == 1) {
-        if (MinNuisanceDenom < 1 & MinNuisanceDenom > 0) {
-            if (min(NuisanceDenom) < MinNuisanceDenom | max(NuisanceDenom) > 1 - MinNuisanceDenom) {
-                warning("practical near positivity violation, truncating NuisanceDenom +-", MinNuisanceDenom, "\n")
+truncNuisanceDenom <- function(NuisanceDenom, MinNuisance) {
+    if (is.function(MinNuisance))
+        warning("Functionality for applying a MinNuisance function is not yet implemented")
+    if (is.numeric(MinNuisance) & length(MinNuisance) == 1) {
+        if (MinNuisance < 1 & MinNuisance > 0) {
+            if (min(NuisanceDenom) < MinNuisance | max(NuisanceDenom) > 1 - MinNuisance) {
+                warning("practical near positivity violation, truncating NuisanceDenom +-", MinNuisance, "\n")
                 attr(NuisanceDenom, "original") <- NuisanceDenom
-                NuisanceDenom[NuisanceDenom < MinNuisanceDenom] <- MinNuisanceDenom
-                NuisanceDenom[NuisanceDenom > (1 - MinNuisanceDenom)] <- 1 - MinNuisanceDenom
+                NuisanceDenom[NuisanceDenom < MinNuisance] <- MinNuisance
+                NuisanceDenom[NuisanceDenom > (1 - MinNuisance)] <- 1 - MinNuisance
             }
         }
     }

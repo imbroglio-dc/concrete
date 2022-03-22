@@ -1,20 +1,24 @@
 
 #' Title
 #'
-#' @param EventTime
-#' @param EventType
-#' @param Treatment
-#' @param Intervention
-#' @param CovDataTable
-#' @param ID
-#' @param TargetTimes
-#' @param TargetEvents
-#' @param Models
-#' @param CVArgs
-#' @param NumUpdateSteps
-#' @param OneStepEps
-#' @param MinNuisanceDenom
-#' @param Verbose
+#' @param EventTime : Numeric vector (N x 1)
+#' @param EventType : Numeric (integer) vector (N x 1)
+#' @param Treatment : Numeric vector (N x 1)
+#' @param Intervention : list of function (length = A*)
+#' @param CovDataTable : data.table (N x ?)
+#' @param ID : vector (N x 1)
+#' @param TargetTimes : numeric vector (length = K)
+#' @param TargetEvents : numeric vector \subset EventType (length = J)
+#' @param Models : list of functions (length = L)
+#' @param CVArgs : list
+#' @param NumUpdateSteps : numeric
+#' @param OneStepEps : numeric
+#' @param MinNuisance : numeric
+#' @param Verbose : boolean
+#' @param Censored : boolean
+#' @param PropScoreBackend : character
+#' @param GComp : boolean
+#' @param ...
 #'
 #' @return
 #' @export
@@ -23,7 +27,7 @@
 doConCRTmle <- function(EventTime, EventType, Treatment, Intervention, CovDataTable,
                         ID = NULL, TargetTimes = sort(unique(EventTime)),
                         TargetEvents = NULL, Models, CVArgs = NULL, NumUpdateSteps = 25,
-                        OneStepEps = 0.1, MinNuisanceDenom = 0.05, PropScoreBackend = "sl3",
+                        OneStepEps = 0.1, MinNuisance = 0.05, PropScoreBackend = "sl3",
                         Verbose = FALSE, GComp = FALSE, ...)
 {
   # check & format parameters  ----------------------------------------------------------------
@@ -35,7 +39,9 @@ doConCRTmle <- function(EventTime, EventType, Treatment, Intervention, CovDataTa
                      "Event" = EventType,
                      "Trt" = Treatment,
                      CovDataTable)
+
   Events <- sort(unique(Data$Event))
+  Censored <- 0 %in% Events
   Events <- Events[Events > 0]
 
   # For user input: data + formula ----
@@ -79,16 +85,23 @@ doConCRTmle <- function(EventTime, EventType, Treatment, Intervention, CovDataTa
   }
 
   # initial estimation ------------------------------------------------------------------------
-  InitEsts <- getInitialEstimates(Data, CovdataTable, Models, MinNuisanceDenom, TargetTimes,
-                                  RegsOfInterest, PropScoreBackend)
+  InitEsts <- getInitialEstimates(Data, CovdataTable, Models, MinNuisance, TargetEvents,
+                                  TargetTimes, RegsOfInterest, PropScoreBackend, Censored)
+  PropScores <- InitEsts[["PropScores"]]
 
   # get initial EIC (possibly with GComp Estimate) ---------------------------------------------
   InitEIC <- getEIC(PropScores = InitEsts[["PropScores"]],
                     SupLrnFits = InitEsts[["SupLrnFits"]],
                     Hazards = InitEsts[["Hazards"]],
-                    TargetEvents, TargetTimes, Events,
-                    RegsOfInterest, MinNuisanceDenom, GComp)
-
+                    TargetEvents,
+                    TargetTimes,
+                    Events,
+                    RegsOfInterest,
+                    MinNuisance,
+                    GComp)
+  # EIC <- InitEIC[["EIC"]]
+  # SummEIC <- InitEIC[["SummEIC"]]
+  # PredFits <- InitEIC[["PredFits"]]
 
   ## initial estimator (g-computation) --------------------------------------------------------
   GCompEst <- InitEIC[["SummEIC"]][, c("A", "Time", "Event", "Psi")]
