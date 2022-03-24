@@ -1,5 +1,6 @@
 # get EICs
-getEIC <- function(Estimates, Data, RegsOfInterest, Censored, TargetEvents, TargetTimes, Events, MinNuisance, GComp = F) {
+getEIC <- function(Estimates, Data, RegsOfInterest, Censored, TargetEvents, TargetTimes,
+                   Events, MinNuisance, GComp = FALSE) {
     Targets <- expand.grid("Time" = TargetTimes, "Event" = TargetEvents)
     EvalTimes <- attr(Estimates, "times")
     T.tilde <- Data[["Time"]]

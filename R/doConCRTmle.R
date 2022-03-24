@@ -30,55 +30,12 @@ doConCRTmle <- function(EventTime, EventType, Treatment, Intervention, CovDataTa
                         OneStepEps = 0.1, MinNuisance = 0.05, PropScoreBackend = "sl3",
                         Verbose = FALSE, GComp = FALSE, ...)
 {
-  # check & format parameters  ----------------------------------------------------------------
-  # args <- checkConCRTmleArgs(EventTime, EventType, Treatment, CovDataTable,
-  #                            ID, TargetTimes, TargetEvents, Models, CVArgs, NumUpdateSteps,
-  #                            OneStepEps, Verbose)
-  Data <- data.table("ID" = ID,
-                     "Time" = EventTime,
-                     "Event" = EventType,
-                     "Trt" = Treatment,
-                     CovDataTable)
-
-  Events <- sort(unique(Data$Event))
-  Censored <- 0 %in% Events
-  Events <- Events[Events > 0]
-
-  # For user input: data + formula ----
-  # try use prodlim::EventHistory.frame
-  # x=EventHistory.frame(Hist(time,Status,cens.code="censored")~age+sex+intervention(trt)+stage,data=pbc,specials="intervention")
-  # names(x)
-
-  # OBS: learners can either work with the original data or with the design matrix (dummies)
-
-  if (is.list(Intervention)) {
-    RegsOfInterest <- lapply(Intervention, function(intervene) {
-      if (is.function(intervene)) {
-        Regime <- do.call(intervene, list(Treatment, CovDataTable))
-        if (is.null(attr(Regime, "g.star"))) {
-          attr(Regime, "g.star") <- function(a) as.numeric(a == Regime)
-          warning("no g.star input, defaulting to the indicator that observed Treatment == desired RegName")
-        }
-        return(Regime)
-      }
-      else stop("Intervention must be a list of functions. See doConCRTmle documentation")
-    })
-  }
-
-  # helper functions  -------------------------------------------------------------------------
-
-  getNormPnEIC <- function(PnEIC, Sigma = NULL) {
-    WeightedPnEIC <- PnEIC
-    if (!is.null(Sigma)) {
-      SigmaInv <- try(solve(Sigma))
-      if (any(class(SigmaInv) == "try-error")) {
-        SigmaInv <- solve(Sigma + diag(x = 1e-6, nrow = nrow(Sigma)))
-        warning("regularization of Sigma needed for inversion")
-      }
-      WeightedPnEIC <- PnEIC %*% SigmaInv
-    }
-    return(sqrt(sum(unlist(PnEIC) * unlist(WeightedPnEIC))))
-  }
+  Args <- formatArguments(EventTime, EventType, Treatment, CovDataTable, ID, TargetTimes,
+                          TargetEvents, CVArgs, NumUpdateSteps, OneStepEps, MinNuisance,
+                          PropScoreBackend, Verbose, GComp)
+  Data <- Args[["Data"]]
+  RegsOfInterest <- Args[["RegsOfInterest"]]
+  Events <- Args[["Events"]]
 
   # initial estimation ------------------------------------------------------------------------
   InitEsts <- getInitialEstimates(Data, CovdataTable, Models, MinNuisance, TargetEvents,
@@ -329,110 +286,15 @@ doConCRTmle <- function(EventTime, EventType, Treatment, Intervention, CovDataTa
 
 }
 
-## check argument formats, types, and sizes ----
-checkConCRTmleArgs <- function(EventTime, EventType, Treatment, CovDataTable,
-                               ID = NULL, TargetTimes = sort(unique(EventTime)),
-                               TargetEvents = NULL, Models, CVArgs = NULL, NumUpdateSteps = 25,
-                               OneStepEps = 0.1, Verbose = FALSE, ...)
-{
-  if (!data.table::is.data.table(CovDataTable)) {
-    CovDataTable <- data.table::as.data.table(CovDataTable)
-    warning("CovDataTable must be a data.table. We have attempted to convert ",
-            "the CovDataTable argument into an object of data.table class.\n")
-  }
-
-  if (any(c("ID",  "Event", "Trt", "t") %in% colnames(CovDataTable)))
-    stop("'ID', 'Event', 'Trt', and 't' are reserved column",
-         "names. Rename covariate column names to avoid name collisions.\n")
-
-
-  if (!all(sapply(list(EventTime, EventType, Treatment, TargetTimes, TargetEvents),
-                  function(vec) is.numeric(vec) | is.null(vec))))
-    stop("EventTime, EventType, and Treatment ",
-         "arguments must be numeric vectors\n")
-
-  if (is.null(ID))
-    ID = seq_along(EventTime)
-
-  Data <- try(
-    data.table::data.table("ID" = ID,
-                           "Time" = EventTime,
-                           "Event" = EventType,
-                           "Trt" = Treatment,
-                           CovDataTable)
-  )
-  if ("try-error" %in% class(Data)) {
-    warning("Failed to create data datatable. ",
-            "Check data inputs; see function help page\n")
-    return(Data)
-  }
-
-  ReservedColumns <- c('Time', 'Event', 'Trt')
-  if (!is.null(CovTrtTime)) {
-    ReservedColumns <- c(ReservedColumns, "t")
-    Data[, `t` := Time]
-  }
-
-  Events <- sort(unique(Data$Event))
-  if (length(Models != length(Events)))
-    stop("Models must be provided for every observed event or censoring type")
-  Events <- Events[Events > 0]
-
-
-  if (is.null(TargetEvents))
-    TargetEvents <- Events
-  else if (!all(TargetEvents %in% Events))
-    stop("")
-
-  # target time(s)
-  if (max(TargetTimes) >= max(Data["Event" != 0, "Time"])) {
-    TargetTimes <- TargetTimes[TargetTimes < max(Data[["Time"]])]
-    warning(paste0("No Observed events at max target time:",
-                   " truncating target time(s) to be at or ",
-                   "before the last observed event time"))
-  }
-
-  # To do:
-  # check if covariates too highly correlated with ID, Time, Event, or Trt
-  # target event(s)
-  # binary treatment
-  # stopping criteria
-  # ...
-  return(list(Data = Data))
-}
-
-getClevCovs <- function(ClevCovTbl, TargetTimes, TargetEvents, Events) {
-  EicTbl <- data.table(ID = unique(ClevCovTbl[["ID"]]))
-  for (k in TargetTimes) {
-    for (j in TargetEvents) {
-      ClevCovTbl[, EIC := 0]
-      for (l in Events) {
-        EicCols <- c(paste0("h.j", j, ".l", l, ".t", k), paste0(c("Cox.j", "BaseHaz.j"), l),
-                     "Event", "Time", "T.tilde", "Trt", "A", "Ht.g", "EIC")
-        ClevCovTbl[(Time <= pmin(k, T.tilde)) & (Trt == A), EIC := EIC + Ht.g * .SD[[1]] *
-                     ((Time == T.tilde) * (Event == l) - .SD[[2]] * .SD[[3]]),
-                   .SDcols = EicCols]
-      }
-      EIC.jk <- ClevCovTbl[, list(EIC = sum(EIC), F.jk = mean(.SD[[2]])),
-                           .SDcols = c("EIC", paste0("F.j", j, ".t", k)), by = c("ID", "A")]
-      EIC.jk <- dcast(EIC.jk[, EIC := EIC + F.jk - mean(F.jk), by = "A"], ID ~ A, value.var = "EIC")
-      setnames(EIC.jk, c("0", "1"), c(paste0("a0.j", j, ".t", k), paste0("a1.j", j, ".t", k)))
-
-      EicTbl <- merge(EicTbl, EIC.jk, by = "ID")
+getNormPnEIC <- function(PnEIC, Sigma = NULL) {
+  WeightedPnEIC <- PnEIC
+  if (!is.null(Sigma)) {
+    SigmaInv <- try(solve(Sigma))
+    if (any(class(SigmaInv) == "try-error")) {
+      SigmaInv <- solve(Sigma + diag(x = 1e-6, nrow = nrow(Sigma)))
+      warning("regularization of Sigma needed for inversion")
     }
+    WeightedPnEIC <- PnEIC %*% SigmaInv
   }
-  SummEIC <- cbind("Summ" = c("PnEIC", "seEIC"),
-                   as.data.table(rbind(colMeans(EicTbl[, -c("ID")]),
-                                       sqrt(diag(var(EicTbl[, -c("ID")]))))))
-  SummEIC <- melt(SummEIC, id.vars = "Summ")
-  SummEIC[, c("A", "j", "k") := tstrsplit(variable, "\\.*(a|j|t)", keep = 2:4)]
-  SummEIC <- dcast(SummEIC, A + j + k ~ Summ, value.var = "value")
-
-  WtdPnEIC <- PnEIC_wt_fun(SummEIC[["PnEIC"]])
-  PnEICNorm <- PnEICNorm_fun(SummEIC[["PnEIC"]], WtdPnEIC)
-  SummEIC[, "WtdPnEIC" := WtdPnEIC]
-
-  return(list("IC" = EicTbl[, -c("ID")],
-              "SummEIC" = SummEIC,
-              "PnEICNorm" = PnEICNorm))
+  return(sqrt(sum(unlist(PnEIC) * unlist(WeightedPnEIC))))
 }

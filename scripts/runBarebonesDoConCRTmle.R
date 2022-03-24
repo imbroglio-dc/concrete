@@ -2,12 +2,9 @@ library(survival); library(zoo); library(prodlim)
 library(foreach); library(doRNG); library(doParallel)
 library(tidyverse); library(data.table)
 library(tlverse); library(sl3); library(origami)
-setwd(dir = "/Shared/Projects/ConCR-TMLE/")
+try(setwd(dir = "/Shared/Projects/ConCR-TMLE/"))
 lapply(paste0("R/", list.files("R/")), source)
 source("./R/doConCRTmle.R")
-lapply(paste0("../contTMLE/R/", list.files("../contTMLE/R/")), source)
-source("./R/contmle.R")
-
 
 data <- as.data.table(survival::pbc)
 set.seed(12345)
