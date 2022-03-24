@@ -1,12 +1,7 @@
-#### must define in foreach environment?
-
-MOSS_mods <- new.env()
-
-
 # haz2surv ----------------------------------------------------------------
+library(MOSS)
 
-
-survival_curve$set(which = "public", name = "haz2surv", function() {
+MOSS::survival_curve$set(which = "public", name = "haz2surv", function() {
     self$survival <- do.call(rbind, lapply(1:nrow(self$hazard), function(i) {
         hazard_here <- head(c(0, self$hazard[i, ]), -1)
         return(cumprod(1 - hazard_here))
@@ -19,7 +14,7 @@ survival_curve$set(which = "public", name = "haz2surv", function() {
 # surv2pdf ----------------------------------------------------------------
 
 
-survival_curve$set(which = "public", name = "surv2pdf", function() {
+MOSS::survival_curve$set(which = "public", name = "surv2pdf", function() {
     self$pdf <- do.call(rbind, lapply(1:self$n(), function(i) {
         c(-diff(self$survival[i, ]), 0)
     }))
@@ -31,7 +26,7 @@ survival_curve$set(which = "public", name = "surv2pdf", function() {
 # surv2haz ----------------------------------------------------------------
 
 
-survival_curve$set(which = "public", name = "surv2haz", function() {
+MOSS::survival_curve$set(which = "public", name = "surv2haz", function() {
     self$surv2pdf()
     self$hazard <- self$pdf/self$survival
     return(self)
