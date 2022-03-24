@@ -54,12 +54,12 @@ doConCRTmle <- function(EventTime, EventType, Treatment, Intervention, CovDataTa
   if (is.list(Intervention)) {
     RegsOfInterest <- lapply(Intervention, function(intervene) {
       if (is.function(intervene)) {
-        RegName <- do.call(intervene, list(Treatment, CovDataTable))
-        if (is.null(attr(RegName, "g.star"))) {
-          attr(RegName, "g.star") <- as.numeric(Treatment == RegName)
+        Regime <- do.call(intervene, list(Treatment, CovDataTable))
+        if (is.null(attr(Regime, "g.star"))) {
+          attr(Regime, "g.star") <- function(a) as.numeric(a == Regime)
           warning("no g.star input, defaulting to the indicator that observed Treatment == desired RegName")
         }
-        return(RegName)
+        return(Regime)
       }
       else stop("Intervention must be a list of functions. See doConCRTmle documentation")
     })
@@ -87,21 +87,13 @@ doConCRTmle <- function(EventTime, EventType, Treatment, Intervention, CovDataTa
   # initial estimation ------------------------------------------------------------------------
   InitEsts <- getInitialEstimates(Data, CovdataTable, Models, MinNuisance, TargetEvents,
                                   TargetTimes, RegsOfInterest, PropScoreBackend, Censored)
-  PropScores <- InitEsts[["PropScores"]]
 
   # get initial EIC (possibly with GComp Estimate) ---------------------------------------------
-  InitEIC <- getEIC(PropScores = InitEsts[["PropScores"]],
-                    SupLrnFits = InitEsts[["SupLrnFits"]],
-                    Hazards = InitEsts[["Hazards"]],
-                    TargetEvents,
-                    TargetTimes,
-                    Events,
-                    RegsOfInterest,
-                    MinNuisance,
-                    GComp)
+  InitEIC <- getEIC(InitEsts, Data, RegsOfInterest, Censored, TargetEvents,
+                    TargetTimes, Events, MinNuisance, GComp)
   # EIC <- InitEIC[["EIC"]]
-  # SummEIC <- InitEIC[["SummEIC"]]
-  # PredFits <- InitEIC[["PredFits"]]
+  SummEIC <- InitEIC[["SummEIC"]]
+  GCompEst <- InitEIC[["GComp"]]
 
   ## initial estimator (g-computation) --------------------------------------------------------
   GCompEst <- InitEIC[["SummEIC"]][, c("A", "Time", "Event", "Psi")]

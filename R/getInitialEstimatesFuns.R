@@ -23,10 +23,15 @@ getInitialEstimates <- function(Data, CovdataTable, Models, MinNuisance, TargetE
     HazSurvPreds <- getHazSurvPreds(Data, HazFits, MinNuisance, TargetEvents,
                                     TargetTimes, RegsOfInterest, Censored)
     InitialEstimates <- lapply(1:length(PropScores), function(a) {
+        NuisanceWeight <- sapply(1:length(PropScores[[a]]), function(i) {
+            PropScores[[a]][i] * HazSurvPreds[[a]][["Survival"]][["LaggedCensSurv"]][, i]})
+        NuisanceWeight <- 1 / truncNuisanceDenom(NuisanceWeight, MinNuisance)
         return(list("PropScore" = PropScores[[a]],
                     "Hazards" = HazSurvPreds[[a]][["Hazards"]],
-                    "Survival" = HazSurvPreds[[a]][["Survival"]]))
+                    "Survival" = HazSurvPreds[[a]][["Survival"]],
+                    "NuisanceWeight" = NuisanceWeight))
     })
+
     names(InitialEstimates) <- names(RegsOfInterest)
     attr(InitialEstimates, "times") <- Hazards[["Time"]]
     return(InitialEstimates)

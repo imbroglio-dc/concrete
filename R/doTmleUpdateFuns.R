@@ -27,35 +27,102 @@
 #
 #     undo or commit updated h() and F() based on PnEIC
 
+doTmleUpdate <- function(Estimates, SummEIC, Data, Censored, TargetEvents, TargetTimes, Events,
+                         NumUpdateSteps, OneStepEps, Verbose) {
+    Targets <- expand.grid("Time" = TargetTimes, "Event" = TargetEvents)
+    EvalTimes <- attr(Estimates, "times")
+    T.tilde <- Data[["Time"]]
+    Delta <- Data[["Event"]]
 
-## get intervention clever covariates for update ----
-getClevCovs <- function(InitEIC = NULL, Hazards = NULL,
-                        TargetTimes, TargetEvents, Events, ) {
-    if (!all(sapply(list(InitEIC, Hazards), is.null))) {
-
-    } else if (!all(sapply(list(PredFits, Hazards), is.null))) {
-
-    } else {
-        warning("Argument(s) missing, gotta provide all update args or all initi args")
-    }
-}
-
-
-
-
-doTmleUpdate <- function(EIC, Data, RegsOfInterest, PropScores, SupLrnFits, Hazards,
-                         TargetEvents, TargetTimes, Events) {
     for (step in 1:NumUpdateSteps) {
+        ## Check if EIC is solved sufficienty and return outputs ----
+        ## check PnEIC <= seEIC / (sqrt(n) log(n))
+        OnestepStop <- SummEIC[, list("check" = abs(PnEIC) <= `seEIC/(root(n)log(n))`,
+                                      "ratio" = abs(PnEIC) / `seEIC/(root(n)log(n))`),
+                               by = c("Trt", "Time", "Event")]
+        if (Verbose)
+            print(OnestepStop[["ratio"]])
+        if (all(sapply(OnestepStop[["check"]], isTRUE))) {
+
+            return()
+        }
+
+        ## one-step tmle loop starts here ----
+
         if (Verbose)
             cat("starting step", step, "with update epsilon =", OneStepEps, "\n")
-        PrevEIC <- EIC
 
         ## make backups ----
         ## save current cause-specific hazards and clever covs in case the update
         ## makes things worse
 
-        PrevPredFits <- PredFits
+        PrevSummEIC <- SummEIC
+        PrevEsts <- Estimates
 
+        ## Get updated hazards
+        updatedHazards <- lapply(Estimates, function(est.a) {
+            NuisanceWeight <- RegimeEsts[["NuisanceWeight"]]
+            GStar <- attr(RegimeEsts[["PropScore"]], "g.star.intervention")
+            Hazards <- RegimeEsts[["Hazards"]]
+            TotalSurv <- RegimeEsts[["Survival"]][["TotalSurv"]]
+
+            lapply(Hazards, function() {})
+        })
+        updateHazards <- function(GStar, Hazards, TotalSurv, NuisanceWeight, Targets,
+                           Events, EvalTimes, GComp) {
+            # loop over individuals
+            lapply(Estimates, function(est.a) {
+                tmp <- lapply(est.a[["Hazards"]], function(haz.al) {
+                    haz.ali <- sapply(1:ncol(est.a[["NuisanceWeight"]]), function(i) {
+
+                    })
+                })
+            })
+
+            IC.a <- do.call(rbind, lapply(1:length(PropScore), function(i) {
+                LagSc.i <- LaggedCensSurv[, i]
+                Surv.i <- TotalSurv[, i]
+                Hazards.i <- lapply(Hazards, function(haz) haz[, i])
+                Risks.i <- lapply(Hazards.i, function(haz.i) cumsum(Surv.i * haz.i))
+
+                if (GStar[i] == 0) # 1(A == a*)
+                    return(cbind("ID" = i, Targets, "IC" = 0,
+                                 "F.j.tau" = apply(Targets, 1, function(target) {
+                                     tau <- target[["Time"]]
+                                     j <- target[["Event"]]
+                                     return(Risks.i[[as.character(j)]][EvalTimes == tau])
+                                 })))
+
+                IC.jk <- t(apply(Targets, 1, function(target) {
+                    j <- target[["Event"]]
+                    tau <- target[["Time"]]
+                    t.tilde <- T.tilde[i]
+                    time.cutoff <- min(tau, t.tilde) ## 1(t \leq tau) * 1(t \leq t.tilde)
+                    F.j.tau <- Risks.i[[as.character(j)]][EvalTimes == tau]
+                    s.ik <- EvalTimes[EvalTimes <= time.cutoff]
+                    Surv.ik <- Surv.i[EvalTimes <= time.cutoff]
+                    haz.J.ik <- lapply(Hazards.i, function(r) r[EvalTimes <= time.cutoff])
+                    F.j.t <- Risks.i[[as.character(j)]][EvalTimes <= time.cutoff]
+
+                    IC.jk <- sum(sapply(Events, function(l) {
+                        h.jk <- GStar[i] * NuisanceWeight[i] * ((l == j) - (F.j.tau - F.j.t) / Surv.ik)
+                        IC.ljk <- sum(h.jk * ((s.ik == t.tilde) * (Delta[i] == l) - haz.J.ik[[as.character(l)]]))
+                        ## the second EIC component ( ... + F_j(tau | a, L) - Psi ) is done outside
+                        return(IC.ljk)
+                    }))
+                    return(c("IC" = IC.jk, "F.j.tau" = F.j.tau))
+                }))
+                IC.jk <- cbind("ID" = i, Targets, IC.jk)
+                return(IC.jk)
+            }))
+
+            ## the second EIC component ( ... + F_j(tau | a, L) - Psi )
+            IC.a <- as.data.table(IC.a)
+            IC.a[, IC := IC + F.j.tau - mean(F.j.tau), by = c("Time", "Event")]
+            return(IC.a[,.SD, .SDcols = !"F.j.tau"])
+        }
+
+        UpdatedHazards <-
 
         ## 5.1 calculate update step direction -------------------------------------
 
@@ -246,3 +313,18 @@ doTmleUpdate <- function(EIC, Data, RegsOfInterest, PropScores, SupLrnFits, Haza
         }
     }
 }
+
+
+## get intervention clever covariates for update ----
+getClevCovs <- function(Estimates, Data, RegsOfInterest, Censored, TargetEvents, TargetTimes, Events) {
+    if (!all(sapply(list(InitEIC, Hazards), is.null))) {
+
+    } else if (!all(sapply(list(PredFits, Hazards), is.null))) {
+
+    } else {
+        warning("Argument(s) missing, gotta provide all update args or all initi args")
+    }
+}
+
+
+

@@ -11,7 +11,7 @@ source("./R/contmle.R")
 
 data <- as.data.table(survival::pbc)
 set.seed(12345)
-data[is.na(trt), trt := sample(1:2, 1)][, trt := trt - 1]
+data[is.na(trt), trt := sample(1:2, sum(is.na(trt)), replace = TRUE)][, trt := trt - 1]
 data[, status := as.numeric(status > 1)]
 EventTime = data$time
 EventType = data$status
@@ -25,7 +25,7 @@ TargetEvents = sort(unique(data[status > 0, status]))
 CVArgs = NULL
 NumUpdateSteps = 100
 OneStepEps = 0.5
-MinNuisanceDenom = 0.05
+MinNuisance = 0.05
 PropScoreBackend = "sl3"
 Verbose = T
 GComp = TRUE
@@ -38,12 +38,12 @@ a_lrnrs <- logreg # make_learner(Stack, logreg, lasso, ridge, e_net)
 Intervention <- list(
     "A == 1" = function(a, L) {
         regime <- rep_len(1, length(a))
-        attr(regime, "g.star") <- as.numeric(a == regime)
+        attr(regime, "g.star") <- function(a) {as.numeric(a == 1)}
         return(regime)
     },
     "A == 0" = function(a, L) {
         regime <- rep_len(0, length(a))
-        attr(regime, "g.star") <- as.numeric(a == regime)
+        attr(regime, "g.star") <- function(a) {as.numeric(a == 0)}
         return(regime)
     })
 

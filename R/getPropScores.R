@@ -32,7 +32,8 @@ getSl3PropScores <- function(Data, CovDataTable, Models, MinNuisance, RegsOfInte
         } else {
             stop("support for non-numeric, non-vector regimes of interest is not yet implemented.")
         }
-        attr(PropScore, "g.star") <- attr(a, "g.star")
+        attr(PropScore, "g.star.intervention") <- attr(a, "g.star")(a)
+        attr(PropScore, "g.star.obs") <- attr(a, "g.star")(Data[["Trt"]])
         return(PropScore)
     })
     return(list("PropScores" = PropScores, "TrtFit" = TrtFit))
