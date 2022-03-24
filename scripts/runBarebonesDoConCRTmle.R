@@ -35,10 +35,15 @@ Models <- list("Trt" = a_lrnrs,
                           mod2 = Surv(Time, Event == 1) ~ Trt + age + sex,
                           mod3 = Surv(Time, Event == 1) ~ Trt*age + Trt*sex))
 
+estimation <- list("cause1" = list(fit = "cox",
+                                   model = Surv(time, status == 1) ~ trt + age + sex),
+                   "cens" = list(fit = "cox",
+                                 model = Surv(time, status == 0) ~ trt + age + sex))
+
 output <- doConCRTmle(EventTime = data$time,
                       EventType = data$status,
                       Treatment = data$trt,
-                      Intervention = ,
+                      Intervention = Intervention,
                       CovDataTable = data[, c("age", "sex")],
                       ID = data$id,
                       TargetTimes = 1200, #500*1:4,
@@ -52,3 +57,13 @@ output <- doConCRTmle(EventTime = data$time,
                       Verbose = FALSE,
                       GComp = TRUE)
 
+contmle_output <- contmle(dt = data,
+                          target = 1,
+                          iterative = FALSE,
+                          treat.effect = 1,
+                          tau = 1200,
+                          estimation = estimation,
+                          treat.model = trt ~ sex + age,
+                          sl.models = list(mod1 = list(Surv(time, status == 1) ~ trt),
+                                           mod2 = list(Surv(time, status == 1) ~ trt + age + sex))
+                          )
