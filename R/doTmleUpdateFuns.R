@@ -66,7 +66,7 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, Censored, TargetEvents, Targe
         NewNormPnEIC <- getNormPnEIC(NewSummEIC[Time %in% TargetTimes & Event %in% TargetEvents,
                                                 PnEIC])
         if (NormPnEIC < NewNormPnEIC) {
-            print("Update increased PnEIC, halving the OneStepEps")
+            print("Update increased ||PnEIC||, halving the OneStepEps")
             for (a in 1:length(Estimates)) {
                 Estimates[[a]][["Hazards"]] <- Estimates[[a]][["OldHazards"]]
                 Estimates[[a]][["EvntFreeSurv"]] <- Estimates[[a]][["OldSurv"]]
@@ -87,6 +87,7 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, Censored, TargetEvents, Targe
             for (a in 1:length(Estimates)) {
                 Estimates[[a]][["OldHazards"]] <- NULL
                 Estimates[[a]][["OldSurv"]] <- NULL
+                Estimates[[a]][["OldSummEIC"]] <- NULL
             }
             return(Estimates)
         }
@@ -104,8 +105,7 @@ updateHazards <- function(GStar, Hazards, TotalSurv, NuisanceWeight, Targets, Ev
             Surv.i <- TotalSurv[, i]
             Hazards.i <- lapply(Hazards, function(haz) haz[, i])
             Risks.i <- lapply(Hazards.i, function(haz.i) cumsum(Surv.i * haz.i))
-
-            update.l <- rowSums(apply(Targets, 1, function(target) {
+            update.l <- try(rowSums(apply(Targets, 1, function(target) {
                 j <- target[["Event"]]
                 tau <- target[["Time"]]
                 Nuisance.ik <- Nuisance.i * as.numeric(EvalTimes <= tau) ## 1(t \leq tau) * 1(t \leq t.tilde)
@@ -114,9 +114,12 @@ updateHazards <- function(GStar, Hazards, TotalSurv, NuisanceWeight, Targets, Ev
 
                 h.jk <- GStar[i] * Nuisance.ik * ((l == j) - (F.j.tau - F.j.t) / Surv.i)
                 return(PnEIC[Time == tau & Event == j, PnEIC] * h.jk)
-            }))
+            })))
+            if (inherits(update.l, "try-error")) browser()
             return(haz.al[, i] * exp(update.l * OneStepEps / NormPnEIC))
         })
+        attr(newhaz.al, "j") <- l
+        return(newhaz.al)
     })
 }
 
