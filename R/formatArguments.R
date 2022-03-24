@@ -1,9 +1,8 @@
 
 ## check argument formats, types, and sizes ----
-formatArguments <- function(EventTime, EventType, Treatment, CovDataTable,
-                            ID = NULL, TargetTimes = sort(unique(EventTime)),
-                            TargetEvents = NULL, Models, CVArgs = NULL, NumUpdateSteps = 25,
-                            OneStepEps = 0.1, Verbose = FALSE, ...)
+formatArguments <- function(EventTime, EventType, Treatment, CovDataTable, ID, TargetTimes,
+                            TargetEvents, CVArgs, NumUpdateSteps, OneStepEps, MinNuisance,
+                            PropScoreBackend, Verbose, GComp)
 {
     # For user input: data + formula ----
     # try use prodlim::EventHistory.frame
@@ -46,10 +45,6 @@ formatArguments <- function(EventTime, EventType, Treatment, CovDataTable,
     }
 
     ReservedColumns <- c('Time', 'Event', 'Trt')
-    if (!is.null(CovTrtTime)) {
-        ReservedColumns <- c(ReservedColumns, "t")
-        Data[, `t` := Time]
-    }
 
     Events <- sort(unique(Data$Event))
     Censored <- 0 %in% Events
@@ -94,5 +89,5 @@ formatArguments <- function(EventTime, EventType, Treatment, CovDataTable,
     # ...
 
 
-    return(list(Data = Data, Events = Events, RegsOfInterest = RegsOfInterest))
+    return(list(Data = Data, Events = Events, RegsOfInterest = RegsOfInterest, Censored = Censored))
 }

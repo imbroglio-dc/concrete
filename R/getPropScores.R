@@ -16,7 +16,6 @@ getSl3PropScores <- function(Data, CovDataTable, Models, MinNuisance, RegsOfInte
         covariates = colnames(CovDataTable),
         outcome = "Trt"
     )
-
     TrtSL <- sl3::Lrnr_sl$new(learners = Models[["Trt"]], folds = CVFolds)
     TrtFit <- TrtSL$train(TrtTask)
 

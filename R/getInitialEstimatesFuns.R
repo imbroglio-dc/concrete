@@ -1,4 +1,4 @@
-getInitialEstimates <- function(Data, CovdataTable, Models, MinNuisance, TargetEvents,
+getInitialEstimates <- function(Data, CovDataTable, Models, MinNuisance, TargetEvents,
                                 TargetTimes, RegsOfInterest, PropScoreBackend, Censored) {
     ## cross validation setup ----
     # stratifying cv so that folds are balanced for treatment assignment & outcomes

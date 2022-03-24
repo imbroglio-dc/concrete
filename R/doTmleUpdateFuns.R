@@ -34,8 +34,7 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, Censored, TargetEvents, Targe
     T.tilde <- Data[["Time"]]
     Delta <- Data[["Event"]]
 
-
-## one-step tmle loop starts here ----
+    ## one-step tmle loop starts here ----
     for (step in 1:NumUpdateSteps) {
          if (Verbose)
             cat("starting step", step, "with update epsilon =", OneStepEps, "\n")
@@ -46,11 +45,11 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, Censored, TargetEvents, Targe
             GStar <- attr(Estimates[[a]][["PropScore"]], "g.star.intervention")
             Hazards <- Estimates[[a]][["OldHazards"]] <- Estimates[[a]][["Hazards"]]
             TotalSurv <- Estimates[[a]][["OldSurv"]] <- Estimates[[a]][["EvntFreeSurv"]]
-            PnEIC <- Estimates[[a]][["SummEIC"]]
+            PnEIC <- Estimates[[a]][["OldSummEIC"]] <- Estimates[[a]][["SummEIC"]]
 
-            NewHazards <- updateHazards(GStar, Hazards, TotalSurv, NuisanceWeight, Targets,
-                                        Events, EvalTimes, T.tilde, Delta, PnEIC, OneStepEps)
-            NewSurv <- apply(do.call(`+`, NewHazards, 2, function(haz) exp(-cumsum(haz))))
+            NewHazards <- updateHazards(GStar, Hazards, TotalSurv, NuisanceWeight, Targets, Events,
+                                        EvalTimes, T.tilde, Delta, PnEIC, NormPnEIC, OneStepEps)
+            NewSurv <- apply(do.call(`+`, NewHazards), 2, function(haz) exp(-cumsum(haz)))
 
             GStar.obs <- attr(Estimates[[a]][["PropScore"]], "g.star.obs")
             IC.a <- getICs(GStar.obs, NewHazards, NewSurv, NuisanceWeight, Targets,
@@ -62,24 +61,42 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, Censored, TargetEvents, Targe
         }
 
         ## Check for improvement
-        OnestepStop <- SummEIC[, list("check" = abs(PnEIC) <= `seEIC/(root(n)log(n))`,
-                                      "ratio" = abs(PnEIC) / `seEIC/(root(n)log(n))`),
-                               by = c("Trt", "Time", "Event")]
-        if (Verbose)
-            print(OnestepStop[["ratio"]])
-        if (all(sapply(OnestepStop[["check"]], isTRUE))) {
-
-            return()
+        NewSummEIC <- do.call(rbind, lapply(1:length(Estimates), function(a) {
+            cbind("Trt" = names(Estimates)[a], Estimates[[a]][["SummEIC"]])}))
+        NewNormPnEIC <- getNormPnEIC(NewSummEIC[Time %in% TargetTimes & Event %in% TargetEvents,
+                                                PnEIC])
+        if (NormPnEIC < NewNormPnEIC) {
+            print("Update increased PnEIC, halving the OneStepEps")
+            for (a in 1:length(Estimates)) {
+                Estimates[[a]][["Hazards"]] <- Estimates[[a]][["OldHazards"]]
+                Estimates[[a]][["EvntFreeSurv"]] <- Estimates[[a]][["OldSurv"]]
+                Estimates[[a]][["SummEIC"]] <- Estimates[[a]][["OldSummEIC"]]
+            }
+            OneStepEps <- 0.5 * OneStepEps
+            next
         }
 
-        ## recalculate eic -----
-        getEIC(EstEICs, Data, RegsOfInterest, Censored, TargetEvents,
-               TargetTimes, Events, MinNuisance, GComp)
+        SummEIC <- NewSummEIC
+        NormPnEIC <- NewNormPnEIC
+        OneStepStop <- NewSummEIC[, list("check" = abs(PnEIC) <= `seEIC/(root(n)log(n))`,
+                                      "ratio" = abs(PnEIC) / `seEIC/(root(n)log(n))`),
+                               by = c("Trt", "Time", "Event")]
+
+        if (Verbose) print(OneStepStop[["ratio"]])
+        if (all(sapply(OneStepStop[["check"]], isTRUE))) {
+            for (a in 1:length(Estimates)) {
+                Estimates[[a]][["OldHazards"]] <- NULL
+                Estimates[[a]][["OldSurv"]] <- NULL
+            }
+            return(Estimates)
+        }
     }
+    warning("TMLE has not converged by step", NumUpdateSteps, " - Results may not be reliable")
+    return(Estimates)
 }
 
-updateHazards <- function(GStar, Hazards, TotalSurv, NuisanceWeight, Targets,
-                          Events, EvalTimes, T.tilde, Delta, PnEIC, OneStepEps) {
+updateHazards <- function(GStar, Hazards, TotalSurv, NuisanceWeight, Targets, Events,
+                          EvalTimes, T.tilde, Delta, PnEIC, NormPnEIC, OneStepEps) {
     lapply(Hazards, function(haz.al) { # loop over L
         l <- attr(haz.al, "j")
         newhaz.al <- sapply(1:ncol(NuisanceWeight), function(i) {# loop over individuals
