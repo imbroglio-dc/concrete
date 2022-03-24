@@ -28,7 +28,7 @@ getInitialEstimates <- function(Data, CovdataTable, Models, MinNuisance, TargetE
         NuisanceWeight <- 1 / truncNuisanceDenom(NuisanceWeight, MinNuisance)
         return(list("PropScore" = PropScores[[a]],
                     "Hazards" = HazSurvPreds[[a]][["Hazards"]],
-                    "Survival" = HazSurvPreds[[a]][["Survival"]],
+                    "EvntFreeSurv" = HazSurvPreds[[a]][["Survival"]][["TotalSurv"]],
                     "NuisanceWeight" = NuisanceWeight))
     })
 

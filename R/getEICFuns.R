@@ -5,30 +5,21 @@ getEIC <- function(Estimates, Data, RegsOfInterest, Censored, TargetEvents, Targ
     T.tilde <- Data[["Time"]]
     Delta <- Data[["Event"]]
 
-    ICs <- lapply(Estimates, function(RegimeEsts) {
-        NuisanceWeight <- RegimeEsts[["NuisanceWeight"]]
-        GStar <- attr(RegimeEsts[["PropScore"]], "g.star.obs")
-        Hazards <- RegimeEsts[["Hazards"]]
-        TotalSurv <- RegimeEsts[["Survival"]][["TotalSurv"]]
+    for (a in 1:length(Estimates)) {
+        NuisanceWeight <- Estimates[[a]][["NuisanceWeight"]]
+        GStar <- attr(Estimates[[a]][["PropScore"]], "g.star.obs")
+        Hazards <- Estimates[[a]][["Hazards"]]
+        TotalSurv <- Estimates[[a]][["EvntFreeSurv"]]
 
         IC.a <- getICs(GStar, Hazards, TotalSurv, NuisanceWeight, Targets,
                        Events, T.tilde, Delta, EvalTimes, GComp)
 
-        GCompEst <- NULL
         if (GComp)
-            GCompEst <- getGComp(EvalTimes, Hazards, TotalSurv, Targets)
+            Estimates[[a]][["GCompEst"]] <- getGComp(EvalTimes, Hazards, TotalSurv, Targets)
 
-        SummIC.a <- summarizeIC(IC.a)
-
-        return(list("EIC" = IC.a, "SummEIC" = SummIC.a, "GCompEst" = GCompEst))
-    })
-
-    out <- list("SummEIC" = do.call(rbind, lapply(1:length(ICs), function(a) {
-        cbind("Trt" = names(ICs)[a], ICs[[a]][["SummEIC"]])})),
-        "GComp" = do.call(rbind, lapply(1:length(ICs), function(a) {
-            cbind("Trt" = names(ICs)[a], ICs[[a]][["GCompEst"]])}))
-    )
-    return(out)
+        Estimates[[a]][["SummEIC"]] <- summarizeIC(IC.a)
+    }
+    return(Estimates)
 }
 
 getICs <- function(GStar, Hazards, TotalSurv, NuisanceWeight, Targets,

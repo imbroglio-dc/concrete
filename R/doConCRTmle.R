@@ -67,21 +67,17 @@ doConCRTmle <- function(EventTime, EventType, Treatment, Intervention, CovDataTa
 
   # helper functions  -------------------------------------------------------------------------
 
-  PnEICNorm_fun <- function(x, y) {
-    return(sqrt(sum(unlist(x) * unlist(y))))
-  }
-
-  PnEIC_wt_fun <- function(PnEIC, Sigma = NULL) {
-    ## INCOMPLETE - work needed to match contmle()
+  getNormPnEIC <- function(PnEIC, Sigma = NULL) {
+    WeightedPnEIC <- PnEIC
     if (!is.null(Sigma)) {
       SigmaInv <- try(solve(Sigma))
       if (any(class(SigmaInv) == "try-error")) {
         SigmaInv <- solve(Sigma + diag(x = 1e-6, nrow = nrow(Sigma)))
         warning("regularization of Sigma needed for inversion")
       }
-      PnEIC <- PnEIC %*% SigmaInv
+      WeightedPnEIC <- PnEIC %*% SigmaInv
     }
-    return(PnEIC)
+    return(sqrt(sum(unlist(PnEIC) * unlist(WeightedPnEIC))))
   }
 
   # initial estimation ------------------------------------------------------------------------
@@ -89,19 +85,35 @@ doConCRTmle <- function(EventTime, EventType, Treatment, Intervention, CovDataTa
                                   TargetTimes, RegsOfInterest, PropScoreBackend, Censored)
 
   # get initial EIC (possibly with GComp Estimate) ---------------------------------------------
-  InitEIC <- getEIC(InitEsts, Data, RegsOfInterest, Censored, TargetEvents,
+  EstEICs <- getEIC(InitEsts, Data, RegsOfInterest, Censored, TargetEvents,
                     TargetTimes, Events, MinNuisance, GComp)
-  # EIC <- InitEIC[["EIC"]]
-  SummEIC <- InitEIC[["SummEIC"]]
-  GCompEst <- InitEIC[["GComp"]]
+  SummEIC <- do.call(rbind, lapply(1:length(EstEICs), function(a) {
+    cbind("Trt" = names(EstEICs)[a], EstEICs[[a]][["SummEIC"]])}))
+
+  NormPnEIC <- getNormPnEIC(SummEIC[Time %in% TargetTimes & Event %in% TargetEvents, PnEIC])
 
   ## initial estimator (g-computation) --------------------------------------------------------
-  GCompEst <- InitEIC[["SummEIC"]][, c("A", "Time", "Event", "Psi")]
+  if (GComp)
+    GCompEst <- do.call(rbind, lapply(1:length(EstEICs), function(a) {
+      cbind("Trt" = names(EstEICs)[a], EstEICs[[a]][["GCompEst"]])}))
 
   # Update step -------------------------------------------------------------------------------
+  ## Check if EIC is solved sufficienty and return outputs ----
+  ## check PnEIC <= seEIC / (sqrt(n) log(n))
+  OnestepStop <- SummEIC[, list("check" = abs(PnEIC) <= `seEIC/(root(n)log(n))`,
+                                "ratio" = abs(PnEIC) / `seEIC/(root(n)log(n))`),
+                         by = c("Trt", "Time", "Event")]
+  if (Verbose)
+    print(OnestepStop[["ratio"]])
+  if (all(sapply(OnestepStop[["check"]], isTRUE))) {
 
-  ## EIC ----
+    return()
+  }
+
   ## one-step tmle loop (one-step) ----
+
+  doTmleUpdate(EstEICs, SummEIC, Data, Censored, TargetEvents, TargetTimes, Events,
+               NumUpdateSteps, OneStepEps, NormPnEIC, Verbose)
 
   for (step in 1:NumUpdateSteps) {
     if (Verbose)
