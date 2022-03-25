@@ -1,5 +1,5 @@
 
-#' Title
+#' doConCRTmle
 #'
 #' @param EventTime : Numeric vector (N x 1)
 #' @param EventType : Numeric (integer) vector (N x 1)
@@ -7,31 +7,35 @@
 #' @param Intervention : list of function (length = A*)
 #' @param CovDataTable : data.table (N x ?)
 #' @param ID : vector (N x 1)
+#' @param LongTime : numeric vector (?? x 1)
 #' @param TargetTimes : numeric vector (length = K)
-#' @param TargetEvents : numeric vector \subset EventType (length = J)
+#' @param TargetEvents : numeric vector \\subset EventType (length = J)
 #' @param Models : list of functions (length = L)
 #' @param CVArgs : list
 #' @param NumUpdateSteps : numeric
 #' @param OneStepEps : numeric
 #' @param MinNuisance : numeric
 #' @param Verbose : boolean
-#' @param Censored : boolean
 #' @param PropScoreBackend : character
 #' @param GComp : boolean
-#' @param ...
 #'
-#' @return
+#' @import data.table
+#'
+#' @return tbd
 #' @export
 #'
 #' @examples
-doConCRTmle <- function(EventTime, EventType, Treatment, Intervention, CovDataTable,
+#' "tbd"
+
+doConCRTmle <- function(EventTime, EventType, Treatment, Intervention, CovDataTable, LongTime = NULL,
                         ID = NULL, TargetTimes = sort(unique(EventTime)),
                         TargetEvents = NULL, Models, CVArgs = NULL, NumUpdateSteps = 25,
                         OneStepEps = 0.1, MinNuisance = 0.05, PropScoreBackend = "sl3",
-                        Verbose = FALSE, GComp = FALSE, ...)
+                        Verbose = FALSE, GComp = FALSE)
 {
-  Args <- formatArguments(EventTime, EventType, Treatment, CovDataTable, ID, TargetTimes,
-                          TargetEvents, CVArgs, NumUpdateSteps, OneStepEps, MinNuisance,
+  Time <- Event <- PnEIC <- `seEIC/(root(n)log(n))` <- NULL # for R CMD globar variable binding check
+  Args <- formatArguments(EventTime, EventType, Treatment, Intervention, CovDataTable, ID, TargetTimes,
+                          TargetEvents, Models, CVArgs, NumUpdateSteps, OneStepEps, MinNuisance,
                           PropScoreBackend, Verbose, GComp)
   Data <- Args[["Data"]]
   RegsOfInterest <- Args[["RegsOfInterest"]]
@@ -46,13 +50,13 @@ doConCRTmle <- function(EventTime, EventType, Treatment, Intervention, CovDataTa
   Estimates <- getEIC(Estimates, Data, RegsOfInterest, Censored, TargetEvents,
                       TargetTimes, Events, MinNuisance, GComp)
 
-  SummEIC <- do.call(rbind, lapply(1:length(Estimates), function(a) {
+  SummEIC <- do.call(rbind, lapply(seq_along(Estimates), function(a) {
     cbind("Trt" = names(Estimates)[a], Estimates[[a]][["SummEIC"]])}))
   NormPnEIC <- getNormPnEIC(SummEIC[Time %in% TargetTimes & Event %in% TargetEvents, PnEIC])
 
   ## initial estimator (g-computation) --------------------------------------------------------
   if (GComp)
-    GCompEst <- do.call(rbind, lapply(1:length(Estimates), function(a) {
+    GCompEst <- do.call(rbind, lapply(seq_along(Estimates), function(a) {
       cbind("Trt" = names(Estimates)[a], Estimates[[a]][["GCompEst"]])}))
 
   # Update step -------------------------------------------------------------------------------
@@ -71,7 +75,7 @@ doConCRTmle <- function(EventTime, EventType, Treatment, Intervention, CovDataTa
 
   # format output --------------------------------------------------------------------------------------
 
-  SummEIC <- do.call(rbind, lapply(1:length(Estimates), function(a) {
+  SummEIC <- do.call(rbind, lapply(seq_along(Estimates), function(a) {
     cbind("Trt" = names(Estimates)[a], Estimates[[a]][["SummEIC"]])}))
 
   NormPnEIC <- getNormPnEIC(SummEIC[Time %in% TargetTimes & Event %in% TargetEvents, PnEIC])

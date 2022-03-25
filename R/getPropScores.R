@@ -1,4 +1,15 @@
 
+#' Title
+#'
+#' @param Data data.table
+#' @param CovDataTable data.table
+#' @param Models list
+#' @param MinNuisance numeric
+#' @param RegsOfInterest list
+#' @param PropScoreBackend character
+#' @param CVFolds list
+#'
+
 getPropScores <- function(Data, CovDataTable, Models, MinNuisance, RegsOfInterest,
                           PropScoreBackend, CVFolds) {
     if (PropScoreBackend == "sl3") {

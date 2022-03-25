@@ -1,7 +1,6 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
-^output$
 ^scripts$
+^inst$
 ^output$
-^examples$
-
+^concrete$

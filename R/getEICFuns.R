@@ -1,4 +1,17 @@
-# get EICs
+#' get EICs
+#'
+#' @param Estimates list
+#' @param Data data.table
+#' @param RegsOfInterest list
+#' @param Censored boolean
+#' @param TargetEvents numeric vector
+#' @param TargetTimes numeric vector
+#' @param Events numeric vector
+#' @param MinNuisance numeric
+#' @param GComp boolean
+#'
+#'
+
 getEIC <- function(Estimates, Data, RegsOfInterest, Censored, TargetEvents, TargetTimes,
                    Events, MinNuisance, GComp = FALSE) {
     Targets <- expand.grid("Time" = TargetTimes, "Event" = TargetEvents)
@@ -6,7 +19,7 @@ getEIC <- function(Estimates, Data, RegsOfInterest, Censored, TargetEvents, Targ
     T.tilde <- Data[["Time"]]
     Delta <- Data[["Event"]]
 
-    for (a in 1:length(Estimates)) {
+    for (a in seq_along(Estimates)) {
         NuisanceWeight <- Estimates[[a]][["NuisanceWeight"]]
         GStar <- attr(Estimates[[a]][["PropScore"]], "g.star.obs")
         Hazards <- Estimates[[a]][["Hazards"]]
@@ -25,6 +38,7 @@ getEIC <- function(Estimates, Data, RegsOfInterest, Censored, TargetEvents, Targ
 
 getICs <- function(GStar, Hazards, TotalSurv, NuisanceWeight, Targets,
                    Events, T.tilde, Delta, EvalTimes, GComp) {
+    IC <- F.j.tau <- NULL
     # loop over individuals
     IC.a <- do.call(rbind, lapply(1:ncol(NuisanceWeight), function(i) {
         Nuisance.i <- NuisanceWeight[, i]
@@ -72,6 +86,7 @@ getICs <- function(GStar, Hazards, TotalSurv, NuisanceWeight, Targets,
 }
 
 getGComp <- function(EvalTimes, Hazards, TotalSurv, Targets) {
+    F.j.tau <- NULL
     Risks <- do.call(rbind, lapply(Hazards, function(haz.j) {
         Risk.a <- sapply(1:ncol(haz.j), function(i) {
             cumsum(TotalSurv[, i] * haz.j[, i])
@@ -87,9 +102,10 @@ getGComp <- function(EvalTimes, Hazards, TotalSurv, Targets) {
 }
 
 summarizeIC <- function(IC.a) {
+    IC <- NULL
     IC.a <- rbind(IC.a,
                   IC.a[, list("Event" = -1, "IC" = -sum(IC)), by = c("ID", "Time")])
-    return(IC.a[, list("PnEIC" = mean(IC), "seEIC" = sqrt(var(IC)),
-                       "seEIC/(root(n)log(n))" = sqrt(var(IC)/.N)/log(.N)),
+    return(IC.a[, list("PnEIC" = mean(IC), "seEIC" = sqrt(stats::var(IC)),
+                       "seEIC/(root(n)log(n))" = sqrt(stats::var(IC)/.N)/log(.N)),
                 by = c("Time", "Event")])
 }

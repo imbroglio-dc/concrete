@@ -27,8 +27,25 @@
 #
 #     undo or commit updated h() and F() based on PnEIC
 
+#' Title
+#'
+#' @param Estimates list
+#' @param SummEIC data.table
+#' @param Data data.table
+#' @param Censored boolean
+#' @param TargetEvents numeric vector
+#' @param TargetTimes numeric vector
+#' @param Events numeric vector
+#' @param NumUpdateSteps numeric
+#' @param OneStepEps numeric
+#' @param NormPnEIC numeric
+#' @param Verbose boolean
+#'
+#'
+
 doTmleUpdate <- function(Estimates, SummEIC, Data, Censored, TargetEvents, TargetTimes, Events,
                          NumUpdateSteps, OneStepEps, NormPnEIC, Verbose) {
+    Time <- Event <- `seEIC/(root(n)log(n))` <- NULL
     Targets <- expand.grid("Time" = TargetTimes, "Event" = TargetEvents)
     EvalTimes <- attr(Estimates, "times")
     T.tilde <- Data[["Time"]]
@@ -40,7 +57,7 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, Censored, TargetEvents, Targe
             cat("starting step", step, "with update epsilon =", OneStepEps, "\n")
 
         ## Get updated hazards and EICs
-        for (a in 1:length(Estimates)) {
+        for (a in seq_along(Estimates)) {
             NuisanceWeight <- Estimates[[a]][["NuisanceWeight"]]
             GStar <- attr(Estimates[[a]][["PropScore"]], "g.star.intervention")
             Hazards <- Estimates[[a]][["OldHazards"]] <- Estimates[[a]][["Hazards"]]
@@ -61,13 +78,13 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, Censored, TargetEvents, Targe
         }
 
         ## Check for improvement
-        NewSummEIC <- do.call(rbind, lapply(1:length(Estimates), function(a) {
+        NewSummEIC <- do.call(rbind, lapply(seq_along(Estimates), function(a) {
             cbind("Trt" = names(Estimates)[a], Estimates[[a]][["SummEIC"]])}))
         NewNormPnEIC <- getNormPnEIC(NewSummEIC[Time %in% TargetTimes & Event %in% TargetEvents,
                                                 PnEIC])
         if (NormPnEIC < NewNormPnEIC) {
             print("Update increased ||PnEIC||, halving the OneStepEps")
-            for (a in 1:length(Estimates)) {
+            for (a in seq_along(Estimates)) {
                 Estimates[[a]][["Hazards"]] <- Estimates[[a]][["OldHazards"]]
                 Estimates[[a]][["EvntFreeSurv"]] <- Estimates[[a]][["OldSurv"]]
                 Estimates[[a]][["SummEIC"]] <- Estimates[[a]][["OldSummEIC"]]
@@ -84,7 +101,7 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, Censored, TargetEvents, Targe
 
         if (Verbose) print(OneStepStop[["ratio"]])
         if (all(sapply(OneStepStop[["check"]], isTRUE))) {
-            for (a in 1:length(Estimates)) {
+            for (a in seq_along(Estimates)) {
                 Estimates[[a]][["OldHazards"]] <- NULL
                 Estimates[[a]][["OldSurv"]] <- NULL
                 Estimates[[a]][["OldSummEIC"]] <- NULL
@@ -98,6 +115,7 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, Censored, TargetEvents, Targe
 
 updateHazards <- function(GStar, Hazards, TotalSurv, NuisanceWeight, Targets, Events,
                           EvalTimes, T.tilde, Delta, PnEIC, NormPnEIC, OneStepEps) {
+    Time <- Event <- NULL
     lapply(Hazards, function(haz.al) { # loop over L
         l <- attr(haz.al, "j")
         newhaz.al <- sapply(1:ncol(NuisanceWeight), function(i) {# loop over individuals

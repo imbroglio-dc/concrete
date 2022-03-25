@@ -1,5 +1,19 @@
+#' Title
+#'
+#' @param Data data.table
+#' @param CovDataTable data.table
+#' @param Models list
+#' @param MinNuisance numeric
+#' @param TargetEvents numeric vector
+#' @param TargetTimes numeric vector
+#' @param RegsOfInterest list
+#' @param PropScoreBackend character
+#' @param Censored boolean
+#'
+
 getInitialEstimates <- function(Data, CovDataTable, Models, MinNuisance, TargetEvents,
                                 TargetTimes, RegsOfInterest, PropScoreBackend, Censored) {
+    Time <- NULL
     ## cross validation setup ----
     # stratifying cv so that folds are balanced for treatment assignment & outcomes
     # theory? but regressions may fail in practice with rare events otherwise
@@ -22,8 +36,8 @@ getInitialEstimates <- function(Data, CovDataTable, Models, MinNuisance, TargetE
     HazFits <- getHazFits(Data, Models, CVFolds, Hazards)
     HazSurvPreds <- getHazSurvPreds(Data, HazFits, MinNuisance, TargetEvents,
                                     TargetTimes, RegsOfInterest, Censored)
-    InitialEstimates <- lapply(1:length(PropScores), function(a) {
-        NuisanceWeight <- sapply(1:length(PropScores[[a]]), function(i) {
+    InitialEstimates <- lapply(seq_along(PropScores), function(a) {
+        NuisanceWeight <- sapply(seq_along(PropScores[[a]]), function(i) {
             PropScores[[a]][i] * HazSurvPreds[[a]][["Survival"]][["LaggedCensSurv"]][, i]})
         NuisanceWeight <- 1 / truncNuisanceDenom(NuisanceWeight, MinNuisance)
         return(list("PropScore" = PropScores[[a]],
@@ -38,8 +52,9 @@ getInitialEstimates <- function(Data, CovDataTable, Models, MinNuisance, TargetE
 }
 
 getHazFits <- function(Data, Models, CVFolds, Hazards) {
+    Time <- Event <- FitLP <- AtRisk <- basehaz <- BaseHaz <- NULL
     HazModels <- Models[grep("\\d+", names(Models))]
-    HazModels <- lapply(1:length(HazModels), function(j) {
+    HazModels <- lapply(seq_along(HazModels), function(j) {
         HazModel <- HazModels[[j]]
         attr(HazModel, "j") <- as.numeric(gsub(".*(\\d+).*", "\\1", names(HazModels[j])))
         return(HazModel)
@@ -55,13 +70,13 @@ getHazFits <- function(Data, Models, CVFolds, Hazards) {
             TrainData <- Data[TrainIndices, -c("ID")]
             ValidData <- Data[ValidIndices, ][order(-Time)]
 
-            for (i in 1:length(Models_j)) {
+            for (i in seq_along(Models_j)) {
                 ## train model ----
                 CoxphArgs <- list("formula" = Models_j[[i]], "data" = TrainData)
                 ModelFit <- do.call(survival::coxph, CoxphArgs)
 
                 ## validation loss (-log partial likelihood) ----
-                ValidData[, FitLP := predict(ModelFit, type = "lp", newdata = ValidData)]
+                ValidData[, FitLP := stats::predict(ModelFit, type = "lp", newdata = ValidData)]
                 ValidData[, AtRisk := cumsum(exp(FitLP))]
                 ValidData[AtRisk == 0, AtRisk := 1]
                 ValidData[, names(Models_j)[i] := (Event == j) * (FitLP - log(AtRisk))]
@@ -101,8 +116,8 @@ getHazSurvPreds <- function(Data, HazFits, MinNuisance, TargetEvents,
     PredHazSurv <- lapply(RegsOfInterest, function(Reg) {
         PredData <- as.data.table(Data)[, "Trt" := Reg]
         PredHaz <- lapply(HazFits, function(HazFit) {
-            exp.coef <- predict(HazFit[["HazFit"]], newdata = PredData, type = "risk")
-            haz <- sapply(exp.coef, function(lambda) HazFit[["BaseHaz"]][["BaseHaz"]]*lambda)
+            exp.coef <- stats::predict(HazFit[["HazFit"]], newdata = PredData, type = "risk")
+            haz <- sapply(exp.coef, function(expLP) HazFit[["BaseHaz"]][["BaseHaz"]]*expLP)
             attr(haz, "j") <- attr(HazFit, "j")
             return(haz)
         })
@@ -112,7 +127,7 @@ getHazSurvPreds <- function(Data, HazFits, MinNuisance, TargetEvents,
         TotalSurv <- apply(do.call(`+`, PredHaz[-CensInd]), 2, function(haz) exp(-cumsum(haz)))
 
         if (Censored) {
-            LaggedCensSurv <- apply(PredHaz[[CensInd]], 2, function(haz) c(1, head(exp(-cumsum(haz)), -1)))
+            LaggedCensSurv <- apply(PredHaz[[CensInd]], 2, function(haz) c(1, utils::head(exp(-cumsum(haz)), -1)))
             PredHaz <- PredHaz[-CensInd]
         } else {
             LaggedCensSurv <- 1
