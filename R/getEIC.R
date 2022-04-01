@@ -25,7 +25,7 @@ getEIC <- function(Estimates, Data, RegsOfInterest, Censored, TargetEvents, Targ
         Hazards <- Estimates[[a]][["Hazards"]]
         TotalSurv <- Estimates[[a]][["EvntFreeSurv"]]
 
-        IC.a <- getICs(GStar, Hazards, TotalSurv, NuisanceWeight, Targets,
+        IC.a <- getIC(GStar, Hazards, TotalSurv, NuisanceWeight, Targets,
                        Events, T.tilde, Delta, EvalTimes, GComp)
 
         if (GComp)
@@ -36,7 +36,7 @@ getEIC <- function(Estimates, Data, RegsOfInterest, Censored, TargetEvents, Targ
     return(Estimates)
 }
 
-getICs <- function(GStar, Hazards, TotalSurv, NuisanceWeight, Targets,
+getIC <- function(GStar, Hazards, TotalSurv, NuisanceWeight, Targets,
                    Events, T.tilde, Delta, EvalTimes, GComp) {
     IC <- F.j.tau <- NULL
     # loop over individuals
@@ -78,7 +78,6 @@ getICs <- function(GStar, Hazards, TotalSurv, NuisanceWeight, Targets,
         IC.jk <- cbind("ID" = i, Targets, IC.jk)
         return(IC.jk)
     }))
-
     ## the second EIC component ( ... + F_j(tau | a, L) - Psi )
     IC.a <- as.data.table(IC.a)
     IC.a[, IC := IC + F.j.tau - mean(F.j.tau), by = c("Time", "Event")]

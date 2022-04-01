@@ -1,29 +1,30 @@
 
 #' Title
 #'
-#' @param Data data.table
+#' @param Treatment numeric vector
 #' @param CovDataTable data.table
 #' @param Models list
 #' @param MinNuisance numeric
 #' @param RegsOfInterest list
 #' @param PropScoreBackend character
 #' @param CVFolds list
+#' @param TrtLoss character or function(A, g.A)
 #'
 
-getPropScores <- function(Data, CovDataTable, Models, MinNuisance, RegsOfInterest,
-                          PropScoreBackend, CVFolds) {
+getPropScore <- function(Treatment, CovDataTable, Models, MinNuisance, RegsOfInterest,
+                         PropScoreBackend, CVFolds, TrtLoss = NULL) {
     if (PropScoreBackend == "sl3") {
-        PropScores <- getSl3PropScores(Data, CovDataTable, Models, MinNuisance, RegsOfInterest, CVFolds)
+        PropScores <- getSl3PropScore(Treatment, CovDataTable, Models, MinNuisance, RegsOfInterest, CVFolds)
     } else {
         stop("functionality for propensity score calculation not using sl3 has not yet been implemented")
     }
     return(PropScores)
 }
 
-getSl3PropScores <- function(Data, CovDataTable, Models, MinNuisance, RegsOfInterest, CVFolds) {
+getSl3PropScore <- function(Treatment, CovDataTable, Models, MinNuisance, RegsOfInterest, CVFolds) {
     ## PropScore score ----
     TrtTask <- sl3::make_sl3_Task(
-        data = Data[, -c("Time", "Event", "ID")],
+        data = cbind("Trt" = Treatment, CovDataTable),
         covariates = colnames(CovDataTable),
         outcome = "Trt"
     )
@@ -31,7 +32,7 @@ getSl3PropScores <- function(Data, CovDataTable, Models, MinNuisance, RegsOfInte
     TrtFit <- TrtSL$train(TrtTask)
 
     PropScores <- lapply(RegsOfInterest, function(a) {
-        if (is.numeric(a) & length(a) == length(Data[["Trt"]])) {
+        if (is.numeric(a) & length(a) == length(Treatment)) {
             if (all(a %in% c(0, 1))) {
                 ga1 <- TrtFit$predict()
                 PropScore <- ga1
@@ -43,7 +44,7 @@ getSl3PropScores <- function(Data, CovDataTable, Models, MinNuisance, RegsOfInte
             stop("support for non-numeric, non-vector regimes of interest is not yet implemented.")
         }
         attr(PropScore, "g.star.intervention") <- attr(a, "g.star")(a)
-        attr(PropScore, "g.star.obs") <- attr(a, "g.star")(Data[["Trt"]])
+        attr(PropScore, "g.star.obs") <- attr(a, "g.star")(Treatment)
         return(PropScore)
     })
     return(list("PropScores" = PropScores, "TrtFit" = TrtFit))

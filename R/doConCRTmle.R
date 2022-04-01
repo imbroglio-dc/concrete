@@ -27,6 +27,9 @@
 #' @examples
 #' "tbd"
 
+# To Do : return warning if targeting time before any observed events of type J
+
+
 doConCRTmle <- function(EventTime, EventType, Treatment, Intervention, CovDataTable, LongTime = NULL,
                         ID = NULL, TargetTimes = sort(unique(EventTime)),
                         TargetEvents = NULL, Models, CVArgs = NULL, NumUpdateSteps = 25,
@@ -43,7 +46,7 @@ doConCRTmle <- function(EventTime, EventType, Treatment, Intervention, CovDataTa
   Censored <- Args[["Censored"]]
 
   # initial estimation ------------------------------------------------------------------------
-  Estimates <- getInitialEstimates(Data, CovDataTable, Models, MinNuisance, TargetEvents,
+  Estimates <- getInitialEstimate(Data, CovDataTable, Models, MinNuisance, TargetEvents,
                                    TargetTimes, RegsOfInterest, PropScoreBackend, Censored)
 
   # get initial EIC (possibly with GComp Estimate) ---------------------------------------------
@@ -81,14 +84,12 @@ doConCRTmle <- function(EventTime, EventType, Treatment, Intervention, CovDataTa
   NormPnEIC <- getNormPnEIC(SummEIC[Time %in% TargetTimes & Event %in% TargetEvents, PnEIC])
 
 
-
   # g-comp (sl estimate)
   # unadjusted cox model
   # tmle & ic
 
   return(Estimates)
 }
-
 getNormPnEIC <- function(PnEIC, Sigma = NULL) {
   WeightedPnEIC <- PnEIC
   if (!is.null(Sigma)) {

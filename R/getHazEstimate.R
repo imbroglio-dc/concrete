@@ -1,57 +1,18 @@
 #' Title
 #'
 #' @param Data data.table
-#' @param CovDataTable data.table
 #' @param Models list
-#' @param MinNuisance numeric
-#' @param TargetEvents numeric vector
-#' @param TargetTimes numeric vector
-#' @param RegsOfInterest list
-#' @param PropScoreBackend character
-#' @param Censored boolean
+#' @param CVFolds list
+#' @param Hazards list
+# #' @param HazFits list
+# #' @param MinNuisance numeric (in the future a function)
+# #' @param TargetEvents numeric vector
+# #' @param TargetTimes numeric vector
+# #' @param RegsOfInterest list
+# #' @param Censored boolean
 #'
 
-getInitialEstimates <- function(Data, CovDataTable, Models, MinNuisance, TargetEvents,
-                                TargetTimes, RegsOfInterest, PropScoreBackend, Censored) {
-    Time <- NULL
-    ## cross validation setup ----
-    # stratifying cv so that folds are balanced for treatment assignment & outcomes
-    # theory? but regressions may fail in practice with rare events otherwise
-    StrataIDs <- as.numeric(factor(paste0(Data[["Trt"]], ":", Data[["Event"]])))
-    CVFolds <- origami::make_folds(n = Data, fold_fun = origami::folds_vfold,
-                                   strata_ids = StrataIDs)
-
-    ## Propensity Scores for Regimes of Interest ----
-    PropScores <- getPropScores(Data, CovDataTable, Models, MinNuisance, RegsOfInterest,
-                                PropScoreBackend, CVFolds)
-    TrtFit <- PropScores[["TrtFit"]]
-    PropScores <- PropScores[["PropScores"]]
-
-    ## hazards: Events & censoring ----
-    ## baseline hazards for obs times + target times ----
-    HazTimes <- unique(c(TargetTimes, Data[["Time"]]))
-    HazTimes <- HazTimes[HazTimes <= max(TargetTimes)]
-    Hazards <- data.table("Time" = c(0, HazTimes))[order(Time)]
-
-    HazFits <- getHazFits(Data, Models, CVFolds, Hazards)
-    HazSurvPreds <- getHazSurvPreds(Data, HazFits, MinNuisance, TargetEvents,
-                                    TargetTimes, RegsOfInterest, Censored)
-    InitialEstimates <- lapply(seq_along(PropScores), function(a) {
-        NuisanceWeight <- sapply(seq_along(PropScores[[a]]), function(i) {
-            PropScores[[a]][i] * HazSurvPreds[[a]][["Survival"]][["LaggedCensSurv"]][, i]})
-        NuisanceWeight <- 1 / truncNuisanceDenom(NuisanceWeight, MinNuisance)
-        return(list("PropScore" = PropScores[[a]],
-                    "Hazards" = HazSurvPreds[[a]][["Hazards"]],
-                    "EvntFreeSurv" = HazSurvPreds[[a]][["Survival"]][["TotalSurv"]],
-                    "NuisanceWeight" = NuisanceWeight))
-    })
-
-    names(InitialEstimates) <- names(RegsOfInterest)
-    attr(InitialEstimates, "times") <- Hazards[["Time"]]
-    return(InitialEstimates)
-}
-
-getHazFits <- function(Data, Models, CVFolds, Hazards) {
+getHazFit <- function(Data, Models, CVFolds, Hazards) {
     Time <- Event <- FitLP <- AtRisk <- basehaz <- BaseHaz <- NULL
     HazModels <- Models[grep("\\d+", names(Models))]
     HazModels <- lapply(seq_along(HazModels), function(j) {
@@ -110,7 +71,7 @@ getHazFits <- function(Data, Models, CVFolds, Hazards) {
     return(HazFits)
 }
 
-getHazSurvPreds <- function(Data, HazFits, MinNuisance, TargetEvents,
+getHazSurvPred <- function(Data, HazFits, MinNuisance, TargetEvents,
                             TargetTimes, RegsOfInterest, Censored) {
     Targets <- expand.grid("Time" = TargetTimes, "Event" = TargetEvents)
     PredHazSurv <- lapply(RegsOfInterest, function(Reg) {
@@ -138,4 +99,3 @@ getHazSurvPreds <- function(Data, HazFits, MinNuisance, TargetEvents,
     })
     return(PredHazSurv)
 }
-

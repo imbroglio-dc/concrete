@@ -26,6 +26,7 @@ formatArguments <- function(EventTime, EventType, Treatment, Intervention, CovDa
                             TargetEvents, Models, CVArgs, NumUpdateSteps, OneStepEps, MinNuisance,
                             PropScoreBackend, Verbose, GComp)
 {
+
     # For user input: data + formula ----
     # try use prodlim::EventHistory.frame
     # x=EventHistory.frame(Hist(time,Status,cens.code="censored")~age+sex+intervention(trt)+stage,data=pbc,specials="intervention")
@@ -33,27 +34,12 @@ formatArguments <- function(EventTime, EventType, Treatment, Intervention, CovDa
 
     # OBS: learners can either work with the original data or with the design matrix (dummies)
 
-    Models <-
-
-    ## observed data ----
-    if (!data.table::is.data.table(CovDataTable)) {
-        CovDataTable <- data.table::as.data.table(CovDataTable)
-        warning("CovDataTable must be a data.table. We have attempted to convert ",
-                "the CovDataTable argument into an object of data.table class.\n")
-    }
-
-    if (any(c("ID",  "Event", "Trt", "t") %in% colnames(CovDataTable)))
-        stop("'ID', 'Event', 'Trt', and 't' are reserved column",
-             "names. Rename covariate column names to avoid name collisions.\n")
-
-
-    if (!all(sapply(list(EventTime, EventType, Treatment, TargetTimes, TargetEvents),
-                    function(vec) is.numeric(vec) | is.null(vec))))
-        stop("EventTime, EventType, and Treatment ",
-             "arguments must be numeric vectors\n")
-
-    if (is.null(ID))
-        ID = seq_along(EventTime)
+    checkEventTimes(EventTime)
+    checkEventTypes(EventType)
+    checkTreatment(Treatment)
+    checkIntervention(Intervention)
+    checkCovDataTable(CovDataTable)
+    checkID(ID)
 
     Data <- try(
         data.table::data.table("ID" = ID,
@@ -91,19 +77,7 @@ formatArguments <- function(EventTime, EventType, Treatment, Intervention, CovDa
     }
 
     ## regimes of interest ----
-    if (is.list(Intervention)) {
-        RegsOfInterest <- lapply(Intervention, function(intervene) {
-            if (is.function(intervene)) {
-                Regime <- do.call(intervene, list(Treatment, CovDataTable))
-                if (is.null(attr(Regime, "g.star"))) {
-                    attr(Regime, "g.star") <- function(a) as.numeric(a == Regime)
-                    warning("no g.star input, defaulting to the indicator that observed Treatment == desired RegName")
-                }
-                return(Regime)
-            }
-            else stop("Intervention must be a list of functions. See doConCRTmle documentation")
-        })
-    }
+    RegsOfInterest <- getRegsOfInterest(Intervention, Treatment, CovDataTable)
 
     # To do:
     # check if covariates too highly correlated with ID, Time, Event, or Trt
@@ -150,14 +124,38 @@ checkIntervention <- function(x) {
         stop("Intervention must be a named list of intervention functions")
 }
 
-# RegOfInt <- setClass(Class = "RegOfInt", slots = c(intervention = "function", g.star = "function"))
-# setMethod(f = "initialize", signature = "RegOfInt",
-#           definition = function(.Object,
-#                                 intervention = function(a.obs, L.obs) return(rep_len(1, length(a.obs))),
-#                                 g.star = function(a, L) return(a == 1), ...) {
-#               .Object <- callNextMethod(.Object, ...)
-#               .Object@intervention <- intervention
-#               .Object@g.star <- g.star
-#               .Object
-#           })
+getRegsOfInterest <- function(Intervention, Treatment, CovDataTable) {
+    if (is.list(Intervention)) {
+        RegsOfInterest <- lapply(Intervention, function(regime) {
+            if (is.function(regime$intervention)) {
+                Regime <- do.call(regime$intervention, list(Treatment, CovDataTable))
+                if (is.null(regime$g.star)) {
+                    attr(Regime, "g.star") <- function(a) as.numeric(a == Regime)
+                    warning("no g.star input, defaulting to the indicator that observed Treatment == desired RegName")
+                } else {
+                    attr(Regime, "g.star") <- regime$g.star
+                }
+                return(Regime)
+            }
+            else stop("Intervention must be a list of list(intervention = f(A, L), g.star = g(A, L)). See doConCRTmle documentation")
+        })
+    }
+    return(RegsOfInterest)
+
+    # RegOfInt <- methods::setClass(Class = "Regimen", slots = c(intervention = "function", g.star = "function"))
+    # RegOfInt <- list(intervention = "function", g.star = "function")
+    # class(RegOfInt) <- "Regimen"
+    #
+    # methods::setMethod(f = "initialize", signature = "Regimen",
+    #           definition = function(.Object,
+    #                                 intervention = function(a.obs, L.obs) return(rep_len(1, length(a.obs))),
+    #                                 g.star = function(a, L) return(a == 1), ...) {
+    #               .Object@intervention <- intervention
+    #               .Object@g.star <- g.star
+    #               .Object
+    #           })
+}
+
+
+
 

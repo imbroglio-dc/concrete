@@ -20,7 +20,8 @@ Imports:
     data.table, 
     methods,
     origami,
-    sl3
+    sl3, 
+    lava
 Depends:
     R (>= 3.5.0)
 LinkingTo: Rcpp
