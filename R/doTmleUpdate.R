@@ -105,7 +105,7 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, Censored, TargetEvent, Target
             return(Estimates)
         }
     }
-    warning("TMLE has not converged by step", MaxUpdateIter, " - Results may not be reliable")
+    warning("TMLE has not converged by step ", MaxUpdateIter, " - Results may not be reliable")
     return(Estimates)
 }
 
