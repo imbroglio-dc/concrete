@@ -33,26 +33,25 @@
 #' @param SummEIC data.table
 #' @param Data data.table
 #' @param Censored boolean
-#' @param TargetEvents numeric vector
-#' @param TargetTimes numeric vector
+#' @param TargetEvent numeric vector
+#' @param TargetTime numeric vector
 #' @param Events numeric vector
-#' @param NumUpdateSteps numeric
+#' @param MaxUpdateIter numeric
 #' @param OneStepEps numeric
 #' @param NormPnEIC numeric
 #' @param Verbose boolean
 #'
 #'
 
-doTmleUpdate <- function(Estimates, SummEIC, Data, Censored, TargetEvents, TargetTimes, Events,
-                         NumUpdateSteps, OneStepEps, NormPnEIC, Verbose) {
-    Time <- Event <- `seEIC/(root(n)log(n))` <- NULL
-    Targets <- expand.grid("Time" = TargetTimes, "Event" = TargetEvents)
+doTmleUpdate <- function(Estimates, SummEIC, Data, Censored, TargetEvent, TargetTime, Events,
+                         MaxUpdateIter, OneStepEps, NormPnEIC, Verbose) {
+    Time <- Event <- `seEIC/(sqrt(n)log(n))` <- NULL
     EvalTimes <- attr(Estimates, "times")
-    T.tilde <- Data[["Time"]]
-    Delta <- Data[["Event"]]
+    T.tilde <- Data[[attr(Data, "EventTime")]]
+    Delta <- Data[[attr(Data, "EventTime")]]
 
     ## one-step tmle loop starts here ----
-    for (step in 1:NumUpdateSteps) {
+    for (step in 1:MaxUpdateIter) {
         if (Verbose)
             cat("starting step", step, "with update epsilon =", OneStepEps, "\n")
 
@@ -65,20 +64,23 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, Censored, TargetEvents, Targe
                                        Events = Events, EvalTimes = EvalTimes, T.tilde = T.tilde,
                                        Delta = Delta, PnEIC = est.a[["SummEIC"]],
                                        NormPnEIC = NormPnEIC, OneStepEps = OneStepEps,
-                                       TargetEvents = TargetEvents, TargetTimes = TargetTimes)
+                                       TargetEvent = TargetEvent, TargetTime = TargetTime)
             NewSurv <- apply(do.call(`+`, NewHazards), 2, function(haz) exp(-cumsum(haz)))
-            NewIC <- summarizeIC(getIC(GStar =  attr(est.a[["PropScore"]], "g.star.obs"),
-                                       Hazards = NewHazards, TotalSurv = NewSurv,
-                                       NuisanceWeight = est.a[["NuisanceWeight"]], Targets = Targets,
-                                       Events = Events, T.tilde = T.tilde, Delta = Delta,
-                                       EvalTimes = EvalTimes, GComp = FALSE))
+            NewIC <- summarizeIC(
+                getIC(GStar =  attr(est.a[["PropScore"]], "g.star.obs"),
+                      Hazards = NewHazards, TotalSurv = NewSurv,
+                      NuisanceWeight = est.a[["NuisanceWeight"]],
+                      TargetEvent = TargetEvent, TargetTime = TargetTime,
+                      Events = Events, T.tilde = T.tilde, Delta = Delta,
+                      EvalTimes = EvalTimes, GComp = FALSE)
+            )
             return(list("Hazards" = NewHazards, "EvntFreeSurv" = NewSurv, "SummEIC" = NewIC))
         })
 
         ## Check for improvement
         NewSummEIC <- do.call(rbind, lapply(seq_along(newEsts), function(a) {
             cbind("Trt" = names(newEsts)[a], newEsts[[a]][["SummEIC"]])}))
-        NewNormPnEIC <- getNormPnEIC(NewSummEIC[Time %in% TargetTimes & Event %in% TargetEvents,
+        NewNormPnEIC <- getNormPnEIC(NewSummEIC[Time %in% TargetTime & Event %in% TargetEvent,
                                                 PnEIC])
         if (NormPnEIC < NewNormPnEIC) {
             print("Update increased ||PnEIC||, halving the OneStepEps")
@@ -94,8 +96,8 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, Censored, TargetEvents, Targe
 
         SummEIC <- NewSummEIC
         NormPnEIC <- NewNormPnEIC
-        OneStepStop <- NewSummEIC[, list("check" = abs(PnEIC) <= `seEIC/(root(n)log(n))`,
-                                         "ratio" = abs(PnEIC) / `seEIC/(root(n)log(n))`),
+        OneStepStop <- NewSummEIC[, list("check" = abs(PnEIC) <= `seEIC/(sqrt(n)log(n))`,
+                                         "ratio" = abs(PnEIC) / `seEIC/(sqrt(n)log(n))`),
                                   by = c("Trt", "Time", "Event")]
 
         if (Verbose) print(OneStepStop[["ratio"]])
@@ -103,24 +105,24 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, Censored, TargetEvents, Targe
             return(Estimates)
         }
     }
-    warning("TMLE has not converged by step", NumUpdateSteps, " - Results may not be reliable")
+    warning("TMLE has not converged by step", MaxUpdateIter, " - Results may not be reliable")
     return(Estimates)
 }
 
 updateHazard <- function(GStar, Hazards, TotalSurv, NuisanceWeight, Events, EvalTimes, T.tilde,
-                         Delta, PnEIC, NormPnEIC, OneStepEps, TargetEvents, TargetTimes) {
+                         Delta, PnEIC, NormPnEIC, OneStepEps, TargetEvent, TargetTime) {
     Time <- Event <- NULL
     if (min(TotalSurv) == 0)
-        stop("max(TargetTimes) goes past the point where some people's survival probabilty = 0.",
-             " This makes the clever covariate explode")
+        stop("max(TargetTime) when people's survival probabilty = 0.",
+             " This makes the clever covariate explode.")
     lapply(Hazards, function(haz.al) { # loop over L
         l <- attr(haz.al, "j")
         update.l <- matrix(0, nrow = nrow(haz.al), ncol = ncol(haz.al))
-        lapply(TargetEvents, function(j) {
-            `F.j.t/S.t` <- apply(Hazards[[as.character(j)]] / TotalSurv, 2, cumsum)
-            update.j <- sapply(TargetTimes, function(tau) {
-                `F.j.tau/S.t` <- `F.j.t/S.t`[EvalTimes == tau, ]
-                h.q <- (l == j) - t(apply(`F.j.t/S.t`, 1, function(r) `F.j.tau/S.t` - r))
+        lapply(TargetEvent, function(j) {
+            `F.j.t` <- apply(Hazards[[as.character(j)]] * TotalSurv, 2, cumsum)
+            update.j <- sapply(TargetTime, function(tau) {
+                `F.j.tau` <- `F.j.t`[EvalTimes == tau, ]
+                h.q <- (l == j) - t(apply(`F.j.t`, 1, function(r) `F.j.tau` - r)) / TotalSurv
                 h.q[EvalTimes > tau, ] <- 0
                 update <- h.q * NuisanceWeight %*% diag(GStar) * PnEIC[Time == tau & Event == j, PnEIC]
                 update.l <<- update.l + update
@@ -128,6 +130,7 @@ updateHazard <- function(GStar, Hazards, TotalSurv, NuisanceWeight, Events, Eval
             })
             return(NULL)
         })
+
         newhaz.al <- haz.al * exp(update.l * OneStepEps / NormPnEIC)
 
         # newhaz.al <- sapply(1:ncol(NuisanceWeight), function(i) {# loop over individuals
@@ -136,13 +139,13 @@ updateHazard <- function(GStar, Hazards, TotalSurv, NuisanceWeight, Events, Eval
         #     }
         #     Nuisance.i <- NuisanceWeight[, i]
         #     Surv.i <- TotalSurv[, i]
-        #     UpdateDir <- do.call(`+`, lapply(TargetEvents, function(j) {
+        #     UpdateDir <- do.call(`+`, lapply(TargetEvent, function(j) {
         #         haz <- Hazards[[as.character(j)]]
-        #         `F.j.t/S.t` <- cumsum(Surv.i * haz[, i] / Surv.i)
-        #         `diffF/S` <- outer(`F.j.t/S.t`[EvalTimes %in% TargetTimes] , `F.j.t/S.t`, "-")
+        #         `F.j.t/S.t` <- cumsum(Surv.i * haz[, i]) / Surv.i
+        #         `diffF/S` <- outer(`F.j.t/S.t`[EvalTimes %in% TargetTime] , `F.j.t/S.t`, "-")
         #         clev.covs <- GStar[i] * apply(`diffF/S`, 1, function(r) ((l == attr(haz, "j")) - r) * Nuisance.i)
-        #         update.dir <- rowSums(sapply(seq_along(TargetTimes), function(k) {
-        #             tau <- TargetTimes[k]
+        #         update.dir <- rowSums(sapply(seq_along(TargetTime), function(k) {
+        #             tau <- TargetTime[k]
         #             (EvalTimes <= tau) * clev.covs[, k] * PnEIC[Time == tau & Event == attr(haz, "j"), PnEIC]}))
         #         return(update.dir)}))
         #     return(haz.al[, i] * exp(UpdateDir * OneStepEps / NormPnEIC))

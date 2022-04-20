@@ -2,41 +2,42 @@
 #'
 #' @param Data data.table
 #' @param CovDataTable data.table
-#' @param Models list
+#' @param Model list
 #' @param MinNuisance numeric
-#' @param TargetEvents numeric vector
-#' @param TargetTimes numeric vector
-#' @param RegsOfInterest list
+#' @param TargetEvent numeric vector
+#' @param TargetTime numeric vector
+#' @param Regime list
 #' @param PropScoreBackend character
 #' @param Censored boolean
 #'
 
-getInitialEstimate <- function(Data, CovDataTable, Models, MinNuisance, TargetEvents,
-                               TargetTimes, RegsOfInterest, PropScoreBackend, Censored) {
+getInitialEstimate <- function(Data, EventTime, EventType, Treatment, CovDataTable, Model, MinNuisance,
+                               TargetEvent, TargetTime, Regime, PropScoreBackend, Censored) {
     Time <- NULL
     ## cross validation setup ----
     # stratifying cv so that folds are balanced for treatment assignment & outcomes
-    # theory? but regressions may fail in practice with rare events otherwise
-    StrataIDs <- as.numeric(factor(paste0(Data[["Trt"]], ":", Data[["Event"]])))
+    # theory? but regressions may fail in practice with rare events otherwise ### make efficient CV representation ----
+    StrataIDs <- as.numeric(factor(paste0(Treatment, ":", EventType)))
     CVFolds <- origami::make_folds(n = Data, fold_fun = origami::folds_vfold,
                                    strata_ids = StrataIDs)
 
     ## Propensity Scores for Regimes of Interest ----
-    PropScores <- getPropScore(Treatment = Data[["Trt"]],
-                               CovDataTable, Models, MinNuisance, RegsOfInterest,
+    PropScores <- getPropScore(Treatment = Treatment,
+                               CovDataTable, Model, MinNuisance, Regime,
                                PropScoreBackend, CVFolds)
     TrtFit <- PropScores[["TrtFit"]]
     PropScores <- PropScores[["PropScores"]]
 
     ## hazards: Events & censoring ----
     ## baseline hazards for obs times + target times ----
-    HazTimes <- unique(c(TargetTimes, Data[["Time"]]))
-    HazTimes <- HazTimes[HazTimes <= max(TargetTimes)]
-    Hazards <- data.table("Time" = c(0, HazTimes))[order(Time)]
+    HazTimes <- sort(unique(c(TargetTime, EventTime)))
+    HazTimes <- HazTimes[HazTimes <= max(TargetTime)]
+    Hazards <- data.table("Time" = c(0, HazTimes))
 
-    HazFits <- getHazFit(Data, Models, CVFolds, Hazards)
-    HazSurvPreds <- getHazSurvPred(Data, HazFits, MinNuisance, TargetEvents,
-                                   TargetTimes, RegsOfInterest, Censored)
+    HazFits <- getHazFit(Data = Data, EventTime = EventTime, Model = Model,
+                         CVFolds = CVFolds, Hazards = Hazards)
+    HazSurvPreds <- getHazSurvPred(Data, HazFits, MinNuisance, TargetEvent,
+                                   TargetTime, Regime, Censored)
     InitialEstimates <- lapply(seq_along(PropScores), function(a) {
         NuisanceWeight <- sapply(seq_along(PropScores[[a]]), function(i) {
             PropScores[[a]][i] * HazSurvPreds[[a]][["Survival"]][["LaggedCensSurv"]][, i]})
@@ -47,7 +48,7 @@ getInitialEstimate <- function(Data, CovDataTable, Models, MinNuisance, TargetEv
                     "NuisanceWeight" = NuisanceWeight))
     })
 
-    names(InitialEstimates) <- names(RegsOfInterest)
+    names(InitialEstimates) <- names(Regime)
     attr(InitialEstimates, "times") <- Hazards[["Time"]]
     return(InitialEstimates)
 }

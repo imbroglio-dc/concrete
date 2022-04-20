@@ -3,35 +3,35 @@
 #'
 #' @param Treatment numeric vector
 #' @param CovDataTable data.table
-#' @param Models list
+#' @param Model list
 #' @param MinNuisance numeric
-#' @param RegsOfInterest list
+#' @param Regime list
 #' @param PropScoreBackend character
 #' @param CVFolds list
 #' @param TrtLoss character or function(A, g.A)
 #'
 
-getPropScore <- function(Treatment, CovDataTable, Models, MinNuisance, RegsOfInterest,
+getPropScore <- function(Treatment, CovDataTable, Model, MinNuisance, Regime,
                          PropScoreBackend, CVFolds, TrtLoss = NULL) {
     if (PropScoreBackend == "sl3") {
-        PropScores <- getSl3PropScore(Treatment, CovDataTable, Models, MinNuisance, RegsOfInterest, CVFolds)
+        PropScores <- getSl3PropScore(Treatment, CovDataTable, Model, MinNuisance, Regime, CVFolds)
     } else {
         stop("functionality for propensity score calculation not using sl3 has not yet been implemented")
     }
     return(PropScores)
 }
 
-getSl3PropScore <- function(Treatment, CovDataTable, Models, MinNuisance, RegsOfInterest, CVFolds) {
+getSl3PropScore <- function(Treatment, CovDataTable, Model, MinNuisance, Regime, CVFolds) {
     ## PropScore score ----
     TrtTask <- sl3::make_sl3_Task(
         data = cbind("Trt" = Treatment, CovDataTable),
         covariates = colnames(CovDataTable),
         outcome = "Trt"
     )
-    TrtSL <- sl3::Lrnr_sl$new(learners = Models[["Trt"]], folds = CVFolds)
+    TrtSL <- sl3::Lrnr_sl$new(learners = Model[["Trt"]], folds = CVFolds)
     TrtFit <- TrtSL$train(TrtTask)
 
-    PropScores <- lapply(RegsOfInterest, function(a) {
+    PropScores <- lapply(Regime, function(a) {
         if (is.numeric(a) & length(a) == length(Treatment)) {
             if (all(a %in% c(0, 1))) {
                 ga1 <- TrtFit$predict()
