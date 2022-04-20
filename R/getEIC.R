@@ -16,7 +16,7 @@ getEIC <- function(Estimates, Data, Regime, Censored, TargetEvent, TargetTime,
                    Events, MinNuisance, GComp = FALSE) {
     EvalTimes <- attr(Estimates, "times")
     T.tilde <- Data[[attr(Data, "EventTime")]]
-    Delta <- Data[[attr(Data, "EventTime")]]
+    Delta <- Data[[attr(Data, "EventType")]]
 
     for (a in seq_along(Estimates)) {
         NuisanceWeight <- Estimates[[a]][["NuisanceWeight"]]
@@ -24,8 +24,10 @@ getEIC <- function(Estimates, Data, Regime, Censored, TargetEvent, TargetTime,
         Hazards <- Estimates[[a]][["Hazards"]]
         TotalSurv <- Estimates[[a]][["EvntFreeSurv"]]
 
-        IC.a <- getIC(GStar, Hazards, TotalSurv, NuisanceWeight, TargetEvent, TargetTime,
-                      Events, T.tilde, Delta, EvalTimes, GComp)
+        IC.a <- getIC(GStar = GStar, Hazards = Hazards, TotalSurv = TotalSurv,
+                      NuisanceWeight = NuisanceWeight, TargetEvent = TargetEvent,
+                      TargetTime = TargetTime, Events = Events, T.tilde = T.tilde,
+                      Delta = Delta, EvalTimes = EvalTimes, GComp = GComp)
 
         if (GComp)
             Estimates[[a]][["GCompEst"]] <- getGComp(EvalTimes, Hazards, TotalSurv, TargetTime)

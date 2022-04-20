@@ -48,7 +48,7 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, Censored, TargetEvent, Target
     Time <- Event <- `seEIC/(sqrt(n)log(n))` <- NULL
     EvalTimes <- attr(Estimates, "times")
     T.tilde <- Data[[attr(Data, "EventTime")]]
-    Delta <- Data[[attr(Data, "EventTime")]]
+    Delta <- Data[[attr(Data, "EventType")]]
 
     ## one-step tmle loop starts here ----
     for (step in 1:MaxUpdateIter) {

@@ -6,7 +6,7 @@ x <- lapply(paste0("R/", list.files("R/")), source)
 try(setwd(dir = "/Shared/Projects/ConCR-TMLE/"),silent = TRUE)
 try(setwd("~/research/SoftWare/devel-tmle-survival/ConCR-TMLE/obsolete-concrete/"),silent = TRUE)
 x <- lapply(list.files("R/*",path = "R",full.names = TRUE), source)
-# concrete 
+# concrete
 try(setwd(dir = "/Shared/Projects/ConCR-TMLE/"),silent = TRUE)
 try(setwd("~/research/SoftWare/devel-tmle-survival/ConCR-TMLE/"),silent = TRUE)
 source("scripts/packages.R")
@@ -34,8 +34,7 @@ output <- with(concreteArgs, doConCRTmle(Data = Data,
                                          CVArg = CVArg,
                                          Model = Model,
                                          PropScoreBackend = PropScoreBackend,
-                                         ## MaxUpdateIter = MaxUpdateIter,
-                                         MaxUpdateIter = 2,
+                                         MaxUpdateIter = MaxUpdateIter,
                                          OneStepEps = OneStepEps,
                                          MinNuisance = MinNuisance,
                                          Verbose = Verbose,
