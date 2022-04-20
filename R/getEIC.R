@@ -1,45 +1,59 @@
-# get EICs
-getEIC <- function(Estimates, Data, RegsOfInterest, Censored, TargetEvents, TargetTimes, Events, MinNuisance, GComp = F) {
-    Targets <- expand.grid("Time" = TargetTimes, "Event" = TargetEvents)
-    EvalTimes <- attr(Estimates, "times")
-    T.tilde <- Data[["Time"]]
-    Delta <- Data[["Event"]]
+#' get EICs
+#'
+#' @param Estimates list
+#' @param Data data.table
+#' @param Regime list
+#' @param Censored boolean
+#' @param TargetEvent numeric vector
+#' @param TargetTime numeric vector
+#' @param Events numeric vector
+#' @param MinNuisance numeric
+#' @param GComp boolean
+#'
+#'
 
-    for (a in 1:length(Estimates)) {
+getEIC <- function(Estimates, Data, Regime, Censored, TargetEvent, TargetTime,
+                   Events, MinNuisance, GComp = FALSE) {
+    EvalTimes <- attr(Estimates, "times")
+    T.tilde <- Data[[attr(Data, "EventTime")]]
+    Delta <- Data[[attr(Data, "EventTime")]]
+
+    for (a in seq_along(Estimates)) {
         NuisanceWeight <- Estimates[[a]][["NuisanceWeight"]]
         GStar <- attr(Estimates[[a]][["PropScore"]], "g.star.obs")
         Hazards <- Estimates[[a]][["Hazards"]]
         TotalSurv <- Estimates[[a]][["EvntFreeSurv"]]
 
-        IC.a <- getICs(GStar, Hazards, TotalSurv, NuisanceWeight, Targets,
-                       Events, T.tilde, Delta, EvalTimes, GComp)
+        IC.a <- getIC(GStar, Hazards, TotalSurv, NuisanceWeight, TargetEvent, TargetTime,
+                      Events, T.tilde, Delta, EvalTimes, GComp)
 
         if (GComp)
-            Estimates[[a]][["GCompEst"]] <- getGComp(EvalTimes, Hazards, TotalSurv, Targets)
+            Estimates[[a]][["GCompEst"]] <- getGComp(EvalTimes, Hazards, TotalSurv, TargetTime)
 
         Estimates[[a]][["SummEIC"]] <- summarizeIC(IC.a)
     }
     return(Estimates)
 }
 
-getICs <- function(GStar, Hazards, TotalSurv, NuisanceWeight, Targets,
-                   Events, T.tilde, Delta, EvalTimes, GComp) {
-    # loop over individuals
+getIC <- function(GStar, Hazards, TotalSurv, NuisanceWeight, TargetEvent, TargetTime,
+                  Events, T.tilde, Delta, EvalTimes, GComp) {
+    Target <- expand.grid("Time" = TargetTime, "Event" = TargetEvent)
+    IC <- F.j.tau <- NULL
     IC.a <- do.call(rbind, lapply(1:ncol(NuisanceWeight), function(i) {
         Nuisance.i <- NuisanceWeight[, i]
         Surv.i <- TotalSurv[, i]
         Hazards.i <- lapply(Hazards, function(haz) haz[, i])
         Risks.i <- lapply(Hazards.i, function(haz.i) cumsum(Surv.i * haz.i))
 
-        if (GStar[i] == 0) # 1(A == a*)
-            return(cbind("ID" = i, Targets, "IC" = 0,
-                         "F.j.tau" = apply(Targets, 1, function(target) {
+        if (GStar[i] == 0) # 1(A != a*)
+            return(cbind("ID" = i, Target,  "IC" = 0,
+                         "F.j.tau" = apply(Target,  1, function(target) {
                              tau <- target[["Time"]]
                              j <- target[["Event"]]
                              return(Risks.i[[as.character(j)]][EvalTimes == tau])
                          })))
 
-        IC.jk <- t(apply(Targets, 1, function(target) {
+        IC.jk <- t(apply(Target,  1, function(target) {
             j <- target[["Event"]]
             tau <- target[["Time"]]
             t.tilde <- T.tilde[i]
@@ -60,24 +74,24 @@ getICs <- function(GStar, Hazards, TotalSurv, NuisanceWeight, Targets,
             }))
             return(c("IC" = IC.jk, "F.j.tau" = F.j.tau))
         }))
-        IC.jk <- cbind("ID" = i, Targets, IC.jk)
+        IC.jk <- cbind("ID" = i, Target,  IC.jk)
         return(IC.jk)
     }))
-
     ## the second EIC component ( ... + F_j(tau | a, L) - Psi )
     IC.a <- as.data.table(IC.a)
     IC.a[, IC := IC + F.j.tau - mean(F.j.tau), by = c("Time", "Event")]
     return(IC.a[,.SD, .SDcols = !"F.j.tau"])
 }
 
-getGComp <- function(EvalTimes, Hazards, TotalSurv, Targets) {
+getGComp <- function(EvalTimes, Hazards, TotalSurv, TargetTime) {
+    F.j.tau <- NULL
     Risks <- do.call(rbind, lapply(Hazards, function(haz.j) {
         Risk.a <- sapply(1:ncol(haz.j), function(i) {
             cumsum(TotalSurv[, i] * haz.j[, i])
         })
         Risk.a <- cbind("Event" = as.numeric(attr(haz.j, "j")),
-                        "Time" = EvalTimes[EvalTimes %in% Targets[["Time"]]],
-                        "F.j.tau" = rowMeans(subset(Risk.a, EvalTimes %in% Targets[["Time"]])))
+                        "Time" = EvalTimes[EvalTimes %in% TargetTime],
+                        "F.j.tau" = rowMeans(subset(Risk.a, EvalTimes %in% TargetTime)))
         return(Risk.a)
     }))
     Risks <- as.data.table(Risks)
@@ -86,9 +100,10 @@ getGComp <- function(EvalTimes, Hazards, TotalSurv, Targets) {
 }
 
 summarizeIC <- function(IC.a) {
+    IC <- NULL
     IC.a <- rbind(IC.a,
                   IC.a[, list("Event" = -1, "IC" = -sum(IC)), by = c("ID", "Time")])
-    return(IC.a[, list("PnEIC" = mean(IC), "seEIC" = sqrt(var(IC)),
-                       "seEIC/(root(n)log(n))" = sqrt(var(IC)/.N)/log(.N)),
+    return(IC.a[, list("PnEIC" = mean(IC), "seEIC" = sqrt(stats::var(IC)),
+                       "seEIC/(sqrt(n)log(n))" = sqrt(stats::var(IC)/.N)/log(.N)),
                 by = c("Time", "Event")])
 }

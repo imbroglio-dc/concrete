@@ -11,8 +11,19 @@ Authors@R:
            comment = c(ORCID = "0000-0002-9413-8152"))
 Maintainer: David Chen <david.chen49@berkeley.edu>
 Description: Continuous-time estimation of survival estimands using targeted maximumum likelihood estimation methodology described by Helene Rytgaard, Thomas Gerds, and Mark van der Laan 2021. Currently supported - Estimation of cause-specific hazards using Cox models, binary treatments, and simultaneously targeting survival estimands at multiple time points. 
-License: GPL (>= 3)
-Imports: Rcpp (>= 1.0.6), R6, MOSS
+License: 
+    GPL (>= 3) + file LICENSE
+Imports: 
+    Rcpp (>= 1.0.6), 
+    survival,
+    zoo,
+    data.table, 
+    methods,
+    origami,
+    sl3, 
+    lava
+Depends:
+    R (>= 3.5.0)
 LinkingTo: Rcpp
 Encoding: UTF-8
 LazyData: true
