@@ -13,32 +13,34 @@ source("scripts/packages.R")
 x <- lapply(list.files("R/*",path = "R",full.names = TRUE), source)
 source("scripts/prepare-pbc.R")
 
+plot(prodlim(Hist(time,status)~trt,data = data))
 
 concreteArgs <- formatArguments(DataTable = data[, c("time", "status", "trt", "id", "age", "sex")],
                                 EventTime = "time", EventType = "status",
                                 Treatment = "trt", ID = "id", Intervention = intervention,
                                 TargetTime = target.time, TargetEvent = target.event,
                                 Model = model, Verbose = TRUE)
-output <- with(concreteArgs, doConCRTmle(Data = Data,
-                                         EventTime = EventTime,
-                                         EventType = EventType,
-                                         Treatment = Treatment,
-                                         CovDataTable = CovDataTable,
-                                         LongTime = LongTime,
-                                         ID = ID,
-                                         Events = Events,
-                                         Censored = Censored,
-                                         TargetTime = TargetTime,
-                                         TargetEvent = TargetEvent,
-                                         Regime = Regime,
-                                         CVArg = CVArg,
-                                         Model = Model,
-                                         PropScoreBackend = PropScoreBackend,
-                                         MaxUpdateIter = MaxUpdateIter,
-                                         OneStepEps = OneStepEps,
-                                         MinNuisance = MinNuisance,
-                                         Verbose = Verbose,
-                                         GComp = GComp))
+output <- with(concreteArgs,
+               doConCRTmle(Data = Data,
+                           EventTime = EventTime,
+                           EventType = EventType,
+                           Treatment = Treatment,
+                           CovDataTable = CovDataTable,
+                           LongTime = LongTime,
+                           ID = ID,
+                           Events = Events,
+                           Censored = Censored,
+                           TargetTime = TargetTime,
+                           TargetEvent = TargetEvent,
+                           Regime = Regime,
+                           CVArg = CVArg,
+                           Model = Model,
+                           PropScoreBackend = PropScoreBackend,
+                           MaxUpdateIter = MaxUpdateIter,
+                           OneStepEps = OneStepEps,
+                           MinNuisance = MinNuisance,
+                           Verbose = Verbose,
+                           GComp = GComp))
 
 Intervention <- list(
     "A == 1" = function(a, L) {
