@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 
 #' doConcrete
 #'
@@ -20,10 +21,40 @@
 # #' @param Events : numeric
 # #' @param Censored : boolean
 # #' @param Regime : list
+=======
+#' doConCRTmle
+##' @title The continuous time TMLE for survival times in the presence of competing risks
+##' TMLE is a nice method
+##'
+##' The one-step TMLE uses a fluctuation model which describes the least-favorable path.
+##' @param Data
+##' @param EventTime character variable name
+##' @param EventType character variable name
+##' @param Treatment character variable name
+##' @param CovDataTable 
+##' @param LongTime long
+##' @param ID long
+##' @param Events 
+##' @param Censored
+##' @param TargetTime
+##' @param TargetEvent
+##' @param Regime
+##' @param CVArg
+##' @param Model
+##' @param PropScoreBackend
+##' @param MaxUpdateIter
+##' @param OneStepEps
+##' @param MinNuisance
+##' @param Verbose
+##' @param GComp
+##' @return 
+##' @seealso 
+>>>>>>> main
 #'
 #' @import data.table
 #'
 #' @return tbd
+<<<<<<< HEAD
 #' @export doConcrete
 #'
 #' @examples
@@ -35,6 +66,15 @@ doConcrete <- function(ConcreteArgs) {
 
 doConCRTmle <- function(Data, CovDataTable,
                         LongTime, ID, Events, Censored,
+=======
+#'
+#' @examples
+#' "tbd"
+##' @export 
+##' @author Thomas A. Gerds <tag@@biostat.ku.dk>
+doConCRTmle <- function(Data, EventTime, EventType, Treatment, CovDataTable,
+                        LongTime = NULL, ID = NULL, Events, Censored,
+>>>>>>> main
                         TargetTime, TargetEvent, Regime,
                         CVFolds, Model, PropScoreBackend, HazEstBackend,
                         MaxUpdateIter, OneStepEps, MinNuisance,
