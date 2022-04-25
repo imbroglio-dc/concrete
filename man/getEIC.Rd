@@ -7,10 +7,10 @@
 getEIC(
   Estimates,
   Data,
-  RegsOfInterest,
+  Regime,
   Censored,
-  TargetEvents,
-  TargetTimes,
+  TargetEvent,
+  TargetTime,
   Events,
   MinNuisance,
   GComp = FALSE
@@ -21,13 +21,13 @@ getEIC(
 
 \item{Data}{data.table}
 
-\item{RegsOfInterest}{list}
+\item{Regime}{list}
 
 \item{Censored}{boolean}
 
-\item{TargetEvents}{numeric vector}
+\item{TargetEvent}{numeric vector}
 
-\item{TargetTimes}{numeric vector}
+\item{TargetTime}{numeric vector}
 
 \item{Events}{numeric vector}
 

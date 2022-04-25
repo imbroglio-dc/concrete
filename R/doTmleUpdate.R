@@ -45,7 +45,7 @@
 
 doTmleUpdate <- function(Estimates, SummEIC, Data, Censored, TargetEvent, TargetTime, Events,
                          MaxUpdateIter, OneStepEps, NormPnEIC, Verbose) {
-    Time <- Event <- `seEIC/(sqrt(n)log(n))` <- NULL
+    Time <- Event <- `seEIC/(sqrt(n)log(n))` <- PnEIC <- NULL
     EvalTimes <- attr(Estimates, "times")
     T.tilde <- Data[[attr(Data, "EventTime")]]
     Delta <- Data[[attr(Data, "EventType")]]

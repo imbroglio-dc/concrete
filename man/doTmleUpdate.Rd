@@ -9,10 +9,10 @@ doTmleUpdate(
   SummEIC,
   Data,
   Censored,
-  TargetEvents,
-  TargetTimes,
+  TargetEvent,
+  TargetTime,
   Events,
-  NumUpdateSteps,
+  MaxUpdateIter,
   OneStepEps,
   NormPnEIC,
   Verbose
@@ -27,13 +27,13 @@ doTmleUpdate(
 
 \item{Censored}{boolean}
 
-\item{TargetEvents}{numeric vector}
+\item{TargetEvent}{numeric vector}
 
-\item{TargetTimes}{numeric vector}
+\item{TargetTime}{numeric vector}
 
 \item{Events}{numeric vector}
 
-\item{NumUpdateSteps}{numeric}
+\item{MaxUpdateIter}{numeric}
 
 \item{OneStepEps}{numeric}
 

@@ -1,48 +1,53 @@
 
-#' doConCRTmle
+#' doConcrete
 #'
-#' @param EventTime : Numeric vector (N x 1)
-#' @param EventType : Numeric (integer) vector (N x 1)
-#' @param Treatment : Numeric vector (N x 1)
-#' @param Intervention : list of function (length = A*)
-#' @param CovDataTable : data.table (N x ?)
-#' @param ID : vector (N x 1)
-#' @param LongTime : numeric vector (?? x 1)
-#' @param TargetTime : numeric vector (length = K)
-#' @param TargetEvent : numeric vector \\subset EventType (length = J)
-#' @param Model : list of functions (length = L)
-#' @param CVArg : list
-#' @param MaxUpdateIter : numeric
-#' @param OneStepEps : numeric
-#' @param MinNuisance : numeric
-#' @param Verbose : boolean
-#' @param PropScoreBackend : character
-#' @param GComp : boolean
+#' @param ConcreteArgs : output from concrete::formatArguments
+#'
+# #' @param Data : data.table (N x ?)
+# #' @param CovDataTable : data.table (N x ?)
+# #' @param ID : vector (N x 1)
+# #' @param LongTime : numeric vector (?? x 1)
+# #' @param TargetTime : numeric vector (length = K)
+# #' @param TargetEvent : numeric vector \\subset EventType (length = J)
+# #' @param Model : list of functions (length = L)
+# #' @param CVFolds : list
+# #' @param MaxUpdateIter : numeric
+# #' @param OneStepEps : numeric
+# #' @param MinNuisance : numeric
+# #' @param Verbose : boolean
+# #' @param PropScoreBackend : character
+# #' @param GComp : boolean
+# #' @param Events : numeric
+# #' @param Censored : boolean
+# #' @param Regime : list
 #'
 #' @import data.table
 #'
 #' @return tbd
-#' @export
+#' @export doConcrete
 #'
 #' @examples
 #' "tbd"
 
-doConCRTmle <- function(Data, EventTime, EventType, Treatment, CovDataTable,
-                        LongTime = NULL, ID = NULL, Events, Censored,
+doConcrete <- function(ConcreteArgs) {
+  return(do.call(doConCRTmle, ConcreteArgs))
+}
+
+doConCRTmle <- function(Data, CovDataTable,
+                        LongTime, ID, Events, Censored,
                         TargetTime, TargetEvent, Regime,
-                        CVArg = NULL, Model, PropScoreBackend = "sl3",
-                        MaxUpdateIter = 100, OneStepEps = 0.1, MinNuisance = 0.05,
-                        Verbose = FALSE, GComp = FALSE)
+                        CVFolds, Model, PropScoreBackend, HazEstBackend,
+                        MaxUpdateIter, OneStepEps, MinNuisance,
+                        Verbose, GComp)
 {
-  Time <- Event <- PnEIC <- `seEIC/(sqrt(n)log(n))` <- NULL # for R CMD globar variable binding check
+  Time <- Event <- PnEIC <- `seEIC/(sqrt(n)log(n))` <- NULL # for data.table compatibility w/ global var binding check
 
 
   # initial estimation ------------------------------------------------------------------------
-  Estimates <- getInitialEstimate(Data = Data, EventTime = EventTime, EventType = EventType,
-                                  Treatment = Treatment, CovDataTable = CovDataTable,
-                                  Model = Model, MinNuisance = MinNuisance,
-                                  TargetEvent = TargetEvent, TargetTime = TargetTime,
-                                  Regime = Regime, PropScoreBackend = PropScoreBackend,
+  Estimates <- getInitialEstimate(Data = Data, CovDataTable = CovDataTable,
+                                  Model = Model, CVFolds = CVFolds, MinNuisance = MinNuisance,
+                                  TargetEvent = TargetEvent, TargetTime = TargetTime, Regime = Regime,
+                                  PropScoreBackend = PropScoreBackend, HazEstBackend = HazEstBackend,
                                   Censored = Censored)
 
   # get initial EIC (possibly with GComp Estimate) ---------------------------------------------
@@ -82,7 +87,6 @@ doConCRTmle <- function(Data, EventTime, EventType, Treatment, CovDataTable,
     cbind("Trt" = names(Estimates)[a], Estimates[[a]][["SummEIC"]])}))
 
   NormPnEIC <- getNormPnEIC(SummEIC[Time %in% TargetTime & Event %in% TargetEvent, PnEIC])
-
 
   # g-comp (sl estimate)
   # unadjusted cox model

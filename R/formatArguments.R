@@ -25,24 +25,31 @@
 #' @param TargetTime : numeric vector (length = K)
 #' @param TargetEvent : numeric vector \\subset EventType (length = J)
 #' @param Target : optional data.table / data.frame (?? x 2); a table containing all combinations of target events (column 1) and target times (column 2).
+#' @param CVArg : character (), or list of arguments to be passed into origami::make_folds or a list of folds in the origami fold structure
 #' @param Model : list of functions (length = L)
-#' @param CVArg : list
+#' @param PropScoreBackend : character
+#' @param HazEstBackend : character
 #' @param MaxUpdateIter : numeric
 #' @param OneStepEps : numeric
 #' @param MinNuisance : numeric
-#' @param PropScoreBackend : character
 #' @param Verbose : boolean
 #' @param GComp : boolean
 #'
 #' @return tbd
-#' @export
+#'
+#' @importFrom stats model.matrix
+#' @import origami
+#' @export formatArguments
+#'
 #'
 
-formatArguments <- function(DataTable, DataStructure = NULL, EventTime, EventType,
-                            Treatment, ID = NULL, LongTime = NULL, Intervention, TargetTime,
-                            TargetEvent, Target = NULL, CVArg = NULL, Model,
-                            PropScoreBackend = "sl3", MaxUpdateIter = 100, OneStepEps = 0.1,
-                            MinNuisance = 0.05, Verbose = TRUE, GComp = TRUE)
+formatArguments <- function(DataTable, DataStructure = NULL, EventTime, EventType, Treatment, ID = NULL, LongTime = NULL,
+                            Intervention, TargetTime, TargetEvent, Target = NULL,
+                            CVArg = list(n = nrow(DataTable), fold_fun = folds_vfold,
+                                                cluster_ids = NULL, strata_ids = NULL),
+                            Model, PropScoreBackend = "sl3", HazEstBackend = "coxph",
+                            MaxUpdateIter = 100, OneStepEps = 0.1, MinNuisance = 0.05,
+                            Verbose = TRUE, GComp = TRUE)
 {
     ## Data Structure ----
     # incorporate prodlim::EventHistory.frame?
@@ -68,8 +75,9 @@ formatArguments <- function(DataTable, DataStructure = NULL, EventTime, EventTyp
                     EventType = event.type)
 
     ## Estimation Paramters ----
-    checkCVArg(CVArg)
-    checkModel(Model = Model, UniqueEvent = event.type.unique, Censored = censored)
+    cv.folds <- getCVFolds(CVArg)
+    checkModel(Model = Model, UniqueEvent = event.type.unique,
+               Censored = censored, HazEstBackend = HazEstBackend)
     checkPropScoreBackend(PropScoreBackend)
 
     ## TMLE Update Parameters ----
@@ -90,9 +98,6 @@ formatArguments <- function(DataTable, DataStructure = NULL, EventTime, EventTyp
     attr(data.tbl, "ID") <- ID
 
     return(list(Data = data.tbl,
-                EventTime = event.time,
-                EventType = event.type,
-                Treatment = treatment,
                 CovDataTable = cov.data.table,
                 LongTime = long.time,
                 ID = id,
@@ -101,7 +106,7 @@ formatArguments <- function(DataTable, DataStructure = NULL, EventTime, EventTyp
                 TargetTime = TargetTime,
                 TargetEvent = target.event,
                 Regime = regime,
-                CVArg = CVArg,
+                CVFolds = cv.folds,
                 Model = Model,
                 PropScoreBackend = PropScoreBackend,
                 MaxUpdateIter = max.update.iter,
@@ -168,7 +173,7 @@ getID <- function(x, DataTable = NULL) {
         x <- tmp
     }
     if (any(!is.vector(x), is.list(x), is.null(x), is.nan(x), is.na(x)))
-        stop("ID must be a non-empty vector")
+        stop("ID column must not include missing values")
     return(x)
 }
 
@@ -202,7 +207,7 @@ getCovDataTable <- function(DataTable, EventTime, EventType, Treatment, ID, Long
     attr(cov.dt.mod.matrixed, "cov.names.mod.matrixed") <- cov.names.mod.matrixed
     if (Verbose)
         # try(superheat::superheat(cov(scale(model.matrix(~., cov.dt.mod.matrixed)))))
-    return(cov.dt.mod.matrixed)
+        return(cov.dt.mod.matrixed)
 }
 
 getRegime <- function(Intervention, Treatment, CovDataTable) {
@@ -295,13 +300,25 @@ checkTargetTime <- function(TargetTime, EventTime, TargetEvent, EventType) {
              max.time)
 }
 
-checkCVArg <- function(CVArg) {
-    warning("CVArg checks not yet written")
+getCVFolds <- function(CVArg) {
+    ## cross validation setup ----
+    # stratifying cv so that folds are balanced for treatment assignment & outcomes
+    # theory? but regressions may fail in practice with rare events otherwise ### make efficient CV representation ----
+    cv.folds <- try(do.call(origami::make_folds, CVArg))
+    if (inherits(cv.folds, "try-error"))
+        stop("CVArg must be a list of arguments to be passed into do.call(origami::make_folds, ...)")
+    return(cv.folds)
 }
 
-checkModel <- function(Model, UniqueEvent, Censored) {
+checkModel <- function(Model, UniqueEvent, Censored, HazEstBackend) {
     ## check that every event has a model
+    if (!all(is.list(Model), length(Model) == length(UniqueEvent) + 1 + Censored))
+        stop("Model must be a named list, one for each event type observed in the dataset")
     ## check model specifications are not obviously broken
+    if (length(setdiff(names(Model), as.character(UniqueEvent))) > 0)
+        stop("Model must be a named list, one for each event type observed in the dataset. ",
+             "Model names must be `Trt` for the intervention, `0` for censoring, or the ",
+             "corresponding numeric value for observed event type(s)")
 
     ## tag every model with an event attribute
     ## tag censoring as event = 0
@@ -313,7 +330,7 @@ checkModel <- function(Model, UniqueEvent, Censored) {
     #     attr(haz.model, "j") <- as.numeric(gsub(".*(\\d+).*", "\\1", names(Model[j])))
     #     return(haz.model)
     # })
-    warning("model checks not yet written")
+    warning("model checks not yet complete")
 }
 
 checkPropScoreBackend <- function(PropScoreBackend) {
@@ -353,3 +370,4 @@ checkGComp <- function(GComp) {
         stop("GComp must either be TRUE or FALSE")
     }
 }
+

@@ -47,7 +47,8 @@ getSl3PropScore <- function(Treatment, CovDataTable, Model, MinNuisance, Regime,
         attr(PropScore, "g.star.obs") <- attr(a, "g.star")(Treatment)
         return(PropScore)
     })
-    return(list("PropScores" = PropScores, "TrtFit" = TrtFit))
+    attr(PropScores, "TrtFit") <- TrtFit
+    return(PropScores)
 }
 
 truncNuisanceDenom <- function(NuisanceDenom, MinNuisance) {

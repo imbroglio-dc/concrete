@@ -5,52 +5,79 @@
 \title{Title}
 \usage{
 formatArguments(
+  DataTable,
+  DataStructure = NULL,
   EventTime,
   EventType,
   Treatment,
+  ID = NULL,
+  LongTime = NULL,
   Intervention,
-  CovDataTable,
-  ID,
-  TargetTimes,
-  TargetEvents,
-  Models,
-  CVArgs,
-  NumUpdateSteps,
-  OneStepEps,
-  MinNuisance,
-  PropScoreBackend,
-  Verbose,
-  GComp
+  TargetTime,
+  TargetEvent,
+  Target = NULL,
+  CVArg = list(n = nrow(DataTable), fold_fun = folds_vfold, cluster_ids = NULL,
+    strata_ids = NULL),
+  Model,
+  PropScoreBackend = "sl3",
+  HazEstBackend = "coxph",
+  MaxUpdateIter = 100,
+  OneStepEps = 0.1,
+  MinNuisance = 0.05,
+  Verbose = TRUE,
+  GComp = TRUE
 )
 }
 \arguments{
-\item{EventTime}{: Numeric vector (N x 1)}
+\item{DataTable}{: data.table (n x (d + (3:4)); data.table of the observed data. Must include:
+\itemize{
+\item{"Event Time"}{non-negative real numbers; the observed event or censoring time}
+\item{"Event Type"}{numeric; the observed event type (0 for censoring)}
+\item{"Treatment"}{numeric; the observed treatment}
+}
+May include
+\itemize{
+\item{"ID"}{factor, character, or numberic; subject id - if missing, ID will be
+set to row number. For longitudinal data, ID must be provided}
+\item{"LongTime"}{numeric; (Specifies monitoring times for longitudinal data structures}
+\item{"Treatment"}{numeric}
+}}
 
-\item{EventType}{: Numeric (integer) vector (N x 1)}
+\item{DataStructure}{: formula; Surv("Event Time", "Event Type") ~ Intervention("Treatment")}
 
-\item{Treatment}{: Numeric vector (N x 1)}
+\item{EventTime}{: character; the column name of the observed time}
 
-\item{Intervention}{: list of function (length = A*)}
+\item{EventType}{: character; the column name of the observed event type}
 
-\item{CovDataTable}{: data.table (N x ?)}
+\item{Treatment}{: character; the column name of the observed treatment assignment}
 
-\item{ID}{: vector (N x 1)}
+\item{ID}{: optional character; the column name of the observed subject id}
 
-\item{TargetTimes}{: numeric vector (length = K)}
+\item{LongTime}{: situational character; the column name of the monitoring times for
+longitudinal data structures}
 
-\item{TargetEvents}{: numeric vector \\subset EventType (length = J)}
+\item{Intervention}{: list; a list of desired interventions on the treatment variable.
+Each intervention must be a list containing two named functions: 'intervention' = function(Treatment, Covariates)}
 
-\item{Models}{: list of functions (length = L)}
+\item{TargetTime}{: numeric vector (length = K)}
 
-\item{CVArgs}{: list}
+\item{TargetEvent}{: numeric vector \\subset EventType (length = J)}
 
-\item{NumUpdateSteps}{: numeric}
+\item{Target}{: optional data.table / data.frame (?? x 2); a table containing all combinations of target events (column 1) and target times (column 2).}
+
+\item{CVArg}{: character (), or list of arguments to be passed into origami::make_folds or a list of folds in the origami fold structure}
+
+\item{Model}{: list of functions (length = L)}
+
+\item{PropScoreBackend}{: character}
+
+\item{HazEstBackend}{: character}
+
+\item{MaxUpdateIter}{: numeric}
 
 \item{OneStepEps}{: numeric}
 
 \item{MinNuisance}{: numeric}
-
-\item{PropScoreBackend}{: character}
 
 \item{Verbose}{: boolean}
 

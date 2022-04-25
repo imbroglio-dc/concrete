@@ -2,10 +2,12 @@
 
 S3method(synthesize,formula)
 S3method(synthesize,lvm)
-export(doConCRTmle)
+export(doConcrete)
 export(formatArguments)
 export(synthesize)
 export(synthesize.formula)
 export(synthesize.lvm)
 import(data.table)
 import(lava)
+import(origami)
+importFrom(stats,model.matrix)

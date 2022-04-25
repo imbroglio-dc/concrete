@@ -5,26 +5,26 @@
 \title{Title}
 \usage{
 getPropScore(
-  Data,
+  Treatment,
   CovDataTable,
-  Models,
+  Model,
   MinNuisance,
-  RegsOfInterest,
+  Regime,
   PropScoreBackend,
   CVFolds,
   TrtLoss = NULL
 )
 }
 \arguments{
-\item{Data}{data.table}
+\item{Treatment}{numeric vector}
 
 \item{CovDataTable}{data.table}
 
-\item{Models}{list}
+\item{Model}{list}
 
 \item{MinNuisance}{numeric}
 
-\item{RegsOfInterest}{list}
+\item{Regime}{list}
 
 \item{PropScoreBackend}{character}
 

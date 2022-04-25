@@ -7,11 +7,12 @@
 getInitialEstimate(
   Data,
   CovDataTable,
-  Models,
+  Model,
+  CVFolds,
   MinNuisance,
-  TargetEvents,
-  TargetTimes,
-  RegsOfInterest,
+  TargetEvent,
+  TargetTime,
+  Regime,
   PropScoreBackend,
   Censored
 )
@@ -21,15 +22,17 @@ getInitialEstimate(
 
 \item{CovDataTable}{data.table}
 
-\item{Models}{list}
+\item{Model}{list}
+
+\item{CVFolds}{: list}
 
 \item{MinNuisance}{numeric}
 
-\item{TargetEvents}{numeric vector}
+\item{TargetEvent}{numeric vector}
 
-\item{TargetTimes}{numeric vector}
+\item{TargetTime}{numeric vector}
 
-\item{RegsOfInterest}{list}
+\item{Regime}{list}
 
 \item{PropScoreBackend}{character}
 

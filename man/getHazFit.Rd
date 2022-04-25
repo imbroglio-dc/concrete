@@ -4,12 +4,12 @@
 \alias{getHazFit}
 \title{Title}
 \usage{
-getHazFit(Data, Models, CVFolds, Hazards)
+getHazFit(Data, Model, CVFolds, Hazards)
 }
 \arguments{
 \item{Data}{data.table}
 
-\item{Models}{list}
+\item{Model}{list}
 
 \item{CVFolds}{list}
 
