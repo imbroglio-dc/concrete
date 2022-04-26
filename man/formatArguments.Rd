@@ -29,59 +29,60 @@ formatArguments(
 )
 }
 \arguments{
-\item{DataTable}{: data.table (n x (d + (3:4)); data.table of the observed data. Must include:
+\item{DataTable}{data.table (n x (d + (3:4)); data.table of the observed data. Must include:
 \itemize{
-\item{"Event Time"}{non-negative real numbers; the observed event or censoring time}
-\item{"Event Type"}{numeric; the observed event type (0 for censoring)}
-\item{"Treatment"}{numeric; the observed treatment}
+\item{"EventTime"}{: non-negative real numbers; the observed event or censoring time}
+\item{"EventType"}{: numeric; the observed event type (0 for censoring)}
+\item{"Treatment"}{: numeric; the observed treatment}
 }
 May include
 \itemize{
-\item{"ID"}{factor, character, or numberic; subject id - if missing, ID will be
+\item{"ID"}{: factor, character, or numberic; subject id - if missing, ID will be
 set to row number. For longitudinal data, ID must be provided}
-\item{"LongTime"}{numeric; (Specifies monitoring times for longitudinal data structures}
-\item{"Treatment"}{numeric}
+\item{"LongTime"}{: numeric; (Specifies monitoring times for longitudinal data structures}
+\item{"Treatment"}{: numeric}
 }}
 
-\item{DataStructure}{: formula; Surv("Event Time", "Event Type") ~ Intervention("Treatment")}
+\item{DataStructure}{(not implemented yet) formula: e.g. Surv("EventTime", "EventType") ~ Intervention("Treatment") + ...}
 
-\item{EventTime}{: character; the column name of the observed time}
+\item{EventTime}{character: the column name of the observed time}
 
-\item{EventType}{: character; the column name of the observed event type}
+\item{EventType}{character: the column name of the observed event type}
 
-\item{Treatment}{: character; the column name of the observed treatment assignment}
+\item{Treatment}{character: the column name of the observed treatment assignment}
 
-\item{ID}{: optional character; the column name of the observed subject id}
+\item{ID}{(optional) character: the column name of the observed subject id}
 
-\item{LongTime}{: situational character; the column name of the monitoring times for
+\item{LongTime}{(situational) character: the column name of the monitoring times for
 longitudinal data structures}
 
-\item{Intervention}{: list; a list of desired interventions on the treatment variable.
-Each intervention must be a list containing two named functions: 'intervention' = function(Treatment, Covariates)}
+\item{Intervention}{list: a list of desired interventions on the treatment variable.
+Each intervention must be a list containing two named functions: 'intervention' = function(treatment vector, covariate data)
+and 'gstar' = function(treatment vector, covariate data)}
 
-\item{TargetTime}{: numeric vector (length = K)}
+\item{TargetTime}{numeric vector (length = K)}
 
-\item{TargetEvent}{: numeric vector \\subset EventType (length = J)}
+\item{TargetEvent}{numeric vector that is a subset of EventType (length = J)}
 
-\item{Target}{: optional data.table / data.frame (?? x 2); a table containing all combinations of target events (column 1) and target times (column 2).}
+\item{Target}{(not yet implemented) data.table / data.frame (?? x 2); a table containing all combinations of target events (column 1) and target times (column 2).}
 
-\item{CVArg}{: character (), or list of arguments to be passed into origami::make_folds or a list of folds in the origami fold structure}
+\item{CVArg}{list of arguments to be passed into origami::make_folds}
 
-\item{Model}{: list of functions (length = L)}
+\item{Model}{list of models (length = L + Censoring + Treatment)}
 
-\item{PropScoreBackend}{: character}
+\item{PropScoreBackend}{(currently must be \code{sl3}) character}
 
-\item{HazEstBackend}{: character}
+\item{HazEstBackend}{(currently must be \code{coxph}) character}
 
-\item{MaxUpdateIter}{: numeric}
+\item{MaxUpdateIter}{numeric: the number of one-step update steps}
 
-\item{OneStepEps}{: numeric}
+\item{OneStepEps}{numeric: the one-step tmle step size}
 
-\item{MinNuisance}{: numeric}
+\item{MinNuisance}{numeric: the minimum value of the nuisance parameter denominator in the clever covariate}
 
-\item{Verbose}{: boolean}
+\item{Verbose}{boolean}
 
-\item{GComp}{: boolean}
+\item{GComp}{boolean}
 }
 \value{
 tbd

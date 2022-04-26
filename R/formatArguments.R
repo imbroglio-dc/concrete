@@ -1,39 +1,40 @@
 
 #' Title
-#' @param DataTable : data.table (n x (d + (3:4)); data.table of the observed data. Must include:
+#' @param DataTable data.table (n x (d + (3:4)); data.table of the observed data. Must include:
 #' \itemize{
-#'   \item{"Event Time"}{non-negative real numbers; the observed event or censoring time}
-#'   \item{"Event Type"}{numeric; the observed event type (0 for censoring)}
-#'   \item{"Treatment"}{numeric; the observed treatment}
+#'   \item{"EventTime"}{: non-negative real numbers; the observed event or censoring time}
+#'   \item{"EventType"}{: numeric; the observed event type (0 for censoring)}
+#'   \item{"Treatment"}{: numeric; the observed treatment}
 #' }
 #' May include
 #' \itemize{
-#'   \item{"ID"}{factor, character, or numberic; subject id - if missing, ID will be
+#'   \item{"ID"}{: factor, character, or numberic; subject id - if missing, ID will be
 #'   set to row number. For longitudinal data, ID must be provided}
-#'   \item{"LongTime"}{numeric; (Specifies monitoring times for longitudinal data structures}
-#'   \item{"Treatment"}{numeric}
+#'   \item{"LongTime"}{: numeric; (Specifies monitoring times for longitudinal data structures}
+#'   \item{"Treatment"}{: numeric}
 #' }
-#' @param DataStructure : formula; Surv("Event Time", "Event Type") ~ Intervention("Treatment")
-#' @param EventTime : character; the column name of the observed time
-#' @param EventType : character; the column name of the observed event type
-#' @param Treatment : character; the column name of the observed treatment assignment
-#' @param ID : optional character; the column name of the observed subject id
-#' @param LongTime : situational character; the column name of the monitoring times for
+#' @param DataStructure (not implemented yet) formula: e.g. Surv("EventTime", "EventType") ~ Intervention("Treatment") + ...
+#' @param EventTime character: the column name of the observed time
+#' @param EventType character: the column name of the observed event type
+#' @param Treatment character: the column name of the observed treatment assignment
+#' @param ID (optional) character: the column name of the observed subject id
+#' @param LongTime (situational) character: the column name of the monitoring times for
 #' longitudinal data structures
-#' @param Intervention : list; a list of desired interventions on the treatment variable.
-#' Each intervention must be a list containing two named functions: 'intervention' = function(Treatment, Covariates)
-#' @param TargetTime : numeric vector (length = K)
-#' @param TargetEvent : numeric vector \\subset EventType (length = J)
-#' @param Target : optional data.table / data.frame (?? x 2); a table containing all combinations of target events (column 1) and target times (column 2).
-#' @param CVArg : character (), or list of arguments to be passed into origami::make_folds or a list of folds in the origami fold structure
-#' @param Model : list of functions (length = L)
-#' @param PropScoreBackend : character
-#' @param HazEstBackend : character
-#' @param MaxUpdateIter : numeric
-#' @param OneStepEps : numeric
-#' @param MinNuisance : numeric
-#' @param Verbose : boolean
-#' @param GComp : boolean
+#' @param Intervention list: a list of desired interventions on the treatment variable.
+#' Each intervention must be a list containing two named functions: 'intervention' = function(treatment vector, covariate data)
+#' and 'gstar' = function(treatment vector, covariate data)
+#' @param TargetTime numeric vector (length = K)
+#' @param TargetEvent numeric vector that is a subset of EventType (length = J)
+#' @param Target (not yet implemented) data.table / data.frame (?? x 2); a table containing all combinations of target events (column 1) and target times (column 2).
+#' @param CVArg list of arguments to be passed into origami::make_folds. the default = list(n = nrow(DataTable), fold_fun = folds_vfold, cluster_ids = NULL, strata_ids = NULL)
+#' @param Model list of models (length = L + Censoring + Treatment)
+#' @param PropScoreBackend (currently must be `sl3`) character
+#' @param HazEstBackend (currently must be `coxph`) character
+#' @param MaxUpdateIter numeric: the number of one-step update steps
+#' @param OneStepEps numeric: the one-step tmle step size
+#' @param MinNuisance numeric: the minimum value of the nuisance parameter denominator in the clever covariate
+#' @param Verbose boolean
+#' @param GComp boolean
 #'
 #' @return tbd
 #'
@@ -46,7 +47,7 @@
 formatArguments <- function(DataTable, DataStructure = NULL, EventTime, EventType, Treatment, ID = NULL, LongTime = NULL,
                             Intervention, TargetTime, TargetEvent, Target = NULL,
                             CVArg = list(n = nrow(DataTable), fold_fun = folds_vfold,
-                                                cluster_ids = NULL, strata_ids = NULL),
+                                         cluster_ids = NULL, strata_ids = NULL),
                             Model, PropScoreBackend = "sl3", HazEstBackend = "coxph",
                             MaxUpdateIter = 100, OneStepEps = 0.1, MinNuisance = 0.05,
                             Verbose = TRUE, GComp = TRUE)
@@ -379,4 +380,9 @@ checkGComp <- function(GComp) {
         stop("GComp must either be TRUE or FALSE")
     }
 }
+
+IntentToTreat <- list("A == 1" = list("intervention" = function(a, L) {rep_len(1, length(a))},
+                                      "g.star" = function(a, L) {as.numeric(a == 1)}),
+                      "A == 0" = list("intervention" = function(a, L) {rep_len(0, length(a))},
+                                      "g.star" = function(a, L) {as.numeric(a == 0)}))
 

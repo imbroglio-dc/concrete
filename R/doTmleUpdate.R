@@ -49,11 +49,12 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, Censored, TargetEvent, Target
     EvalTimes <- attr(Estimates, "times")
     T.tilde <- Data[[attr(Data, "EventTime")]]
     Delta <- Data[[attr(Data, "EventType")]]
+    onestep.eps <- OneStepEps
 
     ## one-step tmle loop starts here ----
     for (step in 1:MaxUpdateIter) {
         if (Verbose)
-            cat("starting step", step, "with update epsilon =", OneStepEps, "\n")
+            cat("starting step", step, "with update epsilon =", onestep.eps, "\n")
 
         ## Get updated hazards and EICs
         newEsts <- lapply(Estimates, function(est.a) {
@@ -63,7 +64,7 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, Censored, TargetEvent, Target
                                        NuisanceWeight = est.a[["NuisanceWeight"]],
                                        Events = Events, EvalTimes = EvalTimes, T.tilde = T.tilde,
                                        Delta = Delta, PnEIC = est.a[["SummEIC"]],
-                                       NormPnEIC = NormPnEIC, OneStepEps = OneStepEps,
+                                       NormPnEIC = NormPnEIC, OneStepEps = onestep.eps,
                                        TargetEvent = TargetEvent, TargetTime = TargetTime)
             NewSurv <- apply(do.call(`+`, NewHazards), 2, function(haz) exp(-cumsum(haz)))
             NewIC <- summarizeIC(
@@ -84,8 +85,10 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, Censored, TargetEvent, Target
                                                 PnEIC])
         if (NormPnEIC < NewNormPnEIC) {
             print("Update increased ||PnEIC||, halving the OneStepEps")
-            OneStepEps <- 0.5 * OneStepEps
+            onestep.eps <- 0.5 * onestep.eps
             next
+        } else if (onestep.eps * 2 <= OneStepEps) {
+            onestep.eps <- onestep.eps * 2
         }
 
         for (a in seq_along(Estimates)) {

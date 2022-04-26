@@ -13,6 +13,10 @@
 #' "tbd"
 
 getOutput <- function(Estimate, Estimand, TargetTime, TargetEvent, GComp) {
+    if (!all(sapply(Estimand, function(e) any(is.function(e), grepl("(rd)|(rr)|(risk)", tolower(e)))))) {
+        stop("Estimand must be in c(`RD`, `RR`, `Risk`), or be a list of user-specified function(s) of",
+             "`Estimate`, `Estimand`, `TargetEvent`, `TargetTime`, and `GComp`.")
+    }
     output <- list()
     if (any(sapply(Estimand, is.function))) {
         output <- lapply(Estimand[which(sapply(Estimand, is.function))], function(estimand) {
@@ -20,16 +24,20 @@ getOutput <- function(Estimate, Estimand, TargetTime, TargetEvent, GComp) {
                                    "TargetEvent" = TargetEvent, "GComp" = GComp))
         })
         names(output) <- names(Estimand)[which(sapply(Estimand, is.function))]
-    } else if (any(tolower(Estimand) == "rd")) {
-        output[["RD"]] <- getRD(Estimate = Estimate, TargetTime = TargetTime, TargetEvent = TargetEvent, GComp = GComp)
-    } else if (any(tolower(Estimand) == "rr")) {
-        output[["RR"]] <- getRR(Estimate = Estimate, TargetTime = TargetTime, TargetEvent = TargetEvent, GComp = GComp)
-    } else if (any(tolower(Estimand) == "risk")) {
-        output[["Risk"]] <- getRisk(Estimate = Estimate, TargetTime = TargetTime, TargetEvent = TargetEvent, GComp = GComp)
-    } else {
-        warning("Estimand must be in c(`RD`, `RR`, `Risk`), or be a list of user-specified function(s) of",
-                "`Estimate`, `Estimand`, `TargetEvent`, `TargetTime`, and `GComp`.")
     }
+    if (any(tolower(Estimand) == "rd")) {
+        output[["RD"]] <- getRD(Estimate = Estimate, TargetTime = TargetTime, TargetEvent = TargetEvent, GComp = GComp)
+    }
+
+    if (any(tolower(Estimand) == "rr")) {
+        output[["RR"]] <- getRR(Estimate = Estimate, TargetTime = TargetTime, TargetEvent = TargetEvent, GComp = GComp)
+    }
+
+    if (any(tolower(Estimand) == "risk")) {
+        output[["Risk"]] <- getRisk(Estimate = Estimate, TargetTime = TargetTime, TargetEvent = TargetEvent, GComp = GComp)
+    }
+
+    return(output)
 }
 
 getRD <- function(Estimate, TargetTime, TargetEvent, GComp) {
