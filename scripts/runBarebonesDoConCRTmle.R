@@ -19,12 +19,13 @@ intervention <- list("A == 1" = list("intervention" = function(a, L) {rep_len(1,
                                      "g.star" = function(a, L) {as.numeric(a == 0)}))
 target.time <- 500 * (2:4)
 target.event <- sort(unique(data[status > 0, status]))
-a_lrnrs <- make_learner(logreg)
+a_lrnrs <- make_learner(Lrnr_glm)
 model <- list("Trt" = a_lrnrs,
               "0" = list(mod1 = Surv(time, status == 0) ~ trt + age + sex),
               "1" = list(mod1 = Surv(time, status == 1) ~ trt + age + sex))
 
-<<<<<<< HEAD
+# plot(prodlim(Hist(time,status)~trt,data = data))
+
 concrete.args <- formatArguments(DataTable = data[, c("time", "status", "trt", "id", "age", "sex")],
                                  EventTime = "time", EventType = "status",
                                  Treatment = "trt", ID = "id", Intervention = intervention,
@@ -33,74 +34,6 @@ concrete.args <- formatArguments(DataTable = data[, c("time", "status", "trt", "
 output <- doConcrete(ConcreteArgs = concrete.args)
 
 concrete.ate <- lapply(output, function(out.a) {
-=======
-plot(prodlim(Hist(time,status)~trt,data = data))
-
-concreteArgs <- formatArguments(DataTable = data[, c("time", "status", "trt", "id", "age", "sex")],
-                                EventTime = "time", EventType = "status",
-                                Treatment = "trt", ID = "id", Intervention = intervention,
-                                TargetTime = target.time, TargetEvent = target.event,
-                                Model = model, Verbose = TRUE)
-output <- with(concreteArgs,
-               doConCRTmle(Data = Data,
-                           EventTime = EventTime,
-                           EventType = EventType,
-                           Treatment = Treatment,
-                           CovDataTable = CovDataTable,
-                           LongTime = LongTime,
-                           ID = ID,
-                           Events = Events,
-                           Censored = Censored,
-                           TargetTime = TargetTime,
-                           TargetEvent = TargetEvent,
-                           Regime = Regime,
-                           CVArg = CVArg,
-                           Model = Model,
-                           PropScoreBackend = PropScoreBackend,
-                           MaxUpdateIter = MaxUpdateIter,
-                           OneStepEps = OneStepEps,
-                           MinNuisance = MinNuisance,
-                           Verbose = Verbose,
-                           GComp = GComp))
-
-Intervention <- list(
-    "A == 1" = function(a, L) {
-        regime <- rep_len(1, length(a))
-        attr(regime, "g.star") <- function(a) {as.numeric(a == 1)}
-        return(regime)
-    },
-    "A == 0" = function(a, L) {
-        regime <- rep_len(0, length(a))
-        attr(regime, "g.star") <- function(a) {as.numeric(a == 0)}
-        return(regime)
-    })
-Models <- list("Trt" = a_lrnrs,
-               "0" = list(mod1 = Surv(Time, Event == 0) ~ Trt + age + sex),
-               "1" = list(mod1 = Surv(Time, Event == 1) ~ Trt + age + sex))
-OBSoutput <- OBSdoConCRTmle(EventTime = data$time,
-                            EventType = data$status,
-                            Treatment = data$trt,
-                            Intervention = Intervention,
-                            CovDataTable = data[, c("age", "sex")],
-                            ID = data$id,
-                            TargetTimes = 500*2:4,
-                            TargetEvents = sort(unique(data[status > 0, status])),
-                            Models = Models,
-                            CVArgs = NULL,
-                            NumUpdateSteps = 25,
-                            OneStepEps = 0.1,
-                            MinNuisance = 0.05,
-                            PropScoreBackend = "sl3",
-                            Verbose = TRUE,
-                            GComp = TRUE)
-
-
-
-#=================================================================================================================
-# David's stuff
-#=================================================================================================================
-tmp <- lapply(output, function(out.a) {
->>>>>>> main
     do.call(rbind, lapply(sort(unique(data[status > 0, status])), function(j) {
         risks <- apply(out.a[["Hazards"]][[as.character(j)]] * out.a[["EvntFreeSurv"]], 2, cumsum)
         Psi <- cbind("tau" = target.time, "tmle.est" = rowMeans(risks[attr(output, "times") %in% target.time, ]))

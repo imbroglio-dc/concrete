@@ -9,6 +9,7 @@
 #' @param TargetTime numeric vector
 #' @param Regime list
 #' @param PropScoreBackend character
+#' @param HazEstBackend character
 #' @param Censored boolean
 
 getInitialEstimate <- function(Data, CovDataTable, Model, CVFolds, MinNuisance, TargetEvent,

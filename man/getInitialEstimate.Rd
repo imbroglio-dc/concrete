@@ -14,6 +14,7 @@ getInitialEstimate(
   TargetTime,
   Regime,
   PropScoreBackend,
+  HazEstBackend,
   Censored
 )
 }
@@ -35,6 +36,8 @@ getInitialEstimate(
 \item{Regime}{list}
 
 \item{PropScoreBackend}{character}
+
+\item{HazEstBackend}{character}
 
 \item{Censored}{boolean}
 }

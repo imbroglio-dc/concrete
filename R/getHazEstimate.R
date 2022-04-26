@@ -21,7 +21,7 @@ getHazFit <- function(Data, Model, CVFolds, Hazards, HazEstBackend) {
         attr(haz.model, "j") <- as.numeric(gsub(".*(\\d+).*", "\\1", names(HazModel[j])))
         return(haz.model)
     })
-    if ("cox" %in% HazEstBackend) {
+    if (grepl("cox", tolower(HazEstBackend))) {
         SupLrnModel <- lapply(HazModel, function(Model_j) {
             SupLrnLibRisk <- data.table::data.table(matrix(NaN, nrow = nrow(Data), ncol = length(Model_j)))
             colnames(SupLrnLibRisk) <- names(Model_j)
@@ -63,7 +63,7 @@ getHazFit <- function(Data, Model, CVFolds, Hazards, HazEstBackend) {
 
     ## fit sl selection on full data ----
     HazFits <- lapply(SupLrnModel, function(SLMod) {
-        if ("cox" %in% HazEstBackend) {
+        if (grepl("cox", tolower(HazEstBackend))) {
             ## fit sl model ----
             ModelFit <- do.call(survival::coxph, list("formula" = SLMod$SupLrnModel, "data" = Data))
             ## selected model must not contain interactions without including the separate terms also, e.g.

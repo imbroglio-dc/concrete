@@ -79,6 +79,7 @@ formatArguments <- function(DataTable, DataStructure = NULL, EventTime, EventTyp
     checkModel(Model = Model, UniqueEvent = event.type.unique,
                Censored = censored, HazEstBackend = HazEstBackend)
     checkPropScoreBackend(PropScoreBackend)
+    checkHazEstBackend(HazEstBackend)
 
     ## TMLE Update Parameters ----
     max.update.iter <- getMaxUpdateIter(MaxUpdateIter)
@@ -109,6 +110,7 @@ formatArguments <- function(DataTable, DataStructure = NULL, EventTime, EventTyp
                 CVFolds = cv.folds,
                 Model = Model,
                 PropScoreBackend = PropScoreBackend,
+                HazEstBackend = HazEstBackend,
                 MaxUpdateIter = max.update.iter,
                 OneStepEps = OneStepEps,
                 MinNuisance = MinNuisance,
@@ -315,7 +317,7 @@ checkModel <- function(Model, UniqueEvent, Censored, HazEstBackend) {
     if (!all(is.list(Model), length(Model) == length(UniqueEvent) + 1 + Censored))
         stop("Model must be a named list, one for each event type observed in the dataset")
     ## check model specifications are not obviously broken
-    if (length(setdiff(names(Model), as.character(UniqueEvent))) > 0)
+    if (length(setdiff(as.character(UniqueEvent), names(Model))) > 0)
         stop("Model must be a named list, one for each event type observed in the dataset. ",
              "Model names must be `Trt` for the intervention, `0` for censoring, or the ",
              "corresponding numeric value for observed event type(s)")
@@ -337,6 +339,13 @@ checkPropScoreBackend <- function(PropScoreBackend) {
     PropScoreBackendOK <- try(length(setdiff(PropScoreBackend, c("sl3"))) == 0)
     if (any(inherits(PropScoreBackendOK, "try-error"), !PropScoreBackendOK)) {
         stop("PropScoreBackend must now be `sl3`. Other options can be implemented in the future.")
+    }
+}
+
+checkHazEstBackend <- function(HazEstBackend) {
+    HazEstBackendOK <- try(length(setdiff(HazEstBackend, c("coxph"))) == 0)
+    if (any(inherits(HazEstBackendOK, "try-error"), !HazEstBackendOK)) {
+        stop("HazEstBackend must now be `coxph`. Other options can be implemented in the future.")
     }
 }
 

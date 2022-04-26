@@ -4,7 +4,7 @@
 \alias{getHazFit}
 \title{Title}
 \usage{
-getHazFit(Data, Model, CVFolds, Hazards)
+getHazFit(Data, Model, CVFolds, Hazards, HazEstBackend)
 }
 \arguments{
 \item{Data}{data.table}
@@ -14,6 +14,8 @@ getHazFit(Data, Model, CVFolds, Hazards)
 \item{CVFolds}{list}
 
 \item{Hazards}{list}
+
+\item{HazEstBackend}{: character}
 }
 \description{
 Title

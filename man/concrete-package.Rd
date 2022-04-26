@@ -10,12 +10,18 @@
   of about one to five lines is recommended.
 }
 \details{
-  This section should provide a more detailed overview of how to use the
-  package, including the most important functions.
+formatArguments()
+many check...(), format...() functions
+getInitialEstimates()
+getPropScores()
+getHazEstimates()
+getEIC()
+getIC()
+doTMLEUpdate()
+getOutput()
 }
 \author{
-David Chen, email optional.
-
+David Chen, <david.chen49@berkeley.edu>
 Maintainer: David Chen <david.chen49@berkeley.edu>
 }
 \references{
@@ -29,6 +35,6 @@ Maintainer: David Chen <david.chen49@berkeley.edu>
 \examples{
   \dontrun{
      ## Optional simple examples of the most important functions
-     ## These can be in \dontrun{} and \donttest{} blocks.   
+     ## These can be in \dontrun{} and \donttest{} blocks.
   }
 }

@@ -86,7 +86,7 @@ getIC <- function(GStar, Hazards, TotalSurv, NuisanceWeight, TargetEvent, Target
 }
 
 getGComp <- function(EvalTimes, Hazards, TotalSurv, TargetTime) {
-    F.j.tau <- NULL
+    F.j.tau <- Event <- Time <- NULL
     Risks <- do.call(rbind, lapply(Hazards, function(haz.j) {
         Risk.a <- sapply(1:ncol(haz.j), function(i) {
             cumsum(TotalSurv[, i] * haz.j[, i])
@@ -98,7 +98,7 @@ getGComp <- function(EvalTimes, Hazards, TotalSurv, TargetTime) {
     }))
     Risks <- as.data.table(Risks)
     Risks <- rbind(Risks, Risks[, list("Event" = -1, "F.j.tau" = 1 - sum(F.j.tau)), by = "Time"])
-    return(as.data.table(Risks))
+    return(Risks[, list("Event" = Event, "Time" = Time, "Risk" = F.j.tau)])
 }
 
 summarizeIC <- function(IC.a) {
