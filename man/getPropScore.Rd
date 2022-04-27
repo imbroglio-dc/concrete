@@ -7,7 +7,7 @@
 getPropScore(
   Treatment,
   CovDataTable,
-  Model,
+  TrtModel,
   MinNuisance,
   Regime,
   PropScoreBackend,
@@ -20,7 +20,7 @@ getPropScore(
 
 \item{CovDataTable}{data.table}
 
-\item{Model}{list}
+\item{TrtModel}{list or fitted object}
 
 \item{MinNuisance}{numeric}
 

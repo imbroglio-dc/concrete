@@ -62,4 +62,13 @@ concrete.outputs$RD
 concrete.outputs$RR
 attr(concrete.outputs$RR, "regime")
 
+x <- lapply(concrete.outputs$Risk, function(risks) {
+    risks <- setDT(risks)[Estimator == "tmle", ]
+    y <- lapply(unique(risks$Event), function(j) {
+        risk.j <- risks[Event == j, ]
+        lines(risk.j$Time, risk.j$Risk, type = "b")
+    })
+})
+
+lines(x = concrete.outputs$Risk$`A == 1`$Time, y = concrete.outputs$Risk$`A == 1`$Risk)
 

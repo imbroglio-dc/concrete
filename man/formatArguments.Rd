@@ -66,7 +66,7 @@ and 'gstar' = function(treatment vector, covariate data)}
 
 \item{Target}{(not yet implemented) data.table / data.frame (?? x 2); a table containing all combinations of target events (column 1) and target times (column 2).}
 
-\item{CVArg}{list of arguments to be passed into origami::make_folds}
+\item{CVArg}{list of arguments to be passed into origami::make_folds. the default = list(n = nrow(DataTable), fold_fun = folds_vfold, cluster_ids = NULL, strata_ids = NULL)}
 
 \item{Model}{list of models (length = L + Censoring + Treatment)}
 

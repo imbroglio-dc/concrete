@@ -3,6 +3,7 @@
 export(doConcrete)
 export(formatArguments)
 export(getOutput)
+import(SuperLearner)
 import(data.table)
 import(origami)
 importFrom(stats,model.matrix)

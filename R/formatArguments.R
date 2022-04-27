@@ -337,16 +337,18 @@ checkModel <- function(Model, UniqueEvent, Censored, HazEstBackend) {
 }
 
 checkPropScoreBackend <- function(PropScoreBackend) {
-    PropScoreBackendOK <- try(length(setdiff(PropScoreBackend, c("sl3"))) == 0)
+    PropScoreBackendOK <- try(length(setdiff(PropScoreBackend, c("sl3", "SuperLearner"))) == 0)
     if (any(inherits(PropScoreBackendOK, "try-error"), !PropScoreBackendOK)) {
-        stop("PropScoreBackend must now be `sl3`. Other options can be implemented in the future.")
+        stop("Currently PropScoreBackend can only be `sl3` or 'SuperLearner'.",
+             " Other options may be implemented in the future.")
     }
 }
 
 checkHazEstBackend <- function(HazEstBackend) {
     HazEstBackendOK <- try(length(setdiff(HazEstBackend, c("coxph"))) == 0)
     if (any(inherits(HazEstBackendOK, "try-error"), !HazEstBackendOK)) {
-        stop("HazEstBackend must now be `coxph`. Other options can be implemented in the future.")
+        stop("Currently HazEstBackend can only be `coxph`.",
+             " Other options may be implemented in the future.")
     }
 }
 
@@ -381,8 +383,8 @@ checkGComp <- function(GComp) {
     }
 }
 
-IntentToTreat <- list("A == 1" = list("intervention" = function(a, L) {rep_len(1, length(a))},
-                                      "g.star" = function(a, L) {as.numeric(a == 1)}),
-                      "A == 0" = list("intervention" = function(a, L) {rep_len(0, length(a))},
-                                      "g.star" = function(a, L) {as.numeric(a == 0)}))
+IntentToTreat <- list("A == 1" = list("intervention" = function(trt, covars) {rep_len(1, length(trt))},
+                                      "g.star" = function(trt, covars) {as.numeric(trt == 1)}),
+                      "A == 0" = list("intervention" = function(trt, covars) {rep_len(0, length(trt))},
+                                      "g.star" = function(trt, covars) {as.numeric(trt == 0)}))
 

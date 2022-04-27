@@ -21,7 +21,8 @@ Imports:
     methods,
     origami,
     sl3, 
-    lava
+    lava, 
+    SuperLearner
 Depends:
     R (>= 3.5.0)
 LinkingTo: Rcpp
