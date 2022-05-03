@@ -56,7 +56,7 @@ if (file.exists("./data/true_risks.RDS")) {
         # for binary treatment only
         obs <-
             as.data.table(bind_rows(lapply(1:5000, function(b)
-                base_data)))
+                PseudoLEADER)))
         A <- rep(a, nrow(obs))
         outcomes <-
             data.table(
@@ -153,7 +153,7 @@ psi0 <- lapply(true_risks, function(r) {
 # generate data -------------------------------------------------------------------------------
 sim_data <- foreach(i = 1:B) %dopar% {
     return(
-        simulate_data(n = 1e3, base_data = base_data) %>%
+        simulate_data(n = 1e3, base_data = PseudoLEADER) %>%
             mutate(EVENT = case_when(EVENT == 0 ~ 0,
                                      T ~ 1),
                    ARM = as.numeric(ARM))

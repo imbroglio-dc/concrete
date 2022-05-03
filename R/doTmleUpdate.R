@@ -66,7 +66,7 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, Censored, TargetEvent, Target
                                        Delta = Delta, PnEIC = est.a[["SummEIC"]],
                                        NormPnEIC = NormPnEIC, OneStepEps = onestep.eps,
                                        TargetEvent = TargetEvent, TargetTime = TargetTime)
-            NewSurv <- apply(do.call(`+`, NewHazards), 2, function(haz) exp(-cumsum(haz)))
+            NewSurv <- apply(Reduce(`+`, NewHazards), 2, function(haz) exp(-cumsum(haz)))
             NewIC <- summarizeIC(
                 getIC(GStar =  attr(est.a[["PropScore"]], "g.star.obs"),
                       Hazards = NewHazards, TotalSurv = NewSurv,
@@ -115,6 +115,7 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, Censored, TargetEvent, Target
 updateHazard <- function(GStar, Hazards, TotalSurv, NuisanceWeight, Events, EvalTimes, T.tilde,
                          Delta, PnEIC, NormPnEIC, OneStepEps, TargetEvent, TargetTime) {
     Time <- Event <- NULL
+    Iterative <- FALSE
     if (min(TotalSurv) == 0)
         stop("max(TargetTime) when people's survival probabilty = 0.",
              " This makes the clever covariate explode.")
@@ -186,7 +187,7 @@ updateHazard <- function(GStar, Hazards, TotalSurv, NuisanceWeight, Events, Eval
         #     }
         #     Nuisance.i <- NuisanceWeight[, i]
         #     Surv.i <- TotalSurv[, i]
-        #     UpdateDir <- do.call(`+`, lapply(TargetEvent, function(j) {
+        #     UpdateDir <- Reduce(`+`, lapply(TargetEvent, function(j) {
         #         haz <- Hazards[[as.character(j)]]
         #         `F.j.t/S.t` <- cumsum(Surv.i * haz[, i]) / Surv.i
         #         `diffF/S` <- outer(`F.j.t/S.t`[EvalTimes %in% TargetTime] , `F.j.t/S.t`, "-")

@@ -68,7 +68,7 @@ if (file.exists("./data/true_risks.csv")) {
              "J" = `3>1`*(1 - `1>2`) + 2*`1>2`*(1 - `2>3`) + 3*`2>3`*(1 - `3>1`)) %>%
       dplyr::select(`T`, J)
     rm(obs); rm(A); gc()
-    
+
     true_risks[[paste0("A=", a)]] <- foreach(t = interval,
                                              .combine = rbind,
                                              .inorder = T) %dopar% {
@@ -79,8 +79,8 @@ if (file.exists("./data/true_risks.csv")) {
   }
   rm(outcomes);
   true_risks <- rbind(
-    data.table(A = 1, "time" = 1:nrow(true_risks[["A=1"]]), true_risks[["A=1"]]), 
-    data.table(A = 0, "time" = 1:nrow(true_risks[["A=0"]]), true_risks[["A=0"]]), 
+    data.table(A = 1, "time" = 1:nrow(true_risks[["A=1"]]), true_risks[["A=1"]]),
+    data.table(A = 0, "time" = 1:nrow(true_risks[["A=0"]]), true_risks[["A=0"]]),
     use.names=F)
   setnames(true_risks, 3:5, paste0("F.j", 1:3))
   true_risks[, "S.t" := 1 - F.j1 - F.j2 - F.j3]
@@ -88,18 +88,18 @@ if (file.exists("./data/true_risks.csv")) {
 }
 
 # plot survival curves
-# lapply(true_risks, function(r) rename_all(r, ~c("J=1", "J=2", "J=3"))) %>%
-#   bind_rows() %>% mutate(`A` = rep(1:0, each = nrow(true_risks[[1]])),
-#                          `t` = rep(1:nrow(true_risks[[1]]), times = 2)) %>%
-#   pivot_longer(cols = c(`J=1`, `J=2`, `J=3`), names_to = "event",
-#                values_to = "risk") %>%
-#   ggplot(aes(x = `t`, y = risk,
-#              linetype = as.character(A), colour = event)) +
-#   geom_line()+ theme_minimal()
+lapply(true_risks, function(r) rename_all(r, ~c("J=1", "J=2", "J=3"))) %>%
+  bind_rows() %>% mutate(`A` = rep(1:0, each = nrow(true_risks[[1]])),
+                         `t` = rep(1:nrow(true_risks[[1]]), times = 2)) %>%
+  pivot_longer(cols = c(`J=1`, `J=2`, `J=3`), names_to = "event",
+               values_to = "risk") %>%
+  ggplot(aes(x = `t`, y = risk,
+             linetype = as.character(A), colour = event)) +
+  geom_line()+ theme_minimal()
 
-melt(true_risks, id.vars = c("A", "time"), variable.name = "Parameter") %>% 
-  mutate(A = as.character(A)) %>% ggplot() + 
-  geom_line(aes(x = time, y = value, colour = Parameter, linetype = A)) + 
+melt(true_risks, id.vars = c("A", "time"), variable.name = "Parameter") %>%
+  mutate(A = as.character(A)) %>% ggplot() +
+  geom_line(aes(x = time, y = value, colour = Parameter, linetype = A)) +
   theme_minimal()
 
 
@@ -107,9 +107,9 @@ melt(true_risks, id.vars = c("A", "time"), variable.name = "Parameter") %>%
 
 if (file.exists("./output/contmle_estimates.RDS")) {
   estimates <- readRDS("./output/contmle_estimates.RDS")
-} else { 
+} else {
   estimates <- foreach(i=1:B,
-                       .combine = rbind) %dopar% 
+                       .combine = rbind) %dopar%
     {
       obs <- simulate_data(n = n, base_data = base_data)
       est <- lapply(1:0, function(a) {
@@ -144,13 +144,13 @@ if (file.exists("./output/contmle_estimates.RDS")) {
                                                SMOKER + STROKSFL + MIFL))
         )
       })
-      
+
       estimates <- lapply(c("tmle", "init"), function(estimator) {
         lapply(1:0, function(a) {
-          est[[2-a]][[estimator]] %>% do.call(cbind, .) %>% t() %>% as.data.frame() %>% 
-            rename_all(~paste0(c("Estimate.", "se."), a)) 
-        }) %>% bind_cols() %>% mutate("Estimand" = c(paste0("F", 1:3), "S"), 
-                                      Estimator = estimator) %>% 
+          est[[2-a]][[estimator]] %>% do.call(cbind, .) %>% t() %>% as.data.frame() %>%
+            rename_all(~paste0(c("Estimate.", "se."), a))
+        }) %>% bind_cols() %>% mutate("Estimand" = c(paste0("F", 1:3), "S"),
+                                      Estimator = estimator) %>%
           dplyr::select(Estimator, Estimand, everything())
       }) %>% bind_rows() %>% cbind("run" = i, .)
       return(estimates)
@@ -162,40 +162,40 @@ if (file.exists("./output/contmle_estimates.RDS")) {
 # 4. Evaluation / Visualization ---------------------------------------------------------------
 
 
-Psi0 <- cbind("time" = tau, 
-              rbind(cbind("A" = 1, unname(true_risks[["A=1"]][tau, ])), 
-                    cbind("A" = 0, unname(true_risks[["A=0"]][tau, ])))) %>% 
-  rename_all(~c("time", "A", "J1", "J2", "J3")) %>% 
-  mutate(S = 1 - J1 - J2 - J3) %>% 
-  pivot_longer(c("J1", "J2", "J3", "S"), names_to = "Event", values_to = "Truth") %>% 
-  pivot_wider(names_from = A, values_from = Truth, names_prefix = "F") %>% 
-  mutate(RD = F1 - F0, 
-         RR = F1 / F0, 
-         SR = (1 - F1) / (1 - F0)) %>% 
+Psi0 <- cbind("time" = tau,
+              rbind(cbind("A" = 1, unname(true_risks[["A=1"]][tau, ])),
+                    cbind("A" = 0, unname(true_risks[["A=0"]][tau, ])))) %>%
+  rename_all(~c("time", "A", "J1", "J2", "J3")) %>%
+  mutate(S = 1 - J1 - J2 - J3) %>%
+  pivot_longer(c("J1", "J2", "J3", "S"), names_to = "Event", values_to = "Truth") %>%
+  pivot_wider(names_from = A, values_from = Truth, names_prefix = "F") %>%
+  mutate(RD = F1 - F0,
+         RR = F1 / F0,
+         SR = (1 - F1) / (1 - F0)) %>%
   pivot_longer(cols = c(F1, F0, RD, RR, SR), names_to = "Estimand", values_to = "Truth")
 
-result_tbl <- estimates %>% dplyr::select(-run) %>% as_tibble() %>% 
-  rename(F1 = Estimate.1, F0 = Estimate.0, se.F1 = se.1, se.F0 = se.0) %>% 
-  mutate(RD = F1 - F0, 
-         RR = F1 / F0, 
-         SR = (1 - F1) / (1 - F0), 
-         se.RD = sqrt(se.F1^2 + se.F0^2), 
-         se.RR = sqrt(se.F1^2 / (F1)^2 + se.F0^2 * ((F1) / (F0)^2)^2), 
-         se.SR = sqrt(se.F1^2 / (1 - F1)^2 + se.F0^2 * (1 - F1)^2 / (1 - F0)^4)) %>% 
-  mutate(Estimand = case_when(Estimand == "F1" ~ "J1", 
-                              Estimand == "F2" ~ "J2", 
-                              Estimand == "F3" ~ "J3", 
-                              Estimand == "S" ~ "S")) %>% rename(Event = Estimand) %>% 
+result_tbl <- estimates %>% dplyr::select(-run) %>% as_tibble() %>%
+  rename(F1 = Estimate.1, F0 = Estimate.0, se.F1 = se.1, se.F0 = se.0) %>%
+  mutate(RD = F1 - F0,
+         RR = F1 / F0,
+         SR = (1 - F1) / (1 - F0),
+         se.RD = sqrt(se.F1^2 + se.F0^2),
+         se.RR = sqrt(se.F1^2 / (F1)^2 + se.F0^2 * ((F1) / (F0)^2)^2),
+         se.SR = sqrt(se.F1^2 / (1 - F1)^2 + se.F0^2 * (1 - F1)^2 / (1 - F0)^4)) %>%
+  mutate(Estimand = case_when(Estimand == "F1" ~ "J1",
+                              Estimand == "F2" ~ "J2",
+                              Estimand == "F3" ~ "J3",
+                              Estimand == "S" ~ "S")) %>% rename(Event = Estimand) %>%
   pivot_longer(cols = c(`F0`, `F1`, `RD`, `RR`, `SR`), names_to = "Estimand",
                values_to = "Estimate") %>%
   pivot_longer(cols = contains("se"), names_to = c("tmp", "se_est"),
                names_sep = "\\.", values_to = "se") %>% dplyr::select(-`tmp`) %>%
-  filter(se_est == Estimand) %>% dplyr::select(-se_est) %>% left_join(., Psi0) %>% 
+  filter(se_est == Estimand) %>% dplyr::select(-se_est) %>% left_join(., Psi0) %>%
   mutate(Bias = Truth - Estimate, MSE = (Truth - Estimate)^2) %>%
   group_by(Estimator, Estimand, Event) %>%
   mutate(upper95 = quantile(Estimate, 0.975),
-         lower95 = quantile(Estimate, 0.025), 
-         cover = (Estimate + 1.96 * se > Truth) & (Estimate - 1.96 * se < Truth)) %>% 
+         lower95 = quantile(Estimate, 0.025),
+         cover = (Estimate + 1.96 * se > Truth) & (Estimate - 1.96 * se < Truth)) %>%
   group_by(Estimator, Event, Estimand, time) %>% summarise_all(mean)
 
 result_plot <- result_tbl %>%
