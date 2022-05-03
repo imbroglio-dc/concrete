@@ -31,21 +31,11 @@ concrete.args <- formatArguments(DataTable = data[, c("time", "status", "trt", "
                                  Treatment = "trt", ID = "id", Intervention = intervention,
                                  TargetTime = target.time, TargetEvent = target.event,
                                  Model = model, Verbose = TRUE)
-output <- doConcrete(ConcreteArgs = concrete.args)
+concrete.est <- doConcrete(ConcreteArgs = concrete.args)
 
-concrete.ate <- lapply(output, function(out.a) {
-    do.call(rbind, lapply(sort(unique(data[status > 0, status])), function(j) {
-        risks <- apply(out.a[["Hazards"]][[as.character(j)]] * out.a[["EvntFreeSurv"]], 2, cumsum)
-        Psi <- cbind("tau" = target.time, "tmle.est" = rowMeans(risks[attr(output, "times") %in% target.time, ]))
-        tmle.se <- subset(out.a$SummEIC[Event == j, ], select = c("Time","seEIC"))
-        Psi <- merge(Psi, tmle.se[, list("tau" = Time, "tmle.se" = seEIC / sqrt(ncol(risks)))], by = "tau")
-        return(cbind("J" = j, Psi))
-    }))
-})
-
-# ate
-concrete.ate <- as.data.table(merge(concrete.ate[[1]], concrete.ate[[2]], by = c("J", "tau")))[order(tau)]
-concrete.ate[, list(J = J, tau = tau, tmle.est = tmle.est.x - tmle.est.y, tmle.se = sqrt(tmle.se.x^2 + tmle.se.y^2))]
+concrete.ate <- getOutput(Estimate = concrete.est, Estimand = c("rd"), TargetTime = target.time,
+                          TargetEvent = target.event, GComp = TRUE)
+concrete.ate$RD[order(Time, Event, Estimator)]
 
 #=================================================================================================================
 # obsolete
@@ -90,6 +80,8 @@ concrete.ate[, list(J = J, tau = tau, tmle.est = tmle.est.x - tmle.est.y, tmle.s
 #=================================================================================================================
 estimation <- list("cause1" = list(fit = "cox",
                                    model = Surv(time, status == 1) ~ trt + age + sex),
+                   "cause2" = list(fit = "cox",
+                                   model = Surv(time, status == 2) ~ trt + age + sex),
                    "cens" = list(fit = "cox",
                                  model = Surv(time, status == 0) ~ trt + age + sex))
 
