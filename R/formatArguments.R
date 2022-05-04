@@ -208,9 +208,11 @@ getCovDataTable <- function(DataTable, EventTime, EventType, Treatment, ID, Long
                                                                      "dummy")]
     }
     attr(cov.dt.mod.matrixed, "cov.names.mod.matrixed") <- cov.names.mod.matrixed
-    if (Verbose)
+    if (Verbose) {
         # try(superheat::superheat(cov(scale(model.matrix(~., cov.dt.mod.matrixed)))))
-        return(cov.dt.mod.matrixed)
+    }
+
+    return(cov.dt.mod.matrixed)
 }
 
 getRegime <- function(Intervention, Treatment, CovDataTable) {

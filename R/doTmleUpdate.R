@@ -84,7 +84,9 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, Censored, TargetEvent, Target
         NewNormPnEIC <- getNormPnEIC(NewSummEIC[Time %in% TargetTime & Event %in% TargetEvent,
                                                 PnEIC])
         if (NormPnEIC < NewNormPnEIC) {
-            print("Update increased ||PnEIC||, halving the OneStepEps")
+            if (Verbose) {
+                print("Update increased ||PnEIC||, halving the OneStepEps")
+            }
             onestep.eps <- 0.5 * onestep.eps
             step <- step - 1
             next
