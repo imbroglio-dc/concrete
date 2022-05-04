@@ -181,7 +181,7 @@ getID <- function(x, DataTable = NULL) {
 }
 
 getLongTime <- function(x, DataTable = NULL) {
-    warning("checks not yet implemented for longitudinal monitoring time, LongTime")
+    warning("Longitudinal data structures not yest supported; checks not yet implemented for (LongTime) longitudinal monitoring time")
     return(NULL)
 }
 

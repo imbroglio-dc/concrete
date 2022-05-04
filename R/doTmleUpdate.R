@@ -41,7 +41,7 @@
 #' @param NormPnEIC numeric
 #' @param Verbose boolean
 #'
-#'
+#' @importFrom nleqslv nleqslv
 
 doTmleUpdate <- function(Estimates, SummEIC, Data, Censored, TargetEvent, TargetTime, Events,
                          MaxUpdateIter, OneStepEps, NormPnEIC, Verbose) {
@@ -86,6 +86,7 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, Censored, TargetEvent, Target
         if (NormPnEIC < NewNormPnEIC) {
             print("Update increased ||PnEIC||, halving the OneStepEps")
             onestep.eps <- 0.5 * onestep.eps
+            step <- step - 1
             next
         } else if (onestep.eps * 2 <= OneStepEps) {
             onestep.eps <- onestep.eps * 2
@@ -114,7 +115,7 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, Censored, TargetEvent, Target
 
 updateHazard <- function(GStar, Hazards, TotalSurv, NuisanceWeight, Events, EvalTimes, T.tilde,
                          Delta, PnEIC, NormPnEIC, OneStepEps, TargetEvent, TargetTime) {
-    Time <- Event <- NULL
+    eps <- Time <- Event <- NULL
     Iterative <- FALSE
     if (min(TotalSurv) == 0)
         stop("max(TargetTime) when people's survival probabilty = 0.",
@@ -241,6 +242,5 @@ getFluctPnEIC <- function(GStar, Hazards, TotalSurv, NuisanceWeight, TargetEvent
     }))
     ## the second EIC component ( ... + F_j(tau | a, L) - Psi )
     IC.a <- as.data.table(IC.a)[, list(mean(IC))]
-    brower()
     return(IC.a)
 }

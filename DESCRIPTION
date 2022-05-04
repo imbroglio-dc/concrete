@@ -22,7 +22,8 @@ Imports:
     origami,
     sl3, 
     lava, 
-    SuperLearner
+    SuperLearner, 
+    nleqslv
 Depends:
     R (>= 3.5.0)
 LinkingTo: Rcpp
