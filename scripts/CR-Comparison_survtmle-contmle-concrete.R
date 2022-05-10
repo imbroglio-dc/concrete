@@ -211,23 +211,23 @@ results <- foreach(i = 1:B) %dopar% {
   rm(sl_fit)
 
   tmle_sl <- surv_tmle(
-    ftime = ceiling(dt$time/300),
-    ftype = dt$delta,
-    targets = ceiling(target.time/300),
-    trt = dt$A,
-    t0 = max(ceiling(target.time/300)),
-    adjustVars = as.data.frame(dt[, list(L1, L2, L3)]),
-    SL.ftime = SL_ftime,
-    SL.ctime = sl_G_dC,
-    SL.trt = sl_lib_g,
-    # glm.trt = glm_trt,
-    returnIC = TRUE,
-    returnModels = TRUE,
-    ftypeOfInterest = target.event,
-    trtOfInterest = c(1, 0),
-    maxIter = 20,
-    method = "hazard"
-  )
+      ftime = ceiling(dt$time/300),
+      ftype = dt$delta,
+      targets = ceiling(target.time/300),
+      trt = dt$A,
+      t0 = max(ceiling(target.time/300)),
+      adjustVars = as.data.frame(dt[, list(L1, L2, L3, L4, L5)]),
+      SL.ftime = SL_ftime,
+      SL.ctime = sl_G_dC,
+      SL.trt = sl_lib_g,
+      # glm.trt = glm_trt,
+      returnIC = TRUE,
+      returnModels = TRUE,
+      ftypeOfInterest = target.event,
+      trtOfInterest = c(1, 0),
+      maxIter = 20,
+      method = "hazard"
+    )
 
   survtmle.out <- cbind(A = rep(0:1, times = length(target.event)),
                         Event = rep(target.event, each = 2),
@@ -252,66 +252,6 @@ results <- foreach(i = 1:B) %dopar% {
 
 stopImplicitCluster()
 
-# obsolete ----------------------------------------------------------------
-
-
-# for (i in 1:B) {
-#   set.seed(seeds[i])
-#   # dt <- sim.data2(1e3, setting = 2, no.cr = 3, competing.risk = TRUE)
-#   dt <- simulate_data(n = 400, base_data = PseudoLEADER)
-#   setnames(dt, c("TIME", 'EVENT', 'ARM', 'AGE', 'HBA1CBL', 'EGFMDRBC'),
-#            c("time", "delta", 'A', "L1", 'L2', 'L3'))
-#
-#   logreg <- make_learner(Lrnr_glm)
-#   # lasso <- make_learner(Lrnr_glmnet) # alpha default is 1
-#   # ridge <- Lrnr_glmnet$new(alpha = 0)
-#   # e_net <- make_learner(Lrnr_glmnet, alpha = 0.5)
-#   a_lrnrs <- make_learner(Stack, logreg)
-#
-#   models <- list("Trt" = a_lrnrs,
-#                  "0" = list(mod1 = Surv(time, delta == 0) ~ A + L1 + L2 + L3),
-#                  "1" = list(mod1 = Surv(time, delta == 1) ~ A + L1 + L2 + L3),
-#                  "2" = list(mod1 = Surv(time, delta == 2) ~ A + L1 + L2 + L3),
-#                  "3" = list(mod1 = Surv(time, delta == 3) ~ A + L1 + L2 + L3))
-#   intervention <- list("A == 1" = list("intervention" = function(a, L) {rep_len(1, length(a))},
-#                                        "g.star" = function(a, L) {as.numeric(a == 1)}),
-#                        "A == 0" = list("intervention" = function(a, L) {rep_len(0, length(a))},
-#                                        "g.star" = function(a, L) {as.numeric(a == 0)}))
-#
-#
-#   concrete.args <- formatArguments(DataTable = dt[, c("time", "delta", "A", "id", "L1", "L2", 'L3')],
-#                                    EventTime = "time", EventType = "delta",
-#                                    Treatment = "A", ID = "id", Intervention = intervention,
-#                                    TargetTime = target.time, TargetEvent = target.event,
-#                                    Model = models, Verbose = TRUE)
-#   concrete.est <- doConcrete(ConcreteArgs = concrete.args)
-#
-#   concrete.ate <- getOutput(Estimate = concrete.est, Estimand = c("rd"), TargetTime = target.time,
-#                             TargetEvent = target.event, GComp = TRUE)$RD
-#
-#   results[[i]] <- cbind(fn = "concrete", concrete.ate)
-#
-#   run <- contmle(
-#     dt, #-- dataset
-#     target = target.event, #-- go after cause 1 and cause 2 specific risks
-#     iterative = FALSE, #-- use one-step tmle to target F1 and F2 simultaneously
-#     treat.effect = "ate", #-- target the ate directly
-#     tau = target.time, #-- time-point of interest
-#     estimation = list(
-#       "cens" = list(fit = "cox",
-#                     model = Surv(time, delta == 0) ~ A + L1 + L2 + L3),
-#       "cause1" = list(fit = "cox",
-#                       model = Surv(time, delta == 1) ~ A + L1 + L2 + L3),
-#       "cause2" = list(fit = "cox",
-#                       model = Surv(time, delta == 2) ~ A + L1 + L2 + L3),
-#       "cause3" = list(fit = "cox",
-#                       model = Surv(time, delta == 3) ~ A + L1 + L2 + L3))
-#   )
-#
-#   results[[i]] <- rbind(results[[i]],
-#                         cbind(fn = "contmle", 'Estimator' = 'tmle',
-#                               formatContmle(run)))
-# }
 
 
 # results -----------------------------------------------------------------
