@@ -21,7 +21,7 @@ source("scripts/packages.R")
 source("scripts/prepare-pbc.R")
 source("scripts/sim_functions.R")
 
-n_cores <- 5
+n_cores <- 10
 registerDoParallel(n_cores)
 
 # data cleaning -------------------------------------------------------------------------------
@@ -97,22 +97,19 @@ formatContmle <- function(contmleOutput) {
 }
 
 B <- 200
+n <- 400
 set.seed(123456)
 seeds <- sample(0:1e9, size = B)
 results <- vector("list", length = B)
-target.time <- 1:4 * 400
+target.time <- 2:6 * 300
 target.event <- 1:3
-results <- vector("list", B)
-j <- 1
 
-while (j <= B) {
-  indices <- seq(j, min(B, j+n_cores-1))
-  results[indices] <- foreach(i = indices) %do% {
+results <- foreach(i = 1:B) %dopar% {
     set.seed(seeds[i])
     # dt <- sim.data2(1e3, setting = 2, no.cr = 3, competing.risk = TRUE)
-    dt <- simulate_data(n = 500, base_data = PseudoLEADER)
-    setnames(dt, c("TIME", 'EVENT', 'ARM', 'AGE', 'HBA1CBL', 'EGFMDRBC'),
-             c("time", "delta", 'A', "L1", 'L2', 'L3'))
+    dt <- simulate_data(n = n, base_data = PseudoLEADER)
+    setnames(dt, c("TIME", 'EVENT', 'ARM', 'AGE', 'STROKSFL', 'SMOKER', 'BMIBL', 'MIFL'),
+             c("time", "delta", 'A', "L1", 'L2', 'L3', 'L4', 'L5'))
 
     # concrete ----------------------------------------------------------------
 
@@ -123,26 +120,23 @@ while (j <= B) {
     a_lrnrs <- make_learner(Stack, logreg)
 
     models <- list("Trt" = a_lrnrs,
-                   "0" = list(mod1 = Surv(time, delta == 0) ~ A + L1 + L2 + L3),
-                   "1" = list(mod1 = Surv(time, delta == 1) ~ A + L1 + L2 + L3),
-                   "2" = list(mod1 = Surv(time, delta == 2) ~ A + L1 + L2 + L3),
-                   "3" = list(mod1 = Surv(time, delta == 3) ~ A + L1 + L2 + L3))
+                   "0" = list(mod1 = Surv(time, delta == 0) ~ A + L1 + L2 + L3 + L4 + L5),
+                   "1" = list(mod1 = Surv(time, delta == 1) ~ A + L1 + L2 + L3 + L4 + L5),
+                   "2" = list(mod1 = Surv(time, delta == 2) ~ A + L1 + L2 + L3 + L4 + L5),
+                   "3" = list(mod1 = Surv(time, delta == 3) ~ A + L1 + L2 + L3 + L4 + L5))
     intervention <- list("A == 1" = list("intervention" = function(a, L) {rep_len(1, length(a))},
                                          "g.star" = function(a, L) {as.numeric(a == 1)}),
                          "A == 0" = list("intervention" = function(a, L) {rep_len(0, length(a))},
                                          "g.star" = function(a, L) {as.numeric(a == 0)}))
 
-    concrete.args <- suppressMessages(suppressWarnings(
-      formatArguments(DataTable = dt[, c("time", "delta", "A", "id", "L1", "L2", 'L3')],
-                      EventTime = "time", EventType = "delta",
-                      Treatment = "A", ID = "id", Intervention = intervention,
-                      TargetTime = target.time, TargetEvent = target.event,
-                      Model = models, Verbose = FALSE)
-    ))
+    concrete.args <- formatArguments(DataTable = dt[, c("time", "delta", "A", "id",
+                                                        "L1", "L2", 'L3', 'L4', "L5")],
+                                     EventTime = "time", EventType = "delta",
+                                     Treatment = "A", ID = "id", Intervention = intervention,
+                                     TargetTime = target.time, TargetEvent = target.event,
+                                     Model = models, Verbose = FALSE)
 
-    concrete.est <- suppressMessages(suppressWarnings(
-      doConcrete(ConcreteArgs = concrete.args)
-    ))
+    concrete.est <- doConcrete(ConcreteArgs = concrete.args)
 
     concrete.ate <- getOutput(Estimate = concrete.est, Estimand = c("rd"), TargetTime = target.time,
                               TargetEvent = target.event, GComp = TRUE)$RD
@@ -151,24 +145,22 @@ while (j <= B) {
 
     # contmle -----------------------------------------------------------------
 
-    run <- suppressMessages(suppressWarnings(
-      contmle(
-        dt, #-- dataset
-        target = target.event, #-- go after cause 1 and cause 2 specific risks
-        iterative = FALSE, #-- use one-step tmle to target F1 and F2 simultaneously
-        treat.effect = "ate", #-- target the ate directly
-        tau = target.time, #-- time-point of interest
-        estimation = list(
-          "cens" = list(fit = "cox",
-                        model = Surv(time, delta == 0) ~ A + L1 + L2 + L3),
-          "cause1" = list(fit = "cox",
-                          model = Surv(time, delta == 1) ~ A + L1 + L2 + L3),
-          "cause2" = list(fit = "cox",
-                          model = Surv(time, delta == 2) ~ A + L1 + L2 + L3),
-          "cause3" = list(fit = "cox",
-                          model = Surv(time, delta == 3) ~ A + L1 + L2 + L3))
-      )
-    ))
+    run <- contmle(
+      dt, #-- dataset
+      target = target.event, #-- go after cause 1 and cause 2 specific risks
+      iterative = FALSE, #-- use one-step tmle to target F1 and F2 simultaneously
+      treat.effect = "ate", #-- target the ate directly
+      tau = target.time, #-- time-point of interest
+      estimation = list(
+        "cens" = list(fit = "cox",
+                      model = Surv(time, delta == 0) ~ A + L1 + L2 + L3 + L4 + L5),
+        "cause1" = list(fit = "cox",
+                        model = Surv(time, delta == 1) ~ A + L1 + L2 + L3 + L4 + L5),
+        "cause2" = list(fit = "cox",
+                        model = Surv(time, delta == 2) ~ A + L1 + L2 + L3 + L4 + L5),
+        "cause3" = list(fit = "cox",
+                        model = Surv(time, delta == 3) ~ A + L1 + L2 + L3 + L4 + L5)),
+      verbose = FALSE)
 
     result.i <- rbind(result.i,
                       cbind(fn = "contmle", 'Estimator' = 'tmle',
@@ -194,11 +186,11 @@ while (j <= B) {
                              function(i) as.character(unlist(sl_lib_failure[i,])))
 
     sl_fit <- my_init_sl_fit(
-      T_tilde = ceiling(dt$time/80),
+      T_tilde = ceiling(dt$time/300),
       Delta = as.numeric(dt$delta),
       A = as.numeric(dt$A),
       W = as.data.frame(dt[, list(L1, L2, L3)]),
-      t_max = max(ceiling(target.time/80)),
+      t_max = max(ceiling(target.time/300)),
       sl_failure = sl_lib_failure,
       sl_censoring = sl_lib_censor,
       sl_treatment = "SL.glm",
@@ -220,11 +212,11 @@ while (j <= B) {
 
     tmle_sl <- suppressMessages(suppressWarnings(
       surv_tmle(
-        ftime = ceiling(dt$time/80),
+        ftime = ceiling(dt$time/300),
         ftype = dt$delta,
-        targets = ceiling(target.time/80),
+        targets = ceiling(target.time/300),
         trt = dt$A,
-        t0 = max(ceiling(target.time/80)),
+        t0 = max(ceiling(target.time/300)),
         adjustVars = as.data.frame(dt[, list(L1, L2, L3)]),
         SL.ftime = SL_ftime,
         SL.ctime = sl_G_dC,
@@ -244,7 +236,7 @@ while (j <= B) {
                           tmle_sl$est) %>% as.data.table()
     survtmle.out <- melt(data = survtmle.out, id.vars = c("A", "Event"),
                          variable.name = "Time", value.name = "Risk")
-    survtmle.out[["Time"]] <- as.numeric(str_extract(survtmle.out[["Time"]], '\\d+')) * 80
+    survtmle.out[["Time"]] <- as.numeric(str_extract(survtmle.out[["Time"]], '\\d+')) * 300
     survtmle.out <- full_join(survtmle.out,
                               data.frame(A = rep(0:1, each = length(target.time) * length(target.event)),
                                          Time = rep(target.time, times = length(target.event) * 2),
@@ -259,10 +251,8 @@ while (j <= B) {
 
     return(result.i)
   }
-  j <- j+n_cores
-}
 
-stopCluster()
+stopImplicitCluster()
 
 # obsolete ----------------------------------------------------------------
 
