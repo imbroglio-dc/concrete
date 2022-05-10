@@ -21,7 +21,7 @@ source("scripts/packages.R")
 source("scripts/prepare-pbc.R")
 source("scripts/sim_functions.R")
 
-n_cores <- 5
+n_cores <- 10
 registerDoParallel(n_cores)
 
 # data cleaning -------------------------------------------------------------------------------
@@ -45,7 +45,7 @@ if (file.exists("./output/true_risks.csv")) {
 } else {
   true_risks <- list("A=1" = NULL, "A=0" = NULL)
   for (a in 1:0) { # for binary treatment only
-    obs <- as.data.table(bind_rows(lapply(1:3000, function(b) PseudoLEADER)))
+    obs <- as.data.table(bind_rows(lapply(1:8000, function(b) PseudoLEADER)))
     n <- nrow(obs)
     A <- rep(a, nrow(obs))
     outcomes <- data.table("T1" = T1_fn(A, obs[["SMOKER"]], obs[["BMIBL"]], t1_coefs,
@@ -56,17 +56,16 @@ if (file.exists("./output/true_risks.csv")) {
                                         u = runif(nrow(obs), 0, 1))$F_inv.u)
     outcomes <- cbind("A" = A,
                       t(apply(outcomes, 1,function(r) c("T" = ceiling(min(r)),
-                                                        "J" = which.min(r))))) %>%
-      as.data.frame()
-    colnames(outcomes) <- c("A", "T", "J")
+                                                        "J" = which.min(r)))))
     rm(obs); rm(A); gc()
 
     true_risks[[paste0("A=", a)]] <- foreach(t = interval,
                                              .combine = rbind,
                                              .inorder = T) %dopar% {
-                                               tabulate(outcomes[["J"]][outcomes[["T"]] <= t]) / n
+                                               tabulate(outcomes[["J"]][outcomes[["T"]] <= t])
                                              }
-    colnames(true_risks[[paste0("A=", a)]]) <- paste0("F.j", 1:3, ".a", a)
+    true_risks[[paste0("A=", a)]] <- as.data.table(true_risks[[paste0("A=", a)]] / n) %>%
+      rename_all(~paste0("F.j", 1:3, ".a", a))
   }
   rm(outcomes);
   true_risks <- rbind(
@@ -97,171 +96,155 @@ formatContmle <- function(contmleOutput) {
 }
 
 B <- 200
-set.seed(123456)
 seeds <- sample(0:1e9, size = B)
 results <- vector("list", length = B)
-target.time <- 1:4 * 400
+target.time <- 2:8 * 200
 target.event <- 1:3
-results <- vector("list", B)
-j <- 1
 
-while (j <= B) {
-  indices <- seq(j, min(B, j+n_cores-1))
-  results[indices] <- foreach(i = indices) %do% {
-    set.seed(seeds[i])
-    # dt <- sim.data2(1e3, setting = 2, no.cr = 3, competing.risk = TRUE)
-    dt <- simulate_data(n = 500, base_data = PseudoLEADER)
-    setnames(dt, c("TIME", 'EVENT', 'ARM', 'AGE', 'HBA1CBL', 'EGFMDRBC'),
-             c("time", "delta", 'A', "L1", 'L2', 'L3'))
+results <- foreach(i = 1:B, .combine = rbind) %dopar% {
+  set.seed(seeds[i])
+  # dt <- sim.data2(1e3, setting = 2, no.cr = 3, competing.risk = TRUE)
+  dt <- simulate_data(n = 500, base_data = PseudoLEADER)
+  setnames(dt, c("TIME", 'EVENT', 'ARM', 'AGE', 'HBA1CBL', 'EGFMDRBC'),
+           c("time", "delta", 'A', "L1", 'L2', 'L3'))
 
-    # concrete ----------------------------------------------------------------
+  # concrete ----------------------------------------------------------------
 
-    logreg <- make_learner(Lrnr_glm)
-    # lasso <- make_learner(Lrnr_glmnet) # alpha default is 1
-    # ridge <- Lrnr_glmnet$new(alpha = 0)
-    # e_net <- make_learner(Lrnr_glmnet, alpha = 0.5)
-    a_lrnrs <- make_learner(Stack, logreg)
+  logreg <- make_learner(Lrnr_glm)
+  # lasso <- make_learner(Lrnr_glmnet) # alpha default is 1
+  # ridge <- Lrnr_glmnet$new(alpha = 0)
+  # e_net <- make_learner(Lrnr_glmnet, alpha = 0.5)
+  a_lrnrs <- make_learner(Stack, logreg)
 
-    models <- list("Trt" = a_lrnrs,
-                   "0" = list(mod1 = Surv(time, delta == 0) ~ A + L1 + L2 + L3),
-                   "1" = list(mod1 = Surv(time, delta == 1) ~ A + L1 + L2 + L3),
-                   "2" = list(mod1 = Surv(time, delta == 2) ~ A + L1 + L2 + L3),
-                   "3" = list(mod1 = Surv(time, delta == 3) ~ A + L1 + L2 + L3))
-    intervention <- list("A == 1" = list("intervention" = function(a, L) {rep_len(1, length(a))},
-                                         "g.star" = function(a, L) {as.numeric(a == 1)}),
-                         "A == 0" = list("intervention" = function(a, L) {rep_len(0, length(a))},
-                                         "g.star" = function(a, L) {as.numeric(a == 0)}))
-
-    concrete.args <- suppressMessages(suppressWarnings(
-      formatArguments(DataTable = dt[, c("time", "delta", "A", "id", "L1", "L2", 'L3')],
-                      EventTime = "time", EventType = "delta",
-                      Treatment = "A", ID = "id", Intervention = intervention,
-                      TargetTime = target.time, TargetEvent = target.event,
-                      Model = models, Verbose = FALSE)
-    ))
-
-    concrete.est <- suppressMessages(suppressWarnings(
-      doConcrete(ConcreteArgs = concrete.args)
-    ))
-
-    concrete.ate <- getOutput(Estimate = concrete.est, Estimand = c("rd"), TargetTime = target.time,
-                              TargetEvent = target.event, GComp = TRUE)$RD
-
-    result.i <- cbind(fn = "concrete", concrete.ate)
-
-    # contmle -----------------------------------------------------------------
-
-    run <- suppressMessages(suppressWarnings(
-      contmle(
-        dt, #-- dataset
-        target = target.event, #-- go after cause 1 and cause 2 specific risks
-        iterative = FALSE, #-- use one-step tmle to target F1 and F2 simultaneously
-        treat.effect = "ate", #-- target the ate directly
-        tau = target.time, #-- time-point of interest
-        estimation = list(
-          "cens" = list(fit = "cox",
-                        model = Surv(time, delta == 0) ~ A + L1 + L2 + L3),
-          "cause1" = list(fit = "cox",
-                          model = Surv(time, delta == 1) ~ A + L1 + L2 + L3),
-          "cause2" = list(fit = "cox",
-                          model = Surv(time, delta == 2) ~ A + L1 + L2 + L3),
-          "cause3" = list(fit = "cox",
-                          model = Surv(time, delta == 3) ~ A + L1 + L2 + L3))
-      )
-    ))
-
-    result.i <- rbind(result.i,
-                      cbind(fn = "contmle", 'Estimator' = 'tmle',
-                            formatContmle(run)))
+  models <- list("Trt" = a_lrnrs,
+                 "0" = list(mod1 = Surv(time, delta == 0) ~ A + L1 + L2 + L3),
+                 "1" = list(mod1 = Surv(time, delta == 1) ~ A + L1 + L2 + L3),
+                 "2" = list(mod1 = Surv(time, delta == 2) ~ A + L1 + L2 + L3),
+                 "3" = list(mod1 = Surv(time, delta == 3) ~ A + L1 + L2 + L3))
+  intervention <- list("A == 1" = list("intervention" = function(a, L) {rep_len(1, length(a))},
+                                       "g.star" = function(a, L) {as.numeric(a == 1)}),
+                       "A == 0" = list("intervention" = function(a, L) {rep_len(0, length(a))},
+                                       "g.star" = function(a, L) {as.numeric(a == 0)}))
 
 
-    # survtmle ----------------------------------------------------------------
+  concrete.args <- formatArguments(DataTable = dt[, c("time", "delta", "A", "id", "L1", "L2", 'L3')],
+                                   EventTime = "time", EventType = "delta",
+                                   Treatment = "A", ID = "id", Intervention = intervention,
+                                   TargetTime = target.time, TargetEvent = target.event,
+                                   Model = models, Verbose = TRUE)
+  concrete.est <- doConcrete(ConcreteArgs = concrete.args)
 
-    screeners <- "All"
+  concrete.ate <- getOutput(Estimate = concrete.est, Estimand = c("rd"), TargetTime = target.time,
+                            TargetEvent = target.event, GComp = TRUE)$RD
 
-    sl_lib_g <- expand.grid(c("SL.glm"), screeners)
-    sl_lib_g <- lapply(1:nrow(sl_lib_g),
-                       function(i) as.character(unlist(sl_lib_g[i,])))
+  result.i <- cbind(fn = "concrete", concrete.ate)
 
-    sl_lib_censor <-
-      expand.grid(c("SL.glm", "SL.glmnet"), screeners)
-    sl_lib_censor <- lapply(1:nrow(sl_lib_censor),
-                            function(i) as.character(unlist(sl_lib_censor[i,])))
+  # contmle -----------------------------------------------------------------
 
-    sl_lib_failure <-
-      expand.grid(c("SL.glm", "SL.glmnet"), screeners)
-    sl_lib_failure <- lapply(1:nrow(sl_lib_failure),
-                             function(i) as.character(unlist(sl_lib_failure[i,])))
-
-    sl_fit <- my_init_sl_fit(
-      T_tilde = ceiling(dt$time/80),
-      Delta = as.numeric(dt$delta),
-      A = as.numeric(dt$A),
-      W = as.data.frame(dt[, list(L1, L2, L3)]),
-      t_max = max(ceiling(target.time/80)),
-      sl_failure = sl_lib_failure,
-      sl_censoring = sl_lib_censor,
-      sl_treatment = "SL.glm",
-      cv.Control = list(V = 10)
+  run <- contmle(
+    dt, #-- dataset
+    target = target.event, #-- go after cause 1 and cause 2 specific risks
+    iterative = FALSE, #-- use one-step tmle to target F1 and F2 simultaneously
+    treat.effect = "ate", #-- target the ate directly
+    tau = target.time, #-- time-point of interest
+    estimation = list(
+      "cens" = list(fit = "cox",
+                    model = Surv(time, delta == 0) ~ A + L1 + L2 + L3),
+      "cause1" = list(fit = "cox",
+                      model = Surv(time, delta == 1) ~ A + L1 + L2 + L3),
+      "cause2" = list(fit = "cox",
+                      model = Surv(time, delta == 2) ~ A + L1 + L2 + L3),
+      "cause3" = list(fit = "cox",
+                      model = Surv(time, delta == 3) ~ A + L1 + L2 + L3))
     )
 
-    sl_fit$models$A$env <- sl_fit$models$C$env <- sl_fit$models$Y$J1$env <- NULL
+  result.i <- rbind(result.i,
+                    cbind(fn = "contmle", 'Estimator' = 'tmle',
+                          formatContmle(run)))
 
-    haz_sl <- list(sl_fit$density_failure_1$clone(),
-                   sl_fit$density_failure_0$clone())
-    haz_sl[[1]]$haz2surv()
-    haz_sl[[2]]$haz2surv()
-    names(haz_sl) <- c("A = 1", "A = 0")
 
-    SL_ftime <- sl_fit$models$Y
-    sl_G_dC <- sl_fit$G_dC
-    # glm_trt <- paste0(colnames(adjust_vars), collapse = " + ")
-    rm(sl_fit)
+  # survtmle ----------------------------------------------------------------
 
-    tmle_sl <- suppressMessages(suppressWarnings(
-      surv_tmle(
-        ftime = ceiling(dt$time/80),
-        ftype = dt$delta,
-        targets = ceiling(target.time/80),
-        trt = dt$A,
-        t0 = max(ceiling(target.time/80)),
-        adjustVars = as.data.frame(dt[, list(L1, L2, L3)]),
-        SL.ftime = SL_ftime,
-        SL.ctime = sl_G_dC,
-        SL.trt = sl_lib_g,
-        # glm.trt = glm_trt,
-        returnIC = TRUE,
-        returnModels = TRUE,
-        ftypeOfInterest = target.event,
-        trtOfInterest = c(1, 0),
-        maxIter = 20,
-        method = "hazard"
-      )
-    ))
+  screeners <- "All"
 
-    survtmle.out <- cbind(A = rep(0:1, times = length(target.event)),
-                          Event = rep(target.event, each = 2),
-                          tmle_sl$est) %>% as.data.table()
-    survtmle.out <- melt(data = survtmle.out, id.vars = c("A", "Event"),
-                         variable.name = "Time", value.name = "Risk")
-    survtmle.out[["Time"]] <- as.numeric(str_extract(survtmle.out[["Time"]], '\\d+')) * 80
-    survtmle.out <- full_join(survtmle.out,
-                              data.frame(A = rep(0:1, each = length(target.time) * length(target.event)),
-                                         Time = rep(target.time, times = length(target.event) * 2),
-                                         Event = rep(1:3, each = length(target.time)),
-                                         'se' = sqrt(diag(tmle_sl$var))))
-    survtmle.out <- dcast(survtmle.out, ... ~ A, value.var = c("Risk", "se"))
-    survtmle.out <- survtmle.out[, list(Event = Event, Time = Time,
-                                        RD = Risk_1 - Risk_0, se = sqrt(se_1^2 + se_0^2))]
-    result.i <- rbind(result.i,
-                      cbind(fn = "survtmle", Estimator = "tmle",
-                            survtmle.out))
+  sl_lib_g <- expand.grid(c("SL.glm"), screeners)
+  sl_lib_g <- lapply(1:nrow(sl_lib_g),
+                     function(i) as.character(unlist(sl_lib_g[i,])))
 
-    return(result.i)
-  }
-  j <- j+n_cores
+  sl_lib_censor <-
+    expand.grid(c("SL.glm", "SL.glmnet"), screeners)
+  sl_lib_censor <- lapply(1:nrow(sl_lib_censor),
+                          function(i) as.character(unlist(sl_lib_censor[i,])))
+
+  sl_lib_failure <-
+    expand.grid(c("SL.glm", "SL.glmnet"), screeners)
+  sl_lib_failure <- lapply(1:nrow(sl_lib_failure),
+                           function(i) as.character(unlist(sl_lib_failure[i,])))
+
+  sl_fit <- my_init_sl_fit(
+    T_tilde = ceiling(dt$time/100),
+    Delta = as.numeric(dt$delta),
+    A = as.numeric(dt$A),
+    W = as.data.frame(dt[, list(L1, L2, L3)]),
+    t_max = max(ceiling(target.time/100)),
+    sl_failure = sl_lib_failure,
+    sl_censoring = sl_lib_censor,
+    sl_treatment = "SL.glm",
+    cv.Control = list(V = 10)
+  )
+
+  sl_fit$models$A$env <- sl_fit$models$C$env <- sl_fit$models$Y$J1$env <- NULL
+
+  haz_sl <- list(sl_fit$density_failure_1$clone(),
+                 sl_fit$density_failure_0$clone())
+  haz_sl[[1]]$haz2surv()
+  haz_sl[[2]]$haz2surv()
+  names(haz_sl) <- c("A = 1", "A = 0")
+
+  SL_ftime <- sl_fit$models$Y
+  sl_G_dC <- sl_fit$G_dC
+  # glm_trt <- paste0(colnames(adjust_vars), collapse = " + ")
+  rm(sl_fit)
+
+  tmle_sl <- surv_tmle(
+    ftime = ceiling(dt$time/100),
+    ftype = dt$delta,
+    targets = ceiling(target.time/100),
+    trt = dt$A,
+    t0 = max(ceiling(target.time/100)),
+    adjustVars = as.data.frame(dt[, list(L1, L2, L3)]),
+    SL.ftime = SL_ftime,
+    SL.ctime = sl_G_dC,
+    SL.trt = sl_lib_g,
+    # glm.trt = glm_trt,
+    returnIC = TRUE,
+    returnModels = TRUE,
+    ftypeOfInterest = target.event,
+    trtOfInterest = c(1, 0),
+    maxIter = 20,
+    method = "hazard"
+  )
+
+  survtmle.out <- cbind(A = rep(0:1, times = length(target.event)),
+                        Event = rep(target.event, each = 2),
+                        tmle_sl$est) %>% as.data.table()
+  survtmle.out <- melt(data = survtmle.out, id.vars = c("A", "Event"),
+                       variable.name = "Time", value.name = "Risk")
+  survtmle.out[["Time"]] <- as.numeric(str_extract(survtmle.out[["Time"]], '\\d+')) * 100
+  survtmle.out <- full_join(survtmle.out,
+                            data.frame(A = rep(0:1, each = length(target.time) * length(target.event)),
+                                       Time = rep(target.time, times = length(target.event) * 2),
+                                       Event = rep(1:3, each = length(target.time)),
+                                       'se' = sqrt(diag(tmle_sl$var))))
+  survtmle.out <- dcast(survtmle.out, ... ~ A, value.var = c("Risk", "se"))
+  survtmle.out <- survtmle.out[, list(Event = Event, Time = Time,
+                                      RD = Risk_1 - Risk_0, se = sqrt(se_1^2 + se_0^2))]
+  result.i <- rbind(result.i,
+                    cbind(fn = "survtmle", Estimator = "tmle",
+                          survtmle.out))
+
+  return(result.i)
 }
-
 stopCluster()
 
 # obsolete ----------------------------------------------------------------
@@ -337,7 +320,7 @@ truth <- truth[, list(Time = time, Event = Event, trueRD = `1` - `0`)]
 truth %>% ggplot(aes(x = Time, y = trueRD, colour = Event)) + geom_line()
 
 truth <- truth[Time %in% target.time, ]
-bind_rows(results) %>% filter(Event != "S") %>%
+result.i  %>% filter(Event != "S") %>%
   mutate(Event = as.character(Event),
          fn = paste(fn, Estimator, sep = "-")) %>%
   group_by(Event, Time, fn, Estimator) %>%
@@ -349,7 +332,7 @@ bind_rows(results) %>% filter(Event != "S") %>%
          lower = mean_ATE - 1.96 * mean_se,
          upper = mean_ATE + 1.96 * mean_se) %>%
   ggplot(aes(x = Time, y = mean_ATE, colour = fn)) +
-  facet_wrap(~Event) + theme_minimal() +
+  facet_wrap(~Event, ncol = 1) + theme_minimal() +
   geom_errorbar(
     aes(
       ymin = lower,
