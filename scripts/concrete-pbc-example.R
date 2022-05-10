@@ -1,24 +1,8 @@
 
-# load libraries ------------------------------------------------------------------------------
 
-library(survival)
-library(tidyverse)
-library(data.table)
-library(zoo)
-library(prodlim)
-library(nleqslv)
-library(sl3)
-library(origami)
-# devtools::install_github("imbroglio-dc/concrete")
-library(concrete)
 
 # prepare dataset -----------------------------------------------------------------------------
 
-set.seed(12345)
-data <- as.data.table(survival::pbc)
-data[is.na(trt), trt := sample(1:2, sum(is.na(trt)), replace = TRUE)][, trt := trt - 1]
-# data[, status := as.numeric(status >= 1)]
-data
 
 # data$time = event/censoring time
 # data$status = event type (0 for censored)
@@ -34,7 +18,7 @@ for (j in seq_along(unique(data$status)[unique(data$status) > 0])) {
 
 # specify targets -----------------------------------------------------------------------------
 target.event <- sort(unique(data[status > 0, status]))
-target.time <- quantile(data$time, 1:4*0.2)
+target.time <- quantile(data$time, 2:4*0.2)
 
 intervention <- concrete:::IntentToTreat
 # intervention <- list("A == 1" = list("intervention" = function(a, L) {rep_len(1, length(a))},
@@ -44,10 +28,12 @@ intervention <- concrete:::IntentToTreat
 
 # specify intervention(s) ------------------------------------------------------------------------
 # list of arguments to be passed into origami::make_folds(), see ?origami::make_folds for details
-cv.arg <- list(n = nrow(data), fold_fun = folds_vfold, cluster_ids = NULL, strata_ids = NULL)
 
 
 # specify learners ----------------------------------------------------------------------------
+
+cv.arg <- list(n = nrow(data), fold_fun = folds_vfold, cluster_ids = NULL, strata_ids = NULL)
+
 # propensity score model
 a_lrnrs <- make_learner(Lrnr_glm) # sl3 learner object: see tlverse sl3 documentation
 cens_lib <- list(model.null = Surv(time, status == 0) ~ 1,
@@ -78,9 +64,6 @@ concrete.outputs <- getOutput(Estimate = concrete.est, Estimand = c("RR", "RD", 
                               TargetTime = target.time, TargetEvent = target.event, GComp = TRUE)
 
 concrete.outputs$RD
-concrete.outputs$RD %>% as.data.frame %>%
-    mutate(lower = RD - 1.96*se, upper = RD + 1.96*se, Time = factor(Time)) %>%
-    ggplot(aes(x = Time, y = RD)) + facet_w
 concrete.outputs$RR
 attr(concrete.outputs$RR, "regime")
 
@@ -94,5 +77,4 @@ ax <- lapply(concrete.outputs$Risk, function(risks) {
     })
 })
 
-lines(x = concrete.outputs$Risk$`A == 1`$Time, y = concrete.outputs$Risk$`A == 1`$Risk)
 
