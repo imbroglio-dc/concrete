@@ -21,8 +21,8 @@ source("scripts/packages.R")
 source("scripts/prepare-pbc.R")
 source("scripts/sim_functions.R")
 
-n_cores <- 10
-registerDoParallel(n_cores)
+# n_cores <- 10
+# registerDoParallel(n_cores)
 
 # data cleaning -------------------------------------------------------------------------------
 load("scripts/PseudoLEADER.RData")
@@ -45,21 +45,28 @@ if (file.exists("./output/true_risks.csv")) {
 } else {
   true_risks <- list("A=1" = NULL, "A=0" = NULL)
   for (a in 1:0) { # for binary treatment only
-    obs <- as.data.table(bind_rows(lapply(1:3000, function(b) PseudoLEADER)))
+    # obs <- as.data.table(bind_rows(lapply(1:4000, function(b) PseudoLEADER)))
+    obs <- PseudoLEADER
     n <- nrow(obs)
     A <- rep(a, nrow(obs))
-    outcomes <- data.table("T1" = T1_fn(A, obs[["SMOKER"]], obs[["BMIBL"]], t1_coefs,
-                                        output = "F_inv.u", u = runif(nrow(obs), 0, 1))$F_inv.u,
-                           "T2" = T2_fn(A, obs[["STROKSFL"]], obs[["MIFL"]], t2_coefs,
-                                        output = "F_inv.u", u = runif(nrow(obs), 0, 1))$F_inv.u,
-                           "T3" = T3_fn(t3_coefs, output = "F_inv.u",
-                                        u = runif(nrow(obs), 0, 1))$F_inv.u)
-    outcomes <- cbind("A" = A,
-                      t(apply(outcomes, 1,function(r) c("T" = ceiling(min(r)),
-                                                        "J" = which.min(r))))) %>%
-      as.data.frame()
-    colnames(outcomes) <- c("A", "T", "J")
-    rm(obs); rm(A); gc()
+    set.seed(12345678)
+    seeds <- sample(1:1e9, 1e4)
+    outcomes <- foreach(j = seq_along(seeds),
+                        .combine = rbind) %dopar% {
+                          seed <- seeds[j]
+                          outcomes <- data.table("T1" = T1_fn(A, obs[["SMOKER"]], obs[["BMIBL"]], t1_coefs,
+                                                              output = "F_inv.u", u = runif(nrow(obs), 0, 1))$F_inv.u,
+                                                 "T2" = T2_fn(A, obs[["STROKSFL"]], obs[["MIFL"]], t2_coefs,
+                                                              output = "F_inv.u", u = runif(nrow(obs), 0, 1))$F_inv.u,
+                                                 "T3" = T3_fn(t3_coefs, output = "F_inv.u",
+                                                              u = runif(nrow(obs), 0, 1))$F_inv.u)
+                          outcomes <- cbind("A" = A,
+                                            t(apply(outcomes, 1,function(r) c("T" = min(r),
+                                                                              "J" = which.min(r))))) %>%
+                            as.data.frame()
+                          colnames(outcomes) <- c("A", "T", "J")
+                          return(outcomes)
+                        }
 
     true_risks[[paste0("A=", a)]] <- foreach(t = interval,
                                              .combine = rbind,
@@ -68,7 +75,7 @@ if (file.exists("./output/true_risks.csv")) {
                                              }
     colnames(true_risks[[paste0("A=", a)]]) <- paste0("F.j", 1:3, ".a", a)
   }
-  rm(outcomes);
+  rm(outcomes)
   true_risks <- rbind(
     data.table(A = 1, "time" = 1:nrow(true_risks[["A=1"]]), true_risks[["A=1"]]),
     data.table(A = 0, "time" = 1:nrow(true_risks[["A=0"]]), true_risks[["A=0"]]),
@@ -96,20 +103,37 @@ formatContmle <- function(contmleOutput) {
   setnames(tmleOutput, c("J", "time", 'ATE'), c("Event", "Time", "RD"))
 }
 
-B <- 10
+B <- 200
 n <- 400
 set.seed(123456)
 seeds <- sample(0:1e9, size = B)
 results <- vector("list", length = B)
-target.time <- 2:6 * 300
+target.time <- 2:8 * 200
 target.event <- 1:3
 
-results <- foreach(i = 1:B) %dopar% {
+# results <- foreach(i = 1:B) %dopar% {
+for (i in 1:20) {
   set.seed(seeds[i])
   # dt <- sim.data2(1e3, setting = 2, no.cr = 3, competing.risk = TRUE)
   dt <- simulate_data(n = n, base_data = PseudoLEADER)
   setnames(dt, c("TIME", 'EVENT', 'ARM', 'AGE', 'STROKSFL', 'SMOKER', 'BMIBL', 'MIFL'),
            c("time", "delta", 'A', "L1", 'L2', 'L3', 'L4', 'L5'))
+
+
+  # aalen-johansen ----------------------------------------------------------
+  AJ <- survfit(Surv(time = time, event = as.factor(delta))
+                ~ A, data = dt, ctype = 1) %>%
+    summary(., times = target.time)
+
+  result.i <- tibble('Risk' = unlist(as.data.frame(AJ$pstate[, target.event + 1])),
+                     se = unlist(as.data.frame(AJ$std.err[, target.event + 1])),
+                     A = rep(rep(0:1, each = length(target.time)), times = length(target.event)),
+                     Event = rep(target.event, each = length(target.time)*2),
+                     Time = rep(target.time, times = length(target.event)*2)) %>%
+    pivot_wider(names_from = "A", values_from = c(Risk, se), names_sep = "_") %>%
+    mutate(Estimator = "Aalen-Johansen") %>%
+    dplyr::select(Estimator, Event, Time, everything())
+
 
   # concrete ----------------------------------------------------------------
 
@@ -138,34 +162,42 @@ results <- foreach(i = 1:B) %dopar% {
 
   concrete.est <- doConcrete(ConcreteArgs = concrete.args)
 
-  concrete.ate <- getOutput(Estimate = concrete.est, Estimand = c("rd"), TargetTime = target.time,
-                            TargetEvent = target.event, GComp = TRUE)$RD
+  concrete.out <- getOutput(Estimate = concrete.est, Estimand = c("risk"), TargetTime = target.time,
+                            TargetEvent = target.event, GComp = TRUE)$Risk
+  setnames(concrete.out$`A == 1`, c("Risk", "se"), c("Risk_1", "se_1"))
+  setnames(concrete.out$`A == 0`, c("Risk", "se"), c("Risk_0", "se_0"))
+  concrete.out <- full_join(concrete.out$`A == 0`, concrete.out$`A == 1`)
+  concrete.out[, Estimator := as.character(Estimator)]
+  concrete.out[Estimator == "tmle", Estimator := 'concrete']
+  concrete.out[Estimator == "gcomp", Estimator := 'c.gcomp']
 
-  result.i <- cbind(fn = "concrete", concrete.ate)
+  result.i <- rbind(result.i, concrete.out)
 
-  # contmle -----------------------------------------------------------------
-
-  run <- contmle(
-    dt, #-- dataset
-    target = target.event, #-- go after cause 1 and cause 2 specific risks
-    iterative = FALSE, #-- use one-step tmle to target F1 and F2 simultaneously
-    treat.effect = "ate", #-- target the ate directly
-    tau = target.time, #-- time-point of interest
-    estimation = list(
-      "cens" = list(fit = "cox",
-                    model = Surv(time, delta == 0) ~ A + L1 + L2 + L3 + L4 + L5),
-      "cause1" = list(fit = "cox",
-                      model = Surv(time, delta == 1) ~ A + L1 + L2 + L3 + L4 + L5),
-      "cause2" = list(fit = "cox",
-                      model = Surv(time, delta == 2) ~ A + L1 + L2 + L3 + L4 + L5),
-      "cause3" = list(fit = "cox",
-                      model = Surv(time, delta == 3) ~ A + L1 + L2 + L3 + L4 + L5)),
-    verbose = FALSE)
-
-  result.i <- rbind(result.i,
-                    cbind(fn = "contmle", 'Estimator' = 'tmle',
-                          formatContmle(run)))
-
+  # # contmle -----------------------------------------------------------------
+  #
+  # run <- contmle(
+  #   dt, #-- dataset
+  #   target = target.event, #-- go after cause 1 and cause 2 specific risks
+  #   iterative = FALSE, #-- use one-step tmle to target F1 and F2 simultaneously
+  #   treat.effect = "ate", #-- target the ate directly
+  #   tau = target.time, #-- time-point of interest
+  #   estimation = list(
+  #     "cens" = list(fit = "cox",
+  #                   model = Surv(time, delta == 0) ~ A + L1 + L2 + L3 + L4 + L5),
+  #     "cause1" = list(fit = "cox",
+  #                     model = Surv(time, delta == 1) ~ A + L1 + L2 + L3 + L4 + L5),
+  #     "cause2" = list(fit = "cox",
+  #                     model = Surv(time, delta == 2) ~ A + L1 + L2 + L3 + L4 + L5),
+  #     "cause3" = list(fit = "cox",
+  #                     model = Surv(time, delta == 3) ~ A + L1 + L2 + L3 + L4 + L5)),
+  #   treat.model = A ~ L1 + L2 + L3 + L4 + L5,
+  #   verbose = FALSE,
+  #   sl.models = list(model = Surv(time, delta == 0) ~ A + L1 + L2 + L3 + L4 + L5))
+  #
+  # result.i <- rbind(result.i,
+  #                   cbind(fn = "contmle", 'Estimator' = 'tmle',
+  #                         formatContmle(run)))
+  #
 
   # survtmle ----------------------------------------------------------------
 
@@ -185,72 +217,54 @@ results <- foreach(i = 1:B) %dopar% {
   sl_lib_failure <- lapply(1:nrow(sl_lib_failure),
                            function(i) as.character(unlist(sl_lib_failure[i,])))
 
-  sl_fit <- my_init_sl_fit(
-    T_tilde = ceiling(dt$time/300),
-    Delta = as.numeric(dt$delta),
-    A = as.numeric(dt$A),
-    W = as.data.frame(dt[, list(L1, L2, L3, L4, L5)]),
-    t_max = max(ceiling(target.time/300)),
-    sl_failure = sl_lib_failure,
-    sl_censoring = sl_lib_censor,
-    sl_treatment = "SL.glm",
-    cv.Control = list(V = 10)
+  tmle_sl <- surv_tmle(
+    ftime = ceiling(dt$time/200),
+    ftype = dt$delta,
+    targets = ceiling(target.time/200),
+    trt = dt$A,
+    t0 = max(ceiling(target.time/200)),
+    adjustVars = as.data.frame(dt[, list(L1, L2, L3, L4, L5)]),
+    SL.ftime = sl_lib_failure,
+    SL.ctime = sl_lib_censor,
+    SL.trt = sl_lib_g,
+    # glm.trt = glm_trt,
+    returnIC = TRUE,
+    returnModels = TRUE,
+    ftypeOfInterest = target.event,
+    trtOfInterest = c(1, 0),
+    maxIter = 25,
+    method = "hazard",
   )
 
-  sl_fit$models$A$env <- sl_fit$models$C$env <- sl_fit$models$Y$J1$env <- NULL
+  survtmle.est <- rbind(cbind("Estimator" = "d.gcomp",
+                              "A" = rep(0:1, times = length(target.event)),
+                              "Event" = rep(target.event, each = 2),
+                              as.data.frame(tmle_sl$init_est)),
+                        cbind(Estimator = "survtmle",
+                              A = rep(0:1, times = length(target.event)),
+                              Event = rep(target.event, each = 2),
+                              as.data.frame(tmle_sl$est)))%>% as.data.table() %>%
+    melt(., id.vars = c("Estimator", "A", "Event"), value.name = "Risk", variable.name = "Time")
+  survtmle.est[["Time"]] <- rep(target.time, each = length(target.event)*2)
+  survtmle.est <- full_join(survtmle.est,
+                            cbind(Estimator = "survtmle",
+                                  A = rep(0:1, each = length(target.event) * length(target.time)),
+                                  Event = rep(target.event, each = length(target.time), times = 2),
+                                  Time = rep(target.time, times = 2 * length(target.event)),
+                                  data.table(se = sqrt(diag(tmle_sl$var))))
+  )
 
-  haz_sl <- list(sl_fit$density_failure_1$clone(),
-                 sl_fit$density_failure_0$clone())
-  haz_sl[[1]]$haz2surv()
-  haz_sl[[2]]$haz2surv()
-  names(haz_sl) <- c("A = 1", "A = 0")
-
-  SL_ftime <- sl_fit$models$Y
-  sl_G_dC <- sl_fit$G_dC
-  # glm_trt <- paste0(colnames(adjust_vars), collapse = " + ")
-  rm(sl_fit)
-
-  tmle_sl <- surv_tmle(
-      ftime = ceiling(dt$time/300),
-      ftype = dt$delta,
-      targets = ceiling(target.time/300),
-      trt = dt$A,
-      t0 = max(ceiling(target.time/300)),
-      adjustVars = as.data.frame(dt[, list(L1, L2, L3, L4, L5)]),
-      SL.ftime = SL_ftime,
-      SL.ctime = sl_G_dC,
-      SL.trt = sl_lib_g,
-      # glm.trt = glm_trt,
-      returnIC = TRUE,
-      returnModels = TRUE,
-      ftypeOfInterest = target.event,
-      trtOfInterest = c(1, 0),
-      maxIter = 20,
-      method = "hazard"
-    )
-
-  survtmle.out <- cbind(A = rep(0:1, times = length(target.event)),
-                        Event = rep(target.event, each = 2),
-                        tmle_sl$est) %>% as.data.table()
-  survtmle.out <- melt(data = survtmle.out, id.vars = c("A", "Event"),
-                       variable.name = "Time", value.name = "Risk")
-  survtmle.out[["Time"]] <- as.numeric(str_extract(survtmle.out[["Time"]], '\\d+')) * 300
-  survtmle.out <- full_join(survtmle.out,
-                            data.frame(A = rep(0:1, each = length(target.time) * length(target.event)),
-                                       Time = rep(target.time, times = length(target.event) * 2),
-                                       Event = rep(1:3, each = length(target.time)),
-                                       'se' = sqrt(diag(tmle_sl$var))))
-  survtmle.out <- dcast(survtmle.out, ... ~ A, value.var = c("Risk", "se"))
-  survtmle.out <- survtmle.out[, list(Event = Event, Time = Time,
+  survtmle.est <- dcast(survtmle.est, ... ~ A, value.var = c("Risk", "se"))
+  survtmle.est <- survtmle.est[, list(Event = Event, Time = Time,
                                       RD = Risk_1 - Risk_0, se = sqrt(se_1^2 + se_0^2))]
   result.i <- rbind(result.i,
-                    cbind(fn = "survtmle", Estimator = "tmle",
-                          survtmle.out))
-
-  return(result.i)
+                   survtmle.est)
+  results[[i]] <- result.i
+  saveRDS(results, "output/concrete-survtmle-aj_1-20.rds", compress = FALSE)
+  #   return(result.i)
 }
 
-stopImplicitCluster()
+# stopImplicitCluster()
 
 
 
@@ -265,14 +279,17 @@ truth <- truth[, list(Time = time, Event = Event, trueRD = `1` - `0`)]
 truth %>% ggplot(aes(x = Time, y = trueRD, colour = Event)) + geom_line()
 
 truth <- truth[Time %in% target.time, ]
-bind_rows(results) %>% filter(Event != "S") %>%
+
+results[sapply(results, function(r) !is.null(results))] %>%
+  bind_rows() %>% filter(Event != "S") %>%
   mutate(Event = as.character(Event),
          fn = paste(fn, Estimator, sep = "-")) %>%
   group_by(Event, Time, fn, Estimator) %>%
   full_join(., truth) %>%
   summarise(mean_ATE = mean(RD), mean_se = mean(se),
             cov = mean(RD + 1.96*se >= trueRD &
-                         RD - 1.96*se <= trueRD)) %>%
+                         RD - 1.96*se <= trueRD),
+            Truth = mean(trueRD)) %>%
   mutate(Time = as.factor(Time),
          lower = mean_ATE - 1.96 * mean_se,
          upper = mean_ATE + 1.96 * mean_se) %>%
@@ -296,5 +313,13 @@ bind_rows(results) %>% filter(Event != "S") %>%
     ),
     position = position_dodge(0.5),
     vjust = -.2
+  ) +
+  geom_segment(
+    aes(
+      y = Truth,
+      yend = Truth,
+      x = as.numeric(Time) - .3,
+      xend = as.numeric(Time) + .3
+    )
   )
 

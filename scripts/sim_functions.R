@@ -102,8 +102,8 @@ simulate_data <- function(n = 1e3, assign_A = function(W, n) rbinom(n, 1, 0.5), 
                            "T3" = T3_fn(t3_coefs, output = "F_inv.u", u = runif(n, 0, 1))$F_inv.u)
 
     obs <- cbind(cbind(t(apply(outcomes, 1, function(r)
-        c("TIME" = ceiling(min(r)), "EVENT" = max(0, which.min(r) - 2)))),
+        c("TIME" = min(r), "EVENT" = max(0, which.min(r) - 2)))),
         "ARM" = A), obs)
-    obs <- as.data.table(cbind(obs, "id" = 1:nrow(obs)))
+    obs <- as.data.table(cbind("id" = 1:nrow(obs), obs))
     return(obs)
 }
