@@ -48,11 +48,12 @@ if (file.exists("./output/true_risks.csv")) {
     # obs <- as.data.table(bind_rows(lapply(1:4000, function(b) PseudoLEADER)))
     obs <- PseudoLEADER
     n <- nrow(obs)
+    N <- 5e3
     A <- rep(a, nrow(obs))
     set.seed(12345678)
-    seeds <- sample(1:1e9, 1e4)
+    seeds <- sample(1:1e9, N)
     outcomes <- foreach(j = seq_along(seeds),
-                        .combine = rbind) %dopar% {
+                        .combine = rbind) %do% {
                           seed <- seeds[j]
                           outcomes <- data.table("T1" = T1_fn(A, obs[["SMOKER"]], obs[["BMIBL"]], t1_coefs,
                                                               output = "F_inv.u", u = runif(nrow(obs), 0, 1))$F_inv.u,
@@ -70,8 +71,8 @@ if (file.exists("./output/true_risks.csv")) {
 
     true_risks[[paste0("A=", a)]] <- foreach(t = interval,
                                              .combine = rbind,
-                                             .inorder = T) %dopar% {
-                                               tabulate(outcomes[["J"]][outcomes[["T"]] <= t]) / n
+                                             .inorder = T) %do% {
+                                               tabulate(outcomes[["J"]][outcomes[["T"]] <= t]) / (n * N)
                                              }
     colnames(true_risks[[paste0("A=", a)]]) <- paste0("F.j", 1:3, ".a", a)
   }
@@ -103,7 +104,7 @@ formatContmle <- function(contmleOutput) {
   setnames(tmleOutput, c("J", "time", 'ATE'), c("Event", "Time", "RD"))
 }
 
-B <- 200
+B <- 500
 n <- 400
 set.seed(123456)
 seeds <- sample(0:1e9, size = B)
@@ -111,8 +112,8 @@ results <- vector("list", length = B)
 target.time <- 2:8 * 200
 target.event <- 1:3
 
-# results <- foreach(i = 1:B) %dopar% {
-for (i in 1:20) {
+# results <- foreach(i = 1:B) %do% {
+for (i in 1:B) {
   set.seed(seeds[i])
   # dt <- sim.data2(1e3, setting = 2, no.cr = 3, competing.risk = TRUE)
   dt <- simulate_data(n = n, base_data = PseudoLEADER)
@@ -255,12 +256,12 @@ for (i in 1:20) {
   )
 
   survtmle.est <- dcast(survtmle.est, ... ~ A, value.var = c("Risk", "se"))
-  survtmle.est <- survtmle.est[, list(Event = Event, Time = Time,
-                                      RD = Risk_1 - Risk_0, se = sqrt(se_1^2 + se_0^2))]
+  # survtmle.est <- survtmle.est[, list(Event = Event, Time = Time,
+  #                                     RD = Risk_1 - Risk_0, se = sqrt(se_1^2 + se_0^2))]
   result.i <- rbind(result.i,
-                   survtmle.est)
+                    survtmle.est)
   results[[i]] <- result.i
-  saveRDS(results, "output/concrete-survtmle-aj_1-20.rds", compress = FALSE)
+  saveRDS(results, "output/concrete-survtmle-aj.rds", compress = FALSE)
   #   return(result.i)
 }
 
