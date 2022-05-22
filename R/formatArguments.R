@@ -133,10 +133,10 @@ formatDataTable <- function(x, EventTime, EventType, Treatment, ID, LongTime) {
 getEventTime <- function(x, DataTable = NULL) {
     if (is.character(x)) {
         tmp <- try(DataTable[[x]])
-        names(tmp) <- x
+        attr(tmp, "var.name") <- x
         x <- tmp
     }
-    if (any(!is.vector(x), !is.numeric(x), try(x <= 0), inherits(try(x <= 0), "try-error"),
+    if (any(!is.numeric(x), try(x <= 0), inherits(try(x <= 0), "try-error"),
             is.infinite(x), is.list(x)))
         stop("EventTime must be a numeric vector with positive, finite values")
     return(x)
@@ -145,10 +145,10 @@ getEventTime <- function(x, DataTable = NULL) {
 getEventType <- function(x, DataTable = NULL) {
     if (is.character(x)) {
         tmp <- try(DataTable[[x]])
-        names(tmp) <- x
+        attr(tmp, "var.name") <- x
         x <- tmp
     }
-    if (any(!is.vector(x), !is.numeric(x), try(x < 0), inherits(try(x < 0), "try-error"), is.list(x)))
+    if (any(!is.numeric(x), try(x < 0), inherits(try(x < 0), "try-error"), is.list(x)))
         stop("EventType must be a numeric vector with non-negative values (0 indicating censoring)")
     return(x)
 }
@@ -156,10 +156,10 @@ getEventType <- function(x, DataTable = NULL) {
 getTreatment <- function(x, DataTable = NULL) {
     if (is.character(x)) {
         tmp <- try(DataTable[[x]])
-        names(tmp) <- x
+        attr(tmp, "var.name") <- x
         x <- tmp
     }
-    if (any(!is.vector(x), !is.numeric(x), is.nan(x), is.infinite(x), is.list(x)))
+    if (any(!is.numeric(x), is.nan(x), is.infinite(x), is.list(x)))
         stop("Treatment must be a numeric vector with finite values")
     return(x)
 }
@@ -172,10 +172,10 @@ getID <- function(x, DataTable = NULL) {
     }
     if (is.character(x)) {
         tmp <- try(DataTable[[x]])
-        names(tmp) <- x
+        attr(tmp, "var.name") <- x
         x <- tmp
     }
-    if (any(!is.vector(x), is.list(x), is.null(x), is.nan(x), is.na(x)))
+    if (any(is.list(x), is.null(x), is.nan(x), is.na(x)))
         stop("ID column must not include missing values")
     return(x)
 }
@@ -189,30 +189,37 @@ getCovDataTable <- function(DataTable, EventTime, EventType, Treatment, ID, Long
     cov.names <- setdiff(colnames(DataTable), c(EventTime, EventType, Treatment, ID, LongTime))
     cov.dt <- DataTable[, .SD ,.SDcols = cov.names]
     non.num.ind <- sapply(cov.names, function(cov.name) {!inherits(cov.dt[[cov.name]], c("numeric", "integer"))})
-    non.num.covs <- cov.names[non.num.ind]
+    cov.names.1hot <- data.table()
+
     if (length(cov.names[!non.num.ind]) == 0) {
-        cov.dt.mod.matrixed <- data.table::data.table("dummy" = rep_len(1, nrow(cov.dt)))
+        cov.dt.1hot <- data.table()
+        l <- 0
     } else {
-        cov.dt.mod.matrixed <- cov.dt[, .SD, .SDcols = cov.names[!non.num.ind]]
+        cov.dt.1hot <- cov.dt[, .SD, .SDcols = cov.names[!non.num.ind]]
+        cov.names.1hot[, list(col.name = paste0("L", 1:ncol(cov.dt.1hot)),
+                              cov.name = colnames(cov.dt.1hot))]
+        setnames(cov.dt.1hot, colnames(cov.dt.1hot), paste0("L", 1:ncol(cov.dt.1hot)))
+        l <- ncol(cov.dt.1hot)
     }
-    cov.names.mod.matrixed <- vector("list", length = length(non.num.covs))
-    for (cov.name in non.num.covs) {
-        cov.mod.matrixed <- data.table::as.data.table(model.matrix(~-1 + ., subset(cov.dt, select = cov.name)))
 
-        cov.dt.mod.matrixed <- cbind(cov.dt.mod.matrixed, cov.mod.matrixed)
-        cov.names.mod.matrixed[[cov.name]] <- colnames(cov.mod.matrixed)
+    for (cov.name in cov.names[non.num.ind]) {
+        cov.1hot <- as.data.table(model.matrix(~-1 + ., subset(cov.dt, select = cov.name)))
+        cov.names.1hot <- rbind(cov.names.1hot,
+                                data.table(col.name = paste0("L", l + 1:ncol(cov.1hot)),
+                                           cov.name = colnames(cov.1hot)))
+        setnames(cov.1hot, colnames(cov.1hot), paste0("L", l + 1:ncol(cov.1hot)))
+        l <- l + ncol(cov.1hot)
+
+        cov.dt.1hot <- cbind(cov.dt.1hot, cov.1hot)
     }
-    if (length(cov.names[!non.num.ind]) == 0) {
-        cov.dt.mod.matrixed <- cov.dt.mod.matrixed[, .SD,
-                                                   .SDcols = setdiff(colnames(cov.dt.mod.matrixed),
-                                                                     "dummy")]
-    }
-    attr(cov.dt.mod.matrixed, "cov.names.mod.matrixed") <- cov.names.mod.matrixed
+
+    attr(cov.dt.1hot, "cov.names") <- cov.names.1hot
+
     if (Verbose) {
-        # try(superheat::superheat(cov(scale(model.matrix(~., cov.dt.mod.matrixed)))))
+        try(superheat::superheat(cov(scale(model.matrix(~., cov.dt.1hot)))))
     }
 
-    return(cov.dt.mod.matrixed)
+    return(cov.dt.1hot)
 }
 
 getRegime <- function(Intervention, Treatment, CovDataTable) {
