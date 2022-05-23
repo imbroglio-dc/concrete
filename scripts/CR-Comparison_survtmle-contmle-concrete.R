@@ -111,6 +111,7 @@ seeds <- sample(0:1e9, size = B)
 results <- vector("list", length = B)
 target.time <- 2:8 * 200
 target.event <- 1:3
+# results <- read_rds("output/concrete-survtmle-aj.rds")
 
 # results <- foreach(i = 1:B) %do% {
 for (i in 1:B) {
@@ -218,24 +219,29 @@ for (i in 1:B) {
   sl_lib_failure <- lapply(1:nrow(sl_lib_failure),
                            function(i) as.character(unlist(sl_lib_failure[i,])))
 
-  tmle_sl <- surv_tmle(
-    ftime = ceiling(dt$time/200),
-    ftype = dt$delta,
-    targets = ceiling(target.time/200),
-    trt = dt$A,
-    t0 = max(ceiling(target.time/200)),
-    adjustVars = as.data.frame(dt[, list(L1, L2, L3, L4, L5)]),
-    SL.ftime = sl_lib_failure,
-    SL.ctime = sl_lib_censor,
-    SL.trt = sl_lib_g,
-    # glm.trt = glm_trt,
-    returnIC = TRUE,
-    returnModels = TRUE,
-    ftypeOfInterest = target.event,
-    trtOfInterest = c(1, 0),
-    maxIter = 25,
-    method = "hazard",
-  )
+  tmle_sl <- list()
+  class(tmle_sl) <- "try-error"
+  while(inherits(tmle_sl, "try-error")) {
+    tmle_sl <- try(surv_tmle(
+      ftime = ceiling(dt$time/200),
+      ftype = dt$delta,
+      targets = ceiling(target.time/200),
+      trt = dt$A,
+      t0 = max(ceiling(target.time/200)),
+      adjustVars = as.data.frame(dt[, list(L1, L2, L3, L4, L5)]),
+      SL.ftime = sl_lib_failure,
+      SL.ctime = sl_lib_censor,
+      SL.trt = sl_lib_g,
+      # glm.trt = glm_trt,
+      returnIC = TRUE,
+      returnModels = TRUE,
+      ftypeOfInterest = target.event,
+      trtOfInterest = c(1, 0),
+      maxIter = 50,
+      method = "hazard",
+    ))
+  }
+
 
   survtmle.est <- rbind(cbind("Estimator" = "d.gcomp",
                               "A" = rep(0:1, times = length(target.event)),
@@ -246,7 +252,7 @@ for (i in 1:B) {
                               Event = rep(target.event, each = 2),
                               as.data.frame(tmle_sl$est)))%>% as.data.table() %>%
     melt(., id.vars = c("Estimator", "A", "Event"), value.name = "Risk", variable.name = "Time")
-  survtmle.est[["Time"]] <- rep(target.time, each = length(target.event)*2)
+  survtmle.est[["Time"]] <- rep(target.time, each = length(target.event)*4)
   survtmle.est <- full_join(survtmle.est,
                             cbind(Estimator = "survtmle",
                                   A = rep(0:1, each = length(target.event) * length(target.time)),
@@ -261,7 +267,7 @@ for (i in 1:B) {
   result.i <- rbind(result.i,
                     survtmle.est)
   results[[i]] <- result.i
-  saveRDS(results, "output/concrete-survtmle-aj.rds", compress = FALSE)
+  saveRDS(results, "output/concrete-survtmle-aj-correctedtime.rds", compress = FALSE)
   #   return(result.i)
 }
 
@@ -275,46 +281,63 @@ truth <- melt(true_risks, id.vars = c('time', 'A'),
               variable.name = 'Event', value.name = "Risk")
 truth[["Event"]] <- as.character(str_extract(truth[["Event"]], "\\d+"))
 truth <- dcast(truth, time + Event ~ A, value.var = c("Risk"), sep = ".a")
-truth <- truth[, list(Time = time, Event = Event, trueRD = `1` - `0`)]
+truth <- truth[, list(Time = time, Event = Event, RR = `1`/`0`,
+                      RD = `1` - `0`, F1 = `1`, F0 = `0`)] %>%
+  melt(id.vars = c("Time", "Event"), variable.name = "Estimand", value.name = "Truth")
 
-truth %>% ggplot(aes(x = Time, y = trueRD, colour = Event)) + geom_line()
+truth %>% ggplot(aes(x = Time, y = Truth, colour = Event)) + geom_line() +
+  facet_wrap(~Estimand)
 
 truth <- truth[Time %in% target.time, ]
 
-results[sapply(results, function(r) !is.null(results))] %>%
+res.tbl <- results[sapply(results, function(r) !is.null(results))] %>%
   bind_rows() %>% filter(Event != "S") %>%
-  mutate(Event = as.character(Event),
-         fn = paste(fn, Estimator, sep = "-")) %>%
-  group_by(Event, Time, fn, Estimator) %>%
-  full_join(., truth) %>%
-  summarise(mean_ATE = mean(RD), mean_se = mean(se),
-            cov = mean(RD + 1.96*se >= trueRD &
-                         RD - 1.96*se <= trueRD),
-            Truth = mean(trueRD)) %>%
+  transmute(Estimator = Estimator, Event = Event, Time = Time,
+            Event = as.character(Event),
+            F1 = Risk_1, F0 = Risk_0, RR = F1/F0, RD = F1 - F0,
+            "se.RR" = sqrt(1/Risk_0^2 * se_1^2 + (Risk_1 / Risk_0^2)^2 * se_0^2),
+            "se.RD" = sqrt(se_1^2 + se_0^2),
+            se1 = se_1, se0 = se_0) %>%
+  melt(id.vars = c("Estimator", "Event", "Time"),
+       measure.vars = list("Estimate" = c("F1", "F0", "RD", "RR"),
+                           "se" = c("se1", "se0", "se.RD", "se.RR")),
+       variable.name = "Estimand") %>%
+  mutate(Estimand = case_when(Estimand == 1 ~ "F1",
+                              Estimand == 2 ~ "F0",
+                              Estimand == 3 ~ "RD",
+                              Estimand == 4 ~ "RR")) %>%
+  left_join(., truth) %>%
+  group_by(Estimator, Event, Time, Estimand) %>%
+  summarise(mean = mean(Estimate),
+            sd = sqrt(var(Estimate)),
+            cov95 = mean(Estimate + 1.96*se >= Truth &
+                         Estimate - 1.96*se <= Truth),
+            Truth = mean(Truth)) %>%
   mutate(Time = as.factor(Time),
-         lower = mean_ATE - 1.96 * mean_se,
-         upper = mean_ATE + 1.96 * mean_se) %>%
-  ggplot(aes(x = Time, y = mean_ATE, colour = fn)) +
-  facet_wrap(~Event) + theme_minimal() +
+         lower = mean - 1.96 * sd,
+         upper = mean + 1.96 * sd)
+res.tbl %>%
+  ggplot(aes(x = Time, y = mean, colour = Estimator)) +
+  facet_wrap(Event ~ Estimand, ncol = 5, scales = "free") + theme_minimal() +
   geom_errorbar(
     aes(
       ymin = lower,
       ymax = upper,
-      colour = fn
+      colour = Estimator
     ),
     width = .5,
     position = position_dodge(.5)
   ) +
-  geom_point(aes(y = mean_ATE, colour = fn), position = position_dodge(0.5)) +
-  geom_label(
-    aes(
-      y = upper,
-      label = paste0(round(cov, 2) * 100, "%"),
-      group = fn
-    ),
-    position = position_dodge(0.5),
-    vjust = -.2
-  ) +
+  geom_point(aes(y = mean, colour = Estimator), position = position_dodge(0.5)) +
+  # geom_label(
+  #   aes(
+  #     y = upper,
+  #     label = paste0(round(cov95, 2) * 100, "%"),
+  #     group = Estimator
+  #   ),
+  #   position = position_dodge(0.5),
+  #   vjust = -.2
+  # ) +
   geom_segment(
     aes(
       y = Truth,
