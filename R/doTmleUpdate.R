@@ -52,7 +52,10 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, Censored, TargetEvent, Target
     onestep.eps <- OneStepEps
 
     ## one-step tmle loop starts here ----
-    for (step in 1:MaxUpdateIter) {
+    step <- 1
+    n.iter <- 1
+    while (step <= MaxUpdateIter & n.iter <= MaxUpdateIter * 3) {
+        n.iter <- n.iter + 1
         if (Verbose)
             cat("starting step", step, "with update epsilon =", onestep.eps, "\n")
 
@@ -83,16 +86,18 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, Censored, TargetEvent, Target
             cbind("Trt" = names(newEsts)[a], newEsts[[a]][["SummEIC"]])}))
         NewNormPnEIC <- getNormPnEIC(NewSummEIC[Time %in% TargetTime & Event %in% TargetEvent,
                                                 PnEIC])
+
         if (NormPnEIC < NewNormPnEIC) {
             if (Verbose) {
                 print("Update increased ||PnEIC||, halving the OneStepEps")
             }
             onestep.eps <- 0.5 * onestep.eps
-            step <- step - 1
             next
-        } else if (onestep.eps * 2 <= OneStepEps) {
+        }
+        if (onestep.eps * 2 <= OneStepEps) {
             onestep.eps <- onestep.eps * 2
         }
+        step <- step + 1
 
         for (a in seq_along(Estimates)) {
             Estimates[[a]][["Hazards"]] <- newEsts[[a]][["Hazards"]]

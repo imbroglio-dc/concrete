@@ -104,7 +104,7 @@ formatContmle <- function(contmleOutput) {
   setnames(tmleOutput, c("J", "time", 'ATE'), c("Event", "Time", "RD"))
 }
 
-B <- 500
+B <- 1000
 n <- 400
 set.seed(123456)
 seeds <- sample(0:1e9, size = B)
@@ -266,7 +266,7 @@ for (i in 1:B) {
 }
 
 # stopImplicitCluster()
-
+results <-
 
 
 # results -----------------------------------------------------------------
