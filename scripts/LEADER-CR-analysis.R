@@ -22,7 +22,7 @@ library(SuperLearner); library(survtmle); library(MOSS)
 i_am("R/competing_risks/LEADER_CR_discrete.R")
 
 target.event <- 1:3
-target.time <- 3 * 1:8 / 12 * 365.25
+target.time <- 6 * 1:6 / 12 * 365.25
 timescale <- 3 # 3 month interval
 
 set.seed(0)
@@ -142,7 +142,45 @@ result.i <- readRDS("../ConCR-TMLE/output/leader-est.RDS")
 #
 
 # survtmle ----------------------------------------------------------------
+glmnets <- create.Learner(base_learner = "SL.glmnet",
+                          tune = list("alpha" = c(0, 0.5, 1)),
+                          detailed_names = T)
+leader_cens_glm_3mo <- function (Y, X, newX, family, obsWeights, model = TRUE, ...)
+{ # indicators for > 14, 15, 16 are for timescale = 3, i.e. 3month time intervals
+    if (is.matrix(X)) {
+        X = as.data.frame(X)
+    }
+    fit.glm <- glm(Y ~ I(t==15) + I(t==16) + ., data = X, family = family,
+                   weights = obsWeights, model = model)
+    if (is.matrix(newX)) {
+        newX = as.data.frame(newX)
+    }
+    pred <- predict(fit.glm, newdata = newX, type = "response")
+    fit <- list(object = fit.glm)
+    class(fit) <- "SL.glm"
+    out <- list(pred = pred, fit = fit)
+    return(out)
+}
+environment(leader_cens_glm_3mo) <- asNamespace('SuperLearner')
 
+leader_cens_bayesglm_3mo <- function (Y, X, newX, family, obsWeights, ...)
+{ # indicators for > 14, 15, 16 are for timescale = 3, i.e. 3month time intervals
+    .SL.require("arm")
+    if (is.matrix(X)) {
+        X = as.data.frame(X)
+    }
+    if (is.matrix(newX)) {
+        newX = as.data.frame(newX)
+    }
+    fit.glm <- arm::bayesglm(Y ~ I(t==15) + I(t==16) + .,
+                             data = X, family = family, weights = obsWeights)
+    pred <- predict(fit.glm, newdata = newX, type = "response")
+    fit <- list(object = fit.glm)
+    out <- list(pred = pred, fit = fit)
+    class(out$fit) <- c("SL.bayesglm")
+    return(out)
+}
+environment(leader_cens_bayesglm_3mo) <- asNamespace("SuperLearner")
 
 sl_trt <- c("SL.glm", glmnets$names, "SL.bayesglm")
 sl_censor <- c("SL.glm", glmnets$names, "SL.bayesglm")
@@ -168,6 +206,30 @@ tmle_sl <- surv_tmle(
     method = "hazard",
 )
 
+
+survtmle.est <- rbind(cbind("Estimator" = "d.gcomp1",
+                            "A" = rep(0:1, times = length(target.event)),
+                            "Event" = rep(target.event, each = 2),
+                            as.data.frame(tmle_sl$init_est)),
+                      cbind(Estimator = "survtmle1",
+                            A = rep(0:1, times = length(target.event)),
+                            Event = rep(target.event, each = 2),
+                            as.data.frame(tmle_sl$est))) %>% as.data.table() %>%
+    melt(., id.vars = c("Estimator", "A", "Event"), value.name = "Risk", variable.name = "Time")
+survtmle.est[["Time"]] <- rep(target.time, each = length(target.event) * 4)
+survtmle.est <- full_join(survtmle.est,
+                          cbind(Estimator = "survtmle1",
+                                A = rep(0:1, each = length(target.event) * length(target.time)),
+                                Event = rep(target.event, each = length(target.time), times = 2),
+                                Time = rep(target.time, times = 2 * length(target.event)),
+                                data.table(se = sqrt(diag(tmle_sl$var))))
+)
+
+survtmle.est <- dcast(survtmle.est, ... ~ A, value.var = c("Risk", "se"))
+# survtmle.est <- survtmle.est[, list(Event = Event, Time = Time,
+#                                     RD = Risk_1 - Risk_0, se = sqrt(se_1^2 + se_0^2))]
+result.i <- rbind(result.i, survtmle.est)
+
 timescale <- 3
 tmle_sl3 <- surv_tmle(
     ftime = ceiling(dt$time * 12 / 365.25 / timescale),
@@ -188,36 +250,34 @@ tmle_sl3 <- surv_tmle(
     method = "hazard",
 )
 
-survtmle.est <- rbind(cbind("Estimator" = "d.gcomp",
+survtmle.est3 <- rbind(cbind("Estimator" = "d.gcomp3",
                             "A" = rep(0:1, times = length(target.event)),
                             "Event" = rep(target.event, each = 2),
-                            as.data.frame(tmle_sl$init_est)),
-                      cbind(Estimator = "survtmle",
+                            as.data.frame(tmle_sl3$init_est)),
+                      cbind(Estimator = "survtmle3",
                             A = rep(0:1, times = length(target.event)),
                             Event = rep(target.event, each = 2),
-                            as.data.frame(tmle_sl$est)))%>% as.data.table() %>%
+                            as.data.frame(tmle_sl3$est))) %>% as.data.table() %>%
     melt(., id.vars = c("Estimator", "A", "Event"), value.name = "Risk", variable.name = "Time")
-survtmle.est[["Time"]] <- rep(target.time, each = length(target.event)*2)
-survtmle.est <- full_join(survtmle.est,
-                          cbind(Estimator = "survtmle",
+survtmle.est3[["Time"]] <- rep(target.time, each = length(target.event) * 4)
+survtmle.est3 <- full_join(survtmle.est3,
+                          cbind(Estimator = "survtmle3",
                                 A = rep(0:1, each = length(target.event) * length(target.time)),
                                 Event = rep(target.event, each = length(target.time), times = 2),
                                 Time = rep(target.time, times = 2 * length(target.event)),
-                                data.table(se = sqrt(diag(tmle_sl$var))))
+                                data.table(se = sqrt(diag(tmle_sl3$var))))
 )
 
-survtmle.est <- dcast(survtmle.est, ... ~ A, value.var = c("Risk", "se"))
-survtmle.est <- survtmle.est[, list(Event = Event, Time = Time,
-                                    RD = Risk_1 - Risk_0, se = sqrt(se_1^2 + se_0^2))]
-result.i <- rbind(result.i, survtmle.est)
-
+survtmle.est3 <- dcast(survtmle.est3, ... ~ A, value.var = c("Risk", "se"))
+# survtmle.est3 <- survtmle.est3[, list(Event = Event, Time = Time,
+#                                     RD = Risk_1 - Risk_0, se = sqrt(se_1^2 + se_0^2))]
+result.i <- rbind(result.i, survtmle.est3)
 
 # plot --------------------------------------------------------------------
 
-
-
-estimates %>%
-    transmute(Estimator = Estimator, t = `t`, delta = delta,
+result.i %>%
+    transmute(Estimator = Estimator, Event = Event, Time = Time, F1 = Risk_1,
+              F0 = Risk_0, se1 = se_1, se0 = se_0,
               "Risk.treated" = F1,
               "Risk.control" = F0,
               "Risk.ratio" = F1 / F0,
@@ -234,55 +294,59 @@ estimates %>%
                                 Estimand == "treated" ~ 2,
                                 Estimand == "diff" ~ 3,
                                 T ~ 4),
-           delta = case_when(delta == "CVDeath" ~ 1,
-                             delta == "nonfatalMACE" ~ 2,
-                             T ~ 3),
            Estimand = factor(Estimand, labels = c("Control Risk", "Treated Risk", "Risk Difference",
                                                   "Relative Risk")),
-           delta = factor(delta, labels = c("CV Death", "nonfatal MACE", "nonCV Death")),
-           Estimator = case_when(Estimator == "Aalen-Johansen" ~ 1,
-                                 Estimator == "TMLE" ~ 2,
-                                 T ~ 3),
-           Estimator = factor(Estimator, labels = c("Aalen-Johansen", "TMLE",
-                                                    "G-Comp")),
-           t = t/4) -> est
+           Event = factor(Event, labels = c("CV Death", "nonfatal MACE", "nonCV Death")),,
+           Time = as.factor(Time)) -> est
 
-est %>% ggplot(aes(x = t, y = `Estimate`, colour = Estimator)) +
-    facet_wrap(delta~Estimand, scales = "free", ncol = 4) +
+est %>% filter(!(Estimator %in% c("c.gcomp", "d.gcomp1", "d.gcomp3"))) %>%
+    group_by(Estimand, Estimator, Event) %>%
+    mutate(Estimator = case_when(Estimator == "concrete" ~ "continuous-TMLE",
+                                 Estimator == "survtmle1" ~ "discrete-TMLE: 1mo",
+                                 Estimator == "survtmle3" ~ "discrete-TMLE: 3mo",
+                                 TRUE ~ Estimator),
+           Estimate = case_when(Estimate > 3 ~ NaN,
+                                TRUE ~ Estimate)) %>%
+    filter(Estimand == "Risk Difference") %>%
+    ggplot(aes(x = Time, y = Estimate, colour = Estimator)) +
+    facet_wrap(~Event, scales = "free", nrow = 3) +
     geom_errorbar(aes(ymin = Estimate - 1.96*se,
                       ymax = Estimate + 1.96*se), width = .5,
-                  position = position_dodge(.5)) +
-    geom_point(size = 2, position = position_dodge(.5)) + theme_bw() +
-    labs(x = "Years")
+                  position = position_dodge(.7)) +
+    geom_point(size = 2, position = position_dodge(.7)) + theme_minimal() +
+    labs(y = "Absolute Risk Difference", x = "Days", title = "Competing Risks Analysis of a LEADER Subset")
 
-estimates <- readRDS("R/competing_risks/")
-estimates %>% mutate(t = t/4) %>%
-    ggplot(aes(x = t, y = `Estimate`, colour = Estimator)) +
-    facet_wrap(delta~Estimand, scales = "free", ncol = 4) +
-    geom_errorbar(aes(ymin = Estimate - 1.96*se,
-                      ymax = Estimate + 1.96*se), width = .5,
-                  position = position_dodge(.5)) +
-    geom_point(size = 2, position = position_dodge(.5)) + theme_bw() +
-    labs(x = "Years")
+ggsave(filename = "../ConCR-TMLE/output/leader-cr.png", device = "png",
+       height = 8, width = 8, units = "in")
 
-est %>% arrange(`t`, `delta`, `Estimand`) %>% group_by(`t`, `delta`, `Estimand`) %>%
-    mutate(Eff = se / head(se, 1)) -> est
-
-est %>% filter(t == 3, Estimator != "G-Comp", Estimand == "Risk Difference") %>%
-    mutate(delta = factor(as.numeric(delta), levels = 1:3,
-                          labels = c("CV Death", "nonfatal MI or Stroke", "nonCV Death"))) %>%
-    ggplot(aes(x = as.character(`t`), y = Estimate, colour = Estimator)) +
-    facet_wrap(~delta, ncol = 3) +
-    geom_hline(aes(yintercept = 0), alpha = 0.3, size = 1) +
-    geom_errorbar(aes(ymin = Estimate - 1.96*se,
-                      ymax = Estimate + 1.96*se), width = .5,
-                  position = position_dodge(.5)) +
-    geom_point(size = 2, position = position_dodge(.5)) + theme_bw() +
-    labs(x = "Year", y = "Risk Difference") # +
-# geom_label(aes(x = as.character(`t`), y = Estimate - 1.96 * `se` - 0.001,
-#                label = paste0("Eff = ", round(Eff, 3)*100, "%")),
-#            data = filter(est, Estimand == "Risk Difference", Estimator == "TMLE"),
-#            colour = 'black')
-ggsave(filename = "leader_riskdiff_yr3.png", path = "R/competing_risks/LEADER/",
-       device = "png", width = 10.5, height = 6, units = "in")
-
+# estimates <- readRDS("R/competing_risks/")
+# estimates %>% mutate(t = t/4) %>%
+#     ggplot(aes(x = t, y = `Estimate`, colour = Estimator)) +
+#     facet_wrap(Event~Estimand, scales = "free", ncol = 4) +
+#     geom_errorbar(aes(ymin = Estimate - 1.96*se,
+#                       ymax = Estimate + 1.96*se), width = .5,
+#                   position = position_dodge(.5)) +
+#     geom_point(size = 2, position = position_dodge(.5)) + theme_bw() +
+#     labs(x = "Years")
+#
+# est %>% arrange(`t`, `Event`, `Estimand`) %>% group_by(`t`, `Event`, `Estimand`) %>%
+#     mutate(Eff = se / head(se, 1)) -> est
+#
+# est %>% filter(t == 3, Estimator != "G-Comp", Estimand == "Risk Difference") %>%
+#     mutate(Event = factor(as.numeric(Event), levels = 1:3,
+#                           labels = c("CV Death", "nonfatal MI or Stroke", "nonCV Death"))) %>%
+#     ggplot(aes(x = as.character(`t`), y = Estimate, colour = Estimator)) +
+#     facet_wrap(~Event, ncol = 3) +
+#     geom_hline(aes(yintercept = 0), alpha = 0.3, size = 1) +
+#     geom_errorbar(aes(ymin = Estimate - 1.96*se,
+#                       ymax = Estimate + 1.96*se), width = .5,
+#                   position = position_dodge(.5)) +
+#     geom_point(size = 2, position = position_dodge(.5)) + theme_bw() +
+#     labs(x = "Year", y = "Risk Difference") # +
+# # geom_label(aes(x = as.character(`t`), y = Estimate - 1.96 * `se` - 0.001,
+# #                label = paste0("Eff = ", round(Eff, 3)*100, "%")),
+# #            data = filter(est, Estimand == "Risk Difference", Estimator == "TMLE"),
+# #            colour = 'black')
+# ggsave(filename = "leader_riskdiff_yr3.png", path = "R/competing_risks/LEADER/",
+#        device = "png", width = 10.5, height = 6, units = "in")
+#
