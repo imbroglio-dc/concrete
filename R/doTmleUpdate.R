@@ -211,8 +211,8 @@ updateHazard <- function(GStar, Hazards, TotalSurv, NuisanceWeight, Events, Eval
 
 getFluctPnEIC <- function(GStar, Hazards, TotalSurv, NuisanceWeight, TargetEvent, TargetTime,
                           Events, T.tilde, Delta, EvalTimes, GComp, l = NULL, fluct.eps = NULL) {
+    IC <- F.j.tau <- eps <- NULL
     Target <- expand.grid("Time" = TargetTime, "Event" = TargetEvent)
-    IC <- F.j.tau <- NULL
     IC.a <- do.call(rbind, lapply(1:ncol(NuisanceWeight), function(i) {
         Nuisance.i <- NuisanceWeight[, i]
         Surv.i <- TotalSurv[, i]

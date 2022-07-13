@@ -20,17 +20,15 @@ intervention <- list("A == 1" = list("intervention" = function(a, L) {rep_len(1,
 target.time <- 500 * (2:4)
 target.event <- sort(unique(data[status > 0, status]))
 a_lrnrs <- make_learner(Lrnr_glm)
-model <- list("Trt" = a_lrnrs,
+model <- list("trt" = a_lrnrs,
               "0" = list(mod1 = Surv(time, status == 0) ~ trt + age + sex),
               "1" = list(mod1 = Surv(time, status == 1) ~ trt + age + sex))
-
-# plot(prodlim(Hist(time,status)~trt,data = data))
 
 concrete.args <- formatArguments(DataTable = data[, c("time", "status", "trt", "id", "age", "sex")],
                                  EventTime = "time", EventType = "status",
                                  Treatment = "trt", ID = "id", Intervention = intervention,
                                  TargetTime = target.time, TargetEvent = target.event,
-                                 Model = model, Verbose = TRUE)
+                                 Model = model, PropScoreBackend = "sl3", Verbose = TRUE)
 concrete.est <- doConcrete(ConcreteArgs = concrete.args)
 
 concrete.ate <- getOutput(Estimate = concrete.est, Estimand = c("rd"), TargetTime = target.time,

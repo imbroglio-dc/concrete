@@ -19,10 +19,11 @@ getInitialEstimate <- function(Data, CovDataTable, Model, CVFolds, MinNuisance, 
     EventType <- Data[[attr(Data, "EventType")]]
     EventTime <- Data[[attr(Data, "EventTime")]]
 
-    TrtModel <- try(Model[["Trt"]])
+    TrtModel <- try(Model[[attr(Data, "Treatment")]])
     if (inherits(TrtModel, "try-error"))
-        stop("TrtModel must currently be specified is Model[['Trt']]")
-
+        stop("TrtModel must currently be specified in the Model argument as a list named ", 
+             "as the Treatment variable, ", attr(Data, "Treatment"))
+    
     ## Propensity Scores for Regimes of Interest ----
     PropScores <- getPropScore(Treatment = Treatment, CovDataTable = CovDataTable, TrtModel = TrtModel,
                                MinNuisance = MinNuisance, Regime = Regime,

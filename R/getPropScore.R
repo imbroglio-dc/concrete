@@ -29,13 +29,17 @@ getPropScore <- function(Treatment, CovDataTable, TrtModel, MinNuisance, Regime,
 getSl3PropScore <- function(Treatment, CovDataTable, TrtModel, Regime, CVFolds) {
     ## PropScore score ----
     TrtTask <- sl3::make_sl3_Task(
-        data = cbind("Trt" = Treatment, CovDataTable),
+        data = as_tibble(cbind("Trt" = Treatment, CovDataTable)),
         covariates = colnames(CovDataTable),
         outcome = "Trt"
     )
-    TrtSL <- sl3::Lrnr_sl$new(learners = TrtModel, folds = CVFolds)
+    if (is.null(TrtModel$params$learners)) {
+        TrtSL <- sl3::Lrnr_cv$new(learner = TrtModel, folds = CVFolds)
+    } else {
+        TrtSL <- sl3::Lrnr_sl$new(learners = TrtModel, folds = CVFolds)
+    }
     TrtFit <- TrtSL$train(TrtTask)
-
+    
     PropScores <- lapply(Regime, function(a) {
         if (is.numeric(a) & length(a) == length(Treatment)) {
             if (all(a %in% c(0, 1))) {
@@ -57,10 +61,15 @@ getSl3PropScore <- function(Treatment, CovDataTable, TrtModel, Regime, CVFolds) 
 }
 
 getSuperLearnerPropScore <- function(Treatment, CovDataTable, TrtModel, Regime, cv.folds) {
-    if (!inherits(TrtModel, "SuperLearner")) {
-        TrtModel[["cvControl"]] <- list("V" = as.integer(length(cv.folds)), "stratifyCV" = FALSE, "shuffle" = FALSE,
-                                        "validRows" = lapply(cv.folds, function(v) v[["validation_set"]]))
-        superlearner.fit <- do.call(SuperLearner, TrtModel)
+    if (!inherits(TrtModel, "SuperLearner")) { 
+        sl.args <- list() 
+        sl.args[["Y"]] <- Treatment
+        sl.args[["X"]] <- CovDataTable
+        sl.args[["family"]] <- binomial()
+        sl.args[["SL.library"]] <- TrtModel
+        sl.args[["cvControl"]] <- list("V" = as.integer(length(cv.folds)), "stratifyCV" = FALSE, "shuffle" = FALSE,
+                                       "validRows" = lapply(cv.folds, function(v) v[["validation_set"]]))
+        superlearner.fit <- do.call(SuperLearner, sl.args)
     } else {
         superlearner.fit <- TrtModel
     }

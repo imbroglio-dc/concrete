@@ -18,7 +18,7 @@ formatArguments(
   Target = NULL,
   CVArg = list(n = nrow(DataTable), fold_fun = folds_vfold, cluster_ids = NULL,
     strata_ids = NULL),
-  Model,
+  Model = NULL,
   PropScoreBackend = "sl3",
   HazEstBackend = "coxph",
   MaxUpdateIter = 100,
@@ -29,25 +29,29 @@ formatArguments(
 )
 }
 \arguments{
-\item{DataTable}{data.table (n x (d + (3:4)); data.table of the observed data. Must include:
+\item{DataTable}{data.table (n x (d + (3:5)); data.table of the observed data, with rows n =
+the number of observations and d = the number of baseline covariates. DataTable must include
+the following columns:
 \itemize{
 \item{"EventTime"}{: non-negative real numbers; the observed event or censoring time}
-\item{"EventType"}{: numeric; the observed event type (0 for censoring)}
+\item{"EventType"}{: numeric; the observed event type, with 0 indicating censoring. There is
+no separate column for indicating censoring}
 \item{"Treatment"}{: numeric; the observed treatment}
 }
 May include
 \itemize{
-\item{"ID"}{: factor, character, or numberic; subject id - if missing, ID will be
-set to row number. For longitudinal data, ID must be provided}
-\item{"LongTime"}{: numeric; (Specifies monitoring times for longitudinal data structures}
-\item{"Treatment"}{: numeric}
+\item{"ID"}{: factor, character, or numeric; unique subject id. If ID column is missing, row
+numbers will be used as ID. For longitudinal data, ID must be provided}
+\item{"LongTime"}{: numeric; Specifies monitoring times for longitudinal data structures}
+\item{"Baseline Covariates"}{: factor, character, or numeric; }
 }}
 
-\item{DataStructure}{(not implemented yet) formula: e.g. Surv("EventTime", "EventType") ~ Intervention("Treatment") + ...}
+\item{DataStructure}{(not implemented yet) formula: e.g. Surv("EventTime", "EventType") ~
+Intervention("Treatment") + ...}
 
-\item{EventTime}{character: the column name of the observed time}
+\item{EventTime}{character: the column name of the observed event or censoring time}
 
-\item{EventType}{character: the column name of the observed event type}
+\item{EventType}{character: the column name of the observed event type. (0 indicating censoring)}
 
 \item{Treatment}{character: the column name of the observed treatment assignment}
 
@@ -57,16 +61,19 @@ set to row number. For longitudinal data, ID must be provided}
 longitudinal data structures}
 
 \item{Intervention}{list: a list of desired interventions on the treatment variable.
-Each intervention must be a list containing two named functions: 'intervention' = function(treatment vector, covariate data)
+Each intervention must be a list containing two named functions: 'intervention' =
+function(treatment vector, covariate data)
 and 'gstar' = function(treatment vector, covariate data)}
 
 \item{TargetTime}{numeric vector (length = K)}
 
 \item{TargetEvent}{numeric vector that is a subset of EventType (length = J)}
 
-\item{Target}{(not yet implemented) data.table / data.frame (?? x 2); a table containing all combinations of target events (column 1) and target times (column 2).}
+\item{Target}{(not yet implemented) data.table / data.frame (?? x 2); a table containing all
+combinations of target events (column 1) and target times (column 2).}
 
-\item{CVArg}{list of arguments to be passed into origami::make_folds. the default = list(n = nrow(DataTable), fold_fun = folds_vfold, cluster_ids = NULL, strata_ids = NULL)}
+\item{CVArg}{list of arguments to be passed into origami::make_folds. the default = list(n =
+nrow(DataTable), fold_fun = folds_vfold, cluster_ids = NULL, strata_ids = NULL)}
 
 \item{Model}{list of models (length = L + Censoring + Treatment)}
 
@@ -78,7 +85,8 @@ and 'gstar' = function(treatment vector, covariate data)}
 
 \item{OneStepEps}{numeric: the one-step tmle step size}
 
-\item{MinNuisance}{numeric: the minimum value of the nuisance parameter denominator in the clever covariate}
+\item{MinNuisance}{numeric: the minimum value of the nuisance parameter denominator in the
+clever covariate}
 
 \item{Verbose}{boolean}
 
@@ -89,4 +97,26 @@ tbd
 }
 \description{
 Title
+}
+\examples{
+library(data.table)
+data <- as.data.table(survival::pbc)
+data[, trt := sample()]
+cols <- c("id", "time", "status", "trt", "age", "sex", "stage", "bili")
+data <- data[, .SD, .SDcols = cols]
+
+# running the function
+concreteArgs <- formatArguments(DataTable = data, 
+                                EventTime = "time", 
+EventType = "status", 
+Treatment = "trt", 
+ID = "id", 
+Intervention = concrete:::IntentToTreat, 
+TargetTime = 2500, 
+TargetEvent = 1:2)
+
+# examples of editing the returned model templates if no Model input
+concreteArgs[["Model"]][["trt"]] <- list("model1" = trt ~ sex:age + bili)
+concreteArgs[["Model"]][["1"]] <- list("model1" = Surv(time, status == 1) ~ trt, 
+                                       "model2" = Surv(time, status == 1) ~ .)
 }
