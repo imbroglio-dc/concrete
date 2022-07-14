@@ -19,13 +19,15 @@ formatArguments(
   CVArg = list(n = nrow(DataTable), fold_fun = folds_vfold, cluster_ids = NULL,
     strata_ids = NULL),
   Model = NULL,
-  PropScoreBackend = "sl3",
+  PropScoreBackend = "SuperLearner",
   HazEstBackend = "coxph",
   MaxUpdateIter = 100,
   OneStepEps = 0.1,
   MinNuisance = 0.05,
   Verbose = TRUE,
-  GComp = TRUE
+  GComp = TRUE,
+  ConcreteArgs,
+  ...
 )
 }
 \arguments{
@@ -46,8 +48,7 @@ numbers will be used as ID. For longitudinal data, ID must be provided}
 \item{"Baseline Covariates"}{: factor, character, or numeric; }
 }}
 
-\item{DataStructure}{(not implemented yet) formula: e.g. Surv("EventTime", "EventType") ~
-Intervention("Treatment") + ...}
+\item{DataStructure}{formula (not ready): e.g. Surv(time, type) ~ Intervention(trt) + ...}
 
 \item{EventTime}{character: the column name of the observed event or censoring time}
 
@@ -55,15 +56,17 @@ Intervention("Treatment") + ...}
 
 \item{Treatment}{character: the column name of the observed treatment assignment}
 
-\item{ID}{(optional) character: the column name of the observed subject id}
+\item{ID}{character (default: NULL): the column name of the observed subject id}
 
-\item{LongTime}{(situational) character: the column name of the monitoring times for
+\item{LongTime}{character (not ready): the column name of the monitoring times for
 longitudinal data structures}
 
 \item{Intervention}{list: a list of desired interventions on the treatment variable.
-Each intervention must be a list containing two named functions: 'intervention' =
-function(treatment vector, covariate data)
-and 'gstar' = function(treatment vector, covariate data)}
+Each intervention must be a list containing two named functions:
+'intervention' = function(treatment vector, covariate data) and
+'gstar' = function(treatment vector, covariate data)
+concrete:::ITT can be used to specify an intent-to-treat analysis for a
+binary intervention variable}
 
 \item{TargetTime}{numeric vector (length = K)}
 
@@ -72,14 +75,16 @@ and 'gstar' = function(treatment vector, covariate data)}
 \item{Target}{(not yet implemented) data.table / data.frame (?? x 2); a table containing all
 combinations of target events (column 1) and target times (column 2).}
 
-\item{CVArg}{list of arguments to be passed into origami::make_folds. the default = list(n =
-nrow(DataTable), fold_fun = folds_vfold, cluster_ids = NULL, strata_ids = NULL)}
+\item{CVArg}{list: arguments to be passed into do.call(origami::make_folds). The default is
+list(n = nrow(DataTable), fold_fun = folds_vfold, cluster_ids = NULL, strata_ids = NULL)}
 
-\item{Model}{list of models (length = L + Censoring + Treatment)}
+\item{Model}{list (default: NULL): named list of models, one for each failure or censoring event
+and one for the 'Treatment' variable. If Model = NULL, then
+a template will be generated for the user to amend.}
 
-\item{PropScoreBackend}{(currently must be \code{sl3}) character}
+\item{PropScoreBackend}{character (default: "Superlearner"): currently must be either "sl3" or "Superlearner"}
 
-\item{HazEstBackend}{(currently must be \code{coxph}) character}
+\item{HazEstBackend}{character (default: "coxph"): currently must be "coxph"}
 
 \item{MaxUpdateIter}{numeric: the number of one-step update steps}
 
@@ -91,6 +96,11 @@ clever covariate}
 \item{Verbose}{boolean}
 
 \item{GComp}{boolean}
+
+\item{ConcreteArgs}{list (default: NULL) : Use to recheck amended output from previous formatArguments()
+calls. A non-NULL input will cause all other arguments to be ignored.}
+
+\item{...}{...}
 }
 \value{
 tbd
@@ -100,23 +110,45 @@ Title
 }
 \examples{
 library(data.table)
+library(concrete)
+
 data <- as.data.table(survival::pbc)
-data[, trt := sample()]
-cols <- c("id", "time", "status", "trt", "age", "sex", "stage", "bili")
+data[, trt := sample(0:1, nrow(data), TRUE)]
+cols <- c("id", "time", "status", "trt",
+          "age", "albumin", "sex", "bili")
 data <- data[, .SD, .SDcols = cols]
+intervention <- concrete:::ITT
+target.time <- 2500
+target.event <- 1:2
+model <- list("trt" = c("SL.glm", "SL.glmnet"),
+              "0" = list(Surv(time, status == 0) ~ .),
+              "1" = list(Surv(time, status == 1) ~ .),
+              "2" = list(Surv(time, status == 2) ~ .))
 
-# running the function
-concreteArgs <- formatArguments(DataTable = data, 
-                                EventTime = "time", 
-EventType = "status", 
-Treatment = "trt", 
-ID = "id", 
-Intervention = concrete:::IntentToTreat, 
-TargetTime = 2500, 
-TargetEvent = 1:2)
+# formatArguments() returns correctly formatted arguments for doConcrete()
+concrete.args <- formatArguments(DataTable = data,
+                                 EventTime = "time",
+                                 EventType = "status",
+                                 Treatment = "trt",
+                                 ID = "id",
+                                 Intervention = intervention,
+                                 TargetTime = target.time,
+                                 TargetEvent = target.event,
+                                 Model = model)
 
-# examples of editing the returned model templates if no Model input
-concreteArgs[["Model"]][["trt"]] <- list("model1" = trt ~ sex:age + bili)
-concreteArgs[["Model"]][["1"]] <- list("model1" = Surv(time, status == 1) ~ trt, 
-                                       "model2" = Surv(time, status == 1) ~ .)
+# if formatArguments(Model = NULL), a model template will be returned for the user to amend.
+# examples of editing models for censoring and failure events
+concreteArgs[["Model"]][["0"]] <- list("model1" = Surv(time, status == 0) ~ trt:sex + age + bili)
+concreteArgs[["Model"]][["1"]] <- list(Surv(time, status == 1) ~ trt, 
+                                       Surv(time, status == 1) ~ .)
+
+# examples of editing models for binary treatment, using PropScoreBackend = "Superlearner"
+concreteArgs[["Model"]][["trt"]] <- c("SL.glm", "SL.glmnet", "SL.bayesglm")
+
+# examples of editing models for binary treatment, using PropScoreBackend = "sl3"
+library(sl3)
+concreteArgs[["Model"]][["trt"]] <- make_learner(Stack, Lrnr_hal9001$new(), 
+                                                 Lrnr_glmnet$new(), Lrnr_glm$new())
+
+
 }

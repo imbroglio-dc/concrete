@@ -19,7 +19,7 @@ intervention <- list("A == 1" = list("intervention" = function(a, L) {rep_len(1,
                                      "g.star" = function(a, L) {as.numeric(a == 0)}))
 target.time <- 500 * (2:4)
 target.event <- sort(unique(data[status > 0, status]))
-a_lrnrs <- make_learner(Lrnr_glm)
+a_lrnrs <- make_learner(Stack, Lrnr_glm$new(), Lrnr_glmnet$new())
 model <- list("trt" = a_lrnrs,
               "0" = list(mod1 = Surv(time, status == 0) ~ trt + age + sex),
               "1" = list(mod1 = Surv(time, status == 1) ~ trt + age + sex))

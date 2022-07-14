@@ -10,7 +10,8 @@
 #' @param CVFolds list
 #' @param TrtLoss character or function(A, g.A)
 #'
-#' @import SuperLearner
+#' @import SuperLearner sl3
+#' @importFrom stats binomial gaussian
 
 getPropScore <- function(Treatment, CovDataTable, TrtModel, MinNuisance, Regime,
                          PropScoreBackend, CVFolds, TrtLoss = NULL) {
@@ -29,7 +30,7 @@ getPropScore <- function(Treatment, CovDataTable, TrtModel, MinNuisance, Regime,
 getSl3PropScore <- function(Treatment, CovDataTable, TrtModel, Regime, CVFolds) {
     ## PropScore score ----
     TrtTask <- sl3::make_sl3_Task(
-        data = as_tibble(cbind("Trt" = Treatment, CovDataTable)),
+        data = as.data.frame(cbind("Trt" = Treatment, CovDataTable)),
         covariates = colnames(CovDataTable),
         outcome = "Trt"
     )
@@ -65,7 +66,10 @@ getSuperLearnerPropScore <- function(Treatment, CovDataTable, TrtModel, Regime, 
         sl.args <- list() 
         sl.args[["Y"]] <- Treatment
         sl.args[["X"]] <- CovDataTable
-        sl.args[["family"]] <- binomial()
+        if (length(unique(Treatment) == 2))
+            sl.args[["family"]] <- binomial()
+        else
+            sl.args[["family"]] <- gaussian()
         sl.args[["SL.library"]] <- TrtModel
         sl.args[["cvControl"]] <- list("V" = as.integer(length(cv.folds)), "stratifyCV" = FALSE, "shuffle" = FALSE,
                                        "validRows" = lapply(cv.folds, function(v) v[["validation_set"]]))

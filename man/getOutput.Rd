@@ -4,7 +4,13 @@
 \alias{getOutput}
 \title{getOutput}
 \usage{
-getOutput(Estimate, Estimand, TargetTime, TargetEvent, GComp)
+getOutput(
+  Estimate,
+  Estimand = c("RD", "RR", "Risk"),
+  TargetTime,
+  TargetEvent,
+  GComp
+)
 }
 \arguments{
 \item{Estimate}{: list concrete Estimate object}
@@ -24,5 +30,5 @@ tbd
 getOutput
 }
 \examples{
-"tbd"
+
 }

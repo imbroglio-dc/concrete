@@ -10,11 +10,11 @@
 #' @export getOutput
 #'
 #' @examples
-#' "tbd"
+#' 
 
-getOutput <- function(Estimate, Estimand, TargetTime, TargetEvent, GComp) {
+getOutput <- function(Estimate, Estimand = c("RD", "RR", "Risk"), TargetTime, TargetEvent, GComp) {
     if (!all(sapply(Estimand, function(e) any(is.function(e), grepl("(rd)|(rr)|(risk)", tolower(e)))))) {
-        stop("Estimand must be in c(`RD`, `RR`, `Risk`), or be a list of user-specified function(s) of",
+        stop("Estimand must be in c('RD', 'RR', 'Risk'), or be a list of user-specified function(s) of",
              "`Estimate`, `Estimand`, `TargetEvent`, `TargetTime`, and `GComp`.")
     }
     output <- list()
@@ -66,7 +66,7 @@ getRisk <- function(Estimate, TargetTime, TargetEvent, GComp) {
         risk.a <- do.call(rbind, lapply(as.character(TargetEvent), function(j) {
             risks <- apply(est.a[["Hazards"]][[j]] * est.a[["EvntFreeSurv"]], 2, cumsum)
             Psi <- cbind("Time" = attr(Estimate, "times")[which(attr(Estimate, "times") %in% TargetTime)],
-                         "Risk" = rowMeans(risks[attr(Estimate, "times") %in% TargetTime, ]))
+                         "Risk" = rowMeans(subset(risks, subset = attr(Estimate, "times") %in% TargetTime)))
             se <- subset(est.a$SummEIC[Event == j, ], select = c("Time", "seEIC"))
             Psi <- merge(Psi, se[, list("Time" = Time, "se" = seEIC / sqrt(ncol(risks)))], by = "Time")
             return(cbind("Estimator" = "tmle", "Event" = j, Psi))
