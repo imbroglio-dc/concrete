@@ -1,6 +1,6 @@
 
 #' Title
-#' @param ConcreteArgs list (default: NULL) : Use to recheck amended output from previous formatArguments() 
+#' @param ConcreteArgs list (default: NULL, not yet ready) : Use to recheck amended output from previous formatArguments() 
 #'                                            calls. A non-NULL input will cause all other arguments to be ignored.
 #' @param DataTable data.table (n x (d + (3:5)); data.table of the observed data, with rows n = 
 #' the number of observations and d = the number of baseline covariates. DataTable must include 
@@ -31,8 +31,8 @@
 #'                             'gstar' = function(treatment vector, covariate data)
 #'                           concrete:::ITT can be used to specify an intent-to-treat analysis for a
 #'                           binary intervention variable 
-#' @param TargetTime numeric vector (length = K)
-#' @param TargetEvent numeric vector that is a subset of EventType (length = J)
+#' @param TargetTime numeric: vector of target times
+#' @param TargetEvent numeric: vector of target events - some subset of unique EventTypes. 
 #' @param Target (not yet implemented) data.table / data.frame (?? x 2); a table containing all 
 #' combinations of target events (column 1) and target times (column 2).
 #' @param CVArg list: arguments to be passed into do.call(origami::make_folds). The default is 
