@@ -3,6 +3,7 @@ Type: Package
 Title: Continuous-Time Competing Risks Estimation using TMLE
 Version: 0.0.0.9
 Date: 2022-03-04
+Author: David Chen
 Authors@R: 
     person(given = "David",
            family = "Chen",
@@ -24,13 +25,15 @@ Imports:
     SuperLearner, 
     nleqslv
 Depends:
-    R (>= 3.5.0), 
-    sl3
+    R (>= 3.5.0)
+Remotes: 
+    tlverse/sl3
 LinkingTo: Rcpp
 Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.2.1
 Suggests: 
+    sl3,
     testthat (>= 3.0.0)
 Config/testthat/edition: 3

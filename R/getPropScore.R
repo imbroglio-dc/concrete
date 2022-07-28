@@ -9,7 +9,7 @@
 #' @param PropScoreBackend character
 #' @param CVFolds list
 #' @param TrtLoss character or function(A, g.A)
-#'
+#' 
 #' @import SuperLearner
 #' @importFrom stats binomial gaussian
 
