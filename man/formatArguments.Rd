@@ -68,9 +68,9 @@ Each intervention must be a list containing two named functions:
 concrete:::ITT can be used to specify an intent-to-treat analysis for a
 binary intervention variable}
 
-\item{TargetTime}{numeric vector (length = K)}
+\item{TargetTime}{numeric: vector of target times}
 
-\item{TargetEvent}{numeric vector that is a subset of EventType (length = J)}
+\item{TargetEvent}{numeric: vector of target events - some subset of unique EventTypes.}
 
 \item{Target}{(not yet implemented) data.table / data.frame (?? x 2); a table containing all
 combinations of target events (column 1) and target times (column 2).}
@@ -97,7 +97,7 @@ clever covariate}
 
 \item{GComp}{boolean}
 
-\item{ConcreteArgs}{list (default: NULL) : Use to recheck amended output from previous formatArguments()
+\item{ConcreteArgs}{list (default: NULL, not yet ready) : Use to recheck amended output from previous formatArguments()
 calls. A non-NULL input will cause all other arguments to be ignored.}
 
 \item{...}{...}
@@ -138,16 +138,16 @@ concrete.args <- formatArguments(DataTable = data,
 
 # if formatArguments(Model = NULL), a model template will be returned for the user to amend.
 # examples of editing models for censoring and failure events
-concreteArgs[["Model"]][["0"]] <- list("model1" = Surv(time, status == 0) ~ trt:sex + age + bili)
-concreteArgs[["Model"]][["1"]] <- list(Surv(time, status == 1) ~ trt, 
+concrete.args[["Model"]][["0"]] <- list("model1" = Surv(time, status == 0) ~ trt:sex + age + bili)
+concrete.args[["Model"]][["1"]] <- list(Surv(time, status == 1) ~ trt, 
                                        Surv(time, status == 1) ~ .)
 
 # examples of editing models for binary treatment, using PropScoreBackend = "Superlearner"
-concreteArgs[["Model"]][["trt"]] <- c("SL.glm", "SL.glmnet", "SL.bayesglm")
+concrete.args[["Model"]][["trt"]] <- c("SL.glm", "SL.glmnet", "SL.bayesglm")
 
 # examples of editing models for binary treatment, using PropScoreBackend = "sl3"
 library(sl3)
-concreteArgs[["Model"]][["trt"]] <- make_learner(Stack, Lrnr_hal9001$new(), 
+concrete.args[["Model"]][["trt"]] <- make_learner(Stack, Lrnr_hal9001$new(), 
                                                  Lrnr_glmnet$new(), Lrnr_glm$new())
 
 

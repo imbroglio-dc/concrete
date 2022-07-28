@@ -86,16 +86,16 @@
 #' 
 #' # if formatArguments(Model = NULL), a model template will be returned for the user to amend.
 #' # examples of editing models for censoring and failure events
-#' concreteArgs[["Model"]][["0"]] <- list("model1" = Surv(time, status == 0) ~ trt:sex + age + bili)
-#' concreteArgs[["Model"]][["1"]] <- list(Surv(time, status == 1) ~ trt, 
+#' concrete.args[["Model"]][["0"]] <- list("model1" = Surv(time, status == 0) ~ trt:sex + age + bili)
+#' concrete.args[["Model"]][["1"]] <- list(Surv(time, status == 1) ~ trt, 
 #'                                        Surv(time, status == 1) ~ .)
 #' 
 #' # examples of editing models for binary treatment, using PropScoreBackend = "Superlearner"
-#' concreteArgs[["Model"]][["trt"]] <- c("SL.glm", "SL.glmnet", "SL.bayesglm")
+#' concrete.args[["Model"]][["trt"]] <- c("SL.glm", "SL.glmnet", "SL.bayesglm")
 #' 
 #' # examples of editing models for binary treatment, using PropScoreBackend = "sl3"
 #' library(sl3)
-#' concreteArgs[["Model"]][["trt"]] <- make_learner(Stack, Lrnr_hal9001$new(), 
+#' concrete.args[["Model"]][["trt"]] <- make_learner(Stack, Lrnr_hal9001$new(), 
 #'                                                  Lrnr_glmnet$new(), Lrnr_glm$new())
 #' 
 #' 

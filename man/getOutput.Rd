@@ -30,5 +30,10 @@ tbd
 getOutput
 }
 \examples{
-
+# getOutput returns risk difference, relative risk, and treatment-specific risks
+# concrete.out <- getOutput(Estimate = concrete.est, Estimand = c("rd", "rr", "risk"), 
+#                           TargetTime = target.time, TargetEvent = target.event, GComp = TRUE)
+# concrete.out$RD
+# concrete.out$RR
+# concrete.out$Risk
 }
