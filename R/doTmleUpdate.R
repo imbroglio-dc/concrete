@@ -125,8 +125,8 @@ updateHazard <- function(GStar, Hazards, TotalSurv, NuisanceWeight, Events, Eval
     eps <- Time <- Event <- NULL
     Iterative <- FALSE
     if (min(TotalSurv) == 0)
-        stop("max(TargetTime) when people's survival probabilty = 0.",
-             " This makes the clever covariate explode.")
+        stop("max(TargetTime) when people's survival probabilty -> 0. ",
+             "This makes the clever covariate explode.")
     lapply(Hazards, function(haz.al) { # loop over L
         l <- attr(haz.al, "j")
         update.l <- matrix(0, nrow = nrow(haz.al), ncol = ncol(haz.al))
