@@ -107,11 +107,11 @@ formatArguments <- function(DataTable, DataStructure = NULL, EventTime, EventTyp
                                          cluster_ids = NULL, strata_ids = NULL),
                             Model = NULL, PropScoreBackend = "SuperLearner", HazEstBackend = "coxph",
                             MaxUpdateIter = 100, OneStepEps = 0.1, MinNuisance = 0.05,
-                            Verbose = TRUE, GComp = TRUE, ConcreteArgs, ...)
+                            Verbose = TRUE, GComp = TRUE, ConcreteArgs = NULL, ...)
 {
     ## Data Structure ----
     # incorporate prodlim::EventHistory.frame?
-    if (exists("Data")) {
+    if (!is.null(ConcreteArgs)) {
         stop("re-checking formatArguments output not yet ready")
     } else {
         data.tbl <- formatDataTable(x = DataTable, EventTime = EventTime, EventType = EventType,
