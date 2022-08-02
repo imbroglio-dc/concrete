@@ -25,8 +25,7 @@ Depends:
     R (>= 3.5.0)
 Remotes: 
     tlverse/sl3
-Additional_repositories:
-    https://github.com/tlverse/sl3
+Additional_repositories: https://github.com/tlverse/sl3
 LinkingTo: Rcpp
 Encoding: UTF-8
 LazyData: true
