@@ -14,7 +14,7 @@ formatArguments(
   LongTime = NULL,
   Intervention,
   TargetTime,
-  TargetEvent,
+  TargetEvent = NULL,
   Target = NULL,
   CVArg = list(n = nrow(DataTable), fold_fun = folds_vfold, cluster_ids = NULL,
     strata_ids = NULL),
@@ -26,7 +26,7 @@ formatArguments(
   MinNuisance = 0.05,
   Verbose = TRUE,
   GComp = TRUE,
-  ConcreteArgs,
+  ConcreteArgs = NULL,
   ...
 )
 }
