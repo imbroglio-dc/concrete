@@ -1,7 +1,6 @@
 #' Title
 #'
 #' @param Data data.table
-#' @param CovDataTable data.table
 #' @param Model list
 #' @param CVFolds : list
 #' @param MinNuisance numeric
@@ -10,35 +9,36 @@
 #' @param Regime list
 #' @param PropScoreBackend character
 #' @param HazEstBackend character
-#' @param Censored boolean
+#' @param ReturnModels boolean
 
-getInitialEstimate <- function(Data, CovDataTable, Model, CVFolds, MinNuisance, TargetEvent,
-                               TargetTime, Regime, PropScoreBackend, HazEstBackend, Censored) {
+getInitialEstimate <- function(Data, Model, CVFolds, MinNuisance, TargetEvent, TargetTime, 
+                               Regime, PropScoreBackend, HazEstBackend, ReturnModels) {
     Time <- NULL
-    Treatment <- Data[[attr(Data, "Treatment")]]
-    EventType <- Data[[attr(Data, "EventType")]]
-    EventTime <- Data[[attr(Data, "EventTime")]]
-
+    TrtVal <- Data[[attr(Data, "Treatment")]]
+    TimeVal <- Data[[attr(Data, "EventTime")]]
+    CovDT <- subset(Data, select = attr(Data, "CovNames")[["ColName"]])
     TrtModel <- try(Model[[attr(Data, "Treatment")]])
     if (inherits(TrtModel, "try-error"))
         stop("TrtModel must currently be specified in the Model argument as a list named ", 
              "as the Treatment variable, ", attr(Data, "Treatment"))
     
     ## Propensity Scores for Regimes of Interest ----
-    PropScores <- getPropScore(Treatment = Treatment, CovDataTable = CovDataTable, TrtModel = TrtModel,
+    PropScores <- getPropScore(TrtVal = TrtVal, CovDT = CovDT, TrtModel = TrtModel,
                                MinNuisance = MinNuisance, Regime = Regime,
-                               PropScoreBackend = PropScoreBackend, CVFolds = CVFolds, TrtLoss = NULL)
-
+                               PropScoreBackend = PropScoreBackend, CVFolds = CVFolds, TrtLoss = NULL, 
+                               ReturnModels = ReturnModels)
+    
     ## hazards: Events & censoring ----
     ## baseline hazards for obs times + target times ----
-    HazTimes <- sort(unique(c(TargetTime, EventTime)))
+    HazTimes <- sort(unique(c(TargetTime, TimeVal)))
     HazTimes <- HazTimes[HazTimes <= max(TargetTime)]
     Hazards <- data.table("Time" = c(0, HazTimes))
-
-    HazFits <- getHazFit(Data = Data, Model = Model, CVFolds = CVFolds, Hazards = Hazards, HazEstBackend)
+    
+    HazFits <- getHazFit(Data = Data, Model = Model, CVFolds = CVFolds, Hazards = Hazards, 
+                         HazEstBackend = HazEstBackend, ReturnModels = ReturnModels)
     HazSurvPreds <- getHazSurvPred(Data = Data, HazFits = HazFits, MinNuisance = MinNuisance,
                                    TargetEvent = TargetEvent, TargetTime = TargetTime,
-                                   Regime = Regime, HazEstBackend, Censored = Censored)
+                                   Regime = Regime, HazEstBackend)
     InitialEstimates <- lapply(seq_along(PropScores), function(a) {
         NuisanceWeight <- sapply(seq_along(PropScores[[a]]), function(i) {
             PropScores[[a]][i] * HazSurvPreds[[a]][["Survival"]][["LaggedCensSurv"]][, i]
@@ -49,9 +49,15 @@ getInitialEstimate <- function(Data, CovDataTable, Model, CVFolds, MinNuisance, 
                     "EvntFreeSurv" = HazSurvPreds[[a]][["Survival"]][["TotalSurv"]],
                     "NuisanceWeight" = NuisanceWeight))
     })
-
+    
     names(InitialEstimates) <- names(Regime)
     attr(InitialEstimates, "times") <- Hazards[["Time"]]
+    if (ReturnModels) {
+        ModelFits <- c(list(attr(PropScores, "TrtFit")), 
+                          lapply(HazFits, function(HF) return(attr(HF, "HazSL"))))
+        names(ModelFits)[1] <- attr(Data, "Treatment")
+        attr(InitialEstimates, "ModelFits") <- ModelFits
+    }
     return(InitialEstimates)
 }
 

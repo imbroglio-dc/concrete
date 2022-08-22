@@ -1,37 +1,38 @@
 
 #' Title
 #'
-#' @param Treatment numeric vector
-#' @param CovDataTable data.table
+#' @param TrtVal numeric vector
+#' @param CovDT data.table
 #' @param TrtModel list or fitted object
 #' @param MinNuisance numeric
 #' @param Regime list
 #' @param PropScoreBackend character
 #' @param CVFolds list
 #' @param TrtLoss character or function(A, g.A)
+#' @param ReturnModels boolean
 #' 
 #' @import SuperLearner
 #' @importFrom stats binomial gaussian
 
-getPropScore <- function(Treatment, CovDataTable, TrtModel, MinNuisance, Regime,
-                         PropScoreBackend, CVFolds, TrtLoss = NULL) {
+getPropScore <- function(TrtVal, CovDT, TrtModel, MinNuisance, Regime,
+                         PropScoreBackend, CVFolds, TrtLoss = NULL, ReturnModels) {
     if (PropScoreBackend == "sl3") {
-        PropScores <- getSl3PropScore(Treatment = Treatment, CovDataTable = CovDataTable,
-                                      TrtModel = TrtModel, Regime = Regime, CVFolds = CVFolds)
+        PropScores <- getSl3PropScore(TrtVal = TrtVal, CovDT = CovDT, TrtModel = TrtModel, 
+                                      Regime = Regime, CVFolds = CVFolds, ReturnModels = ReturnModels)
     } else if (PropScoreBackend == "SuperLearner") {
-        PropScores <- getSuperLearnerPropScore(Treatment = Treatment, CovDataTable = CovDataTable,
-                                               TrtModel = TrtModel, Regime = Regime, cv.folds = CVFolds)
+        PropScores <- getSuperLearnerPropScore(TrtVal = TrtVal, CovDT = CovDT, TrtModel = TrtModel, 
+                                               Regime = Regime, CVFolds = CVFolds, ReturnModels = ReturnModels)
     } else {
         stop("functionality for propensity score calculation not using sl3 has not yet been implemented")
     }
     return(PropScores)
 }
 
-getSl3PropScore <- function(Treatment, CovDataTable, TrtModel, Regime, CVFolds) {
+getSl3PropScore <- function(TrtVal, CovDT, TrtModel, Regime, CVFolds, ReturnModels) {
     ## PropScore score ----
     TrtTask <- sl3::make_sl3_Task(
-        data = as.data.frame(cbind("Trt" = Treatment, CovDataTable)),
-        covariates = colnames(CovDataTable),
+        data = as.data.frame(cbind("Trt" = TrtVal, CovDT)),
+        covariates = colnames(CovDT),
         outcome = "Trt"
     )
     if (is.null(TrtModel$params$learners)) {
@@ -42,7 +43,7 @@ getSl3PropScore <- function(Treatment, CovDataTable, TrtModel, Regime, CVFolds) 
     TrtFit <- TrtSL$train(TrtTask)
     
     PropScores <- lapply(Regime, function(a) {
-        if (is.numeric(a) & length(a) == length(Treatment)) {
+        if (is.numeric(a) & length(a) == length(TrtVal)) {
             if (all(a %in% c(0, 1))) {
                 ga1 <- TrtFit$predict()
                 PropScore <- ga1
@@ -53,34 +54,33 @@ getSl3PropScore <- function(Treatment, CovDataTable, TrtModel, Regime, CVFolds) 
         } else {
             stop("support for non-numeric, non-vector regimes of interest is not yet implemented.")
         }
-        attr(PropScore, "g.star.intervention") <- attr(a, "g.star")(a)
-        attr(PropScore, "g.star.obs") <- attr(a, "g.star")(Treatment)
+        attr(PropScore, "g.star.intervention") <- attr(a, "g.star")(a, CovDT)
+        attr(PropScore, "g.star.obs") <- attr(a, "g.star")(TrtVal, CovDT)
         return(PropScore)
     })
-    attr(PropScores, "TrtFit") <- TrtFit
+    if (ReturnModels) attr(PropScores, "TrtFit") <- TrtFit
     return(PropScores)
 }
 
-getSuperLearnerPropScore <- function(Treatment, CovDataTable, TrtModel, Regime, cv.folds) {
+getSuperLearnerPropScore <- function(TrtVal, CovDT, TrtModel, Regime, CVFolds, ReturnModels) {
     if (!inherits(TrtModel, "SuperLearner")) { 
-        sl.args <- list() 
-        sl.args[["Y"]] <- Treatment
-        sl.args[["X"]] <- CovDataTable
-        if (length(unique(Treatment) == 2))
-            sl.args[["family"]] <- binomial()
-        else
-            sl.args[["family"]] <- gaussian()
-        sl.args[["SL.library"]] <- TrtModel
-        sl.args[["cvControl"]] <- list("V" = as.integer(length(cv.folds)), "stratifyCV" = FALSE, "shuffle" = FALSE,
-                                       "validRows" = lapply(cv.folds, function(v) v[["validation_set"]]))
-        superlearner.fit <- do.call(SuperLearner, sl.args)
+        SLArgs <- list() 
+        SLArgs[["Y"]] <- TrtVal
+        SLArgs[["X"]] <- CovDT
+        SLArgs[["family"]] <- gaussian()
+        if (length(unique(TrtVal) == 2)) 
+            SLArgs[["family"]] <- binomial()
+        SLArgs[["SL.library"]] <- TrtModel
+        SLArgs[["cvControl"]] <- list("V" = as.integer(length(CVFolds)), "stratifyCV" = FALSE, "shuffle" = FALSE,
+                                       "validRows" = lapply(CVFolds, function(v) v[["validation_set"]]))
+        TrtFit <- do.call(SuperLearner, SLArgs)
     } else {
-        superlearner.fit <- TrtModel
+        TrtFit <- TrtModel
     }
     PropScores <- lapply(Regime, function(a) {
-        if (is.numeric(a) & length(a) == length(Treatment)) {
+        if (is.numeric(a) & length(a) == length(TrtVal)) {
             if (all(a %in% c(0, 1))) {
-                ga1 <- as.numeric(predict.SuperLearner(object = superlearner.fit, newdata = CovDataTable)$pred)
+                ga1 <- as.numeric(predict.SuperLearner(object = TrtFit, newdata = CovDT)$pred)
                 PropScore <- ga1
                 PropScore[a == 0] <- 1 - PropScore[a == 0]
             } else {
@@ -89,10 +89,13 @@ getSuperLearnerPropScore <- function(Treatment, CovDataTable, TrtModel, Regime, 
         } else {
             stop("support for non-numeric, non-vector regimes of interest is not yet implemented.")
         }
-        attr(PropScore, "g.star.intervention") <- attr(a, "g.star")(a)
-        attr(PropScore, "g.star.obs") <- attr(a, "g.star")(Treatment)
+        attr(PropScore, "g.star.intervention") <- attr(a, "g.star")(a, CovDT)
+        attr(PropScore, "g.star.obs") <- attr(a, "g.star")(TrtVal, CovDT)
+        
         return(PropScore)
     })
+    if (ReturnModels) attr(PropScores, "TrtFit") <- TrtFit
+    return(PropScores)
 }
 
 truncNuisanceDenom <- function(NuisanceDenom, MinNuisance) {

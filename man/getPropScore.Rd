@@ -5,20 +5,21 @@
 \title{Title}
 \usage{
 getPropScore(
-  Treatment,
-  CovDataTable,
+  TrtVal,
+  CovDT,
   TrtModel,
   MinNuisance,
   Regime,
   PropScoreBackend,
   CVFolds,
-  TrtLoss = NULL
+  TrtLoss = NULL,
+  ReturnModels
 )
 }
 \arguments{
-\item{Treatment}{numeric vector}
+\item{TrtVal}{numeric vector}
 
-\item{CovDataTable}{data.table}
+\item{CovDT}{data.table}
 
 \item{TrtModel}{list or fitted object}
 
@@ -31,6 +32,8 @@ getPropScore(
 \item{CVFolds}{list}
 
 \item{TrtLoss}{character or function(A, g.A)}
+
+\item{ReturnModels}{boolean}
 }
 \description{
 Title

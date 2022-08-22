@@ -20,8 +20,8 @@
 # #' @param MinNuisance : numeric
 # #' @param Verbose : boolean
 # #' @param GComp : boolean
+# #' @param ReturnModels boolean
 #'
-#' @import data.table
 #'
 #' @return tbd
 #'
@@ -67,69 +67,70 @@
 #' concrete.out$Risk
 
 doConcrete <- function(ConcreteArgs) {
-  return(do.call(doConCRTmle, ConcreteArgs))
+    if (!inherits(ConcreteArgs, "ConcreteArgs")) {
+        stop("doConcrete takes a single argument, the output of the formatArguments() function. ", 
+             "Run that function first and pass the resulting output into doConcrete() after ", 
+             "addressing any errors or warnings.")
+    }
+    return(do.call(doConCRTmle, ConcreteArgs))
 }
 
-doConCRTmle <- function(Data, CovDataTable, LongTime, ID, Events, Censored,
-                        TargetTime, TargetEvent, Regime,
-                        CVFolds, Model, PropScoreBackend, HazEstBackend,
-                        MaxUpdateIter, OneStepEps, MinNuisance,
-                        Verbose, GComp)
+doConCRTmle <- function(Data, TargetTime, TargetEvent, Regime, CVFolds, Model, PropScoreBackend, 
+                        HazEstBackend, MaxUpdateIter, OneStepEps, MinNuisance, Verbose, GComp, 
+                        ReturnModels)
 {
-  Time <- Event <- PnEIC <- `seEIC/(sqrt(n)log(n))` <- NULL # for data.table compatibility w/ global var binding check
-
-  # initial estimation ------------------------------------------------------------------------
-  Estimates <- getInitialEstimate(Data = Data, CovDataTable = CovDataTable,
-                                  Model = Model, CVFolds = CVFolds, MinNuisance = MinNuisance,
-                                  TargetEvent = TargetEvent, TargetTime = TargetTime, Regime = Regime,
-                                  PropScoreBackend = PropScoreBackend, HazEstBackend = HazEstBackend,
-                                  Censored = Censored)
-
-  # get initial EIC (possibly with GComp plug-in estimate) ---------------------------------------------
-  Estimates <- getEIC(Estimates = Estimates, Data = Data, Regime = Regime, Censored = Censored,
-                      TargetEvent = TargetEvent, TargetTime = TargetTime, Events = Events,
-                      MinNuisance = MinNuisance, GComp = GComp)
-
-
-  # Update step -------------------------------------------------------------------------------
-  ## Check if EIC is solved sufficienty and return outputs ----
-  ## check PnEIC <= seEIC / (sqrt(n) log(n))
-  SummEIC <- do.call(rbind, lapply(seq_along(Estimates), function(a) {
-    cbind("Trt" = names(Estimates)[a], Estimates[[a]][["SummEIC"]])}))
-  NormPnEIC <- getNormPnEIC(SummEIC[Time %in% TargetTime & Event %in% TargetEvent, PnEIC])
-  OneStepStop <- SummEIC[, list("check" = abs(PnEIC) <= `seEIC/(sqrt(n)log(n))`,
-                                "ratio" = abs(PnEIC) / `seEIC/(sqrt(n)log(n))`),
-                         by = c("Trt", "Time", "Event")]
-  if (Verbose)
-    print(OneStepStop[["ratio"]])
-
-  ## one-step tmle loop (one-step) ----
-  if (!all(sapply(OneStepStop[["check"]], isTRUE))) {
-    Estimates <- doTmleUpdate(Estimates = Estimates, SummEIC = SummEIC, Data = Data,
-                              Censored = Censored, TargetEvent = TargetEvent,
-                              TargetTime = TargetTime, Events = Events,
-                              MaxUpdateIter = MaxUpdateIter, OneStepEps = OneStepEps,
-                              NormPnEIC = NormPnEIC, Verbose = Verbose)
-  }
-
-  # format output --------------------------------------------------------------------------------------
-
-  # g-comp (sl estimate)
-  # unadjusted cox model
-  # tmle & ic
-
-  return(Estimates)
+    Time <- Event <- PnEIC <- `seEIC/(sqrt(n)log(n))` <- NULL # for data.table compatibility w/ global var binding check
+    
+    # initial estimation ------------------------------------------------------------------------
+    Estimates <- getInitialEstimate(Data = Data, Model = Model, CVFolds = CVFolds, MinNuisance = MinNuisance,
+                                    TargetEvent = TargetEvent, TargetTime = TargetTime, Regime = Regime,
+                                    PropScoreBackend = PropScoreBackend, HazEstBackend = HazEstBackend, 
+                                    ReturnModels = ReturnModels)
+    
+    # get initial EIC (possibly with GComp plug-in estimate) ---------------------------------------------
+    Estimates <- getEIC(Estimates = Estimates, Data = Data, Regime = Regime,
+                        TargetEvent = TargetEvent, TargetTime = TargetTime, 
+                        MinNuisance = MinNuisance, GComp = GComp)
+    
+    
+    # Update step -------------------------------------------------------------------------------
+    ## Check if EIC is solved sufficienty and return outputs ----
+    ## check PnEIC <= seEIC / (sqrt(n) log(n))
+    SummEIC <- do.call(rbind, lapply(seq_along(Estimates), function(a) {
+        cbind("Trt" = names(Estimates)[a], Estimates[[a]][["SummEIC"]])}))
+    NormPnEIC <- getNormPnEIC(SummEIC[Time %in% TargetTime & Event %in% TargetEvent, PnEIC])
+    OneStepStop <- SummEIC[, list("check" = abs(PnEIC) <= `seEIC/(sqrt(n)log(n))`,
+                                  "ratio" = abs(PnEIC) / `seEIC/(sqrt(n)log(n))`),
+                           by = c("Trt", "Time", "Event")]
+    if (Verbose)
+        print(OneStepStop[["ratio"]])
+    
+    ## one-step tmle loop (one-step) ----
+    if (!all(sapply(OneStepStop[["check"]], isTRUE))) {
+        Estimates <- doTmleUpdate(Estimates = Estimates, SummEIC = SummEIC, Data = Data,
+                                  TargetEvent = TargetEvent, TargetTime = TargetTime,
+                                  MaxUpdateIter = MaxUpdateIter, OneStepEps = OneStepEps,
+                                  NormPnEIC = NormPnEIC, Verbose = Verbose)
+    }
+    
+    # format output --------------------------------------------------------------------------------------
+    
+    # g-comp (sl estimate)
+    # unadjusted cox model
+    # tmle & ic
+    
+    return(Estimates)
 }
 
 getNormPnEIC <- function(PnEIC, Sigma = NULL) {
-  WeightedPnEIC <- PnEIC
-  if (!is.null(Sigma)) {
-    SigmaInv <- try(solve(Sigma))
-    if (any(class(SigmaInv) == "try-error")) {
-      SigmaInv <- solve(Sigma + diag(x = 1e-6, nrow = nrow(Sigma)))
-      warning("regularization of Sigma needed for inversion")
+    WeightedPnEIC <- PnEIC
+    if (!is.null(Sigma)) {
+        SigmaInv <- try(solve(Sigma))
+        if (any(class(SigmaInv) == "try-error")) {
+            SigmaInv <- solve(Sigma + diag(x = 1e-6, nrow = nrow(Sigma)))
+            warning("regularization of Sigma needed for inversion")
+        }
+        WeightedPnEIC <- PnEIC %*% SigmaInv
     }
-    WeightedPnEIC <- PnEIC %*% SigmaInv
-  }
-  return(sqrt(sum(unlist(PnEIC) * unlist(WeightedPnEIC))))
+    return(sqrt(sum(unlist(PnEIC) * unlist(WeightedPnEIC))))
 }

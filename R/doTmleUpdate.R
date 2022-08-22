@@ -32,10 +32,8 @@
 #' @param Estimates list
 #' @param SummEIC data.table
 #' @param Data data.table
-#' @param Censored boolean
 #' @param TargetEvent numeric vector
 #' @param TargetTime numeric vector
-#' @param Events numeric vector
 #' @param MaxUpdateIter numeric
 #' @param OneStepEps numeric
 #' @param NormPnEIC numeric
@@ -43,7 +41,7 @@
 #'
 #' @importFrom nleqslv nleqslv
 
-doTmleUpdate <- function(Estimates, SummEIC, Data, Censored, TargetEvent, TargetTime, Events,
+doTmleUpdate <- function(Estimates, SummEIC, Data, TargetEvent, TargetTime, 
                          MaxUpdateIter, OneStepEps, NormPnEIC, Verbose) {
     Time <- Event <- `seEIC/(sqrt(n)log(n))` <- PnEIC <- NULL
     EvalTimes <- attr(Estimates, "times")
@@ -65,7 +63,7 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, Censored, TargetEvent, Target
                                        Hazards = est.a[["Hazards"]],
                                        TotalSurv = est.a[["EvntFreeSurv"]],
                                        NuisanceWeight = est.a[["NuisanceWeight"]],
-                                       Events = Events, EvalTimes = EvalTimes, T.tilde = T.tilde,
+                                       EvalTimes = EvalTimes, T.tilde = T.tilde,
                                        Delta = Delta, PnEIC = est.a[["SummEIC"]],
                                        NormPnEIC = NormPnEIC, OneStepEps = onestep.eps,
                                        TargetEvent = TargetEvent, TargetTime = TargetTime)
@@ -75,7 +73,7 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, Censored, TargetEvent, Target
                       Hazards = NewHazards, TotalSurv = NewSurv,
                       NuisanceWeight = est.a[["NuisanceWeight"]],
                       TargetEvent = TargetEvent, TargetTime = TargetTime,
-                      Events = Events, T.tilde = T.tilde, Delta = Delta,
+                      T.tilde = T.tilde, Delta = Delta,
                       EvalTimes = EvalTimes, GComp = FALSE)
             )
             return(list("Hazards" = NewHazards, "EvntFreeSurv" = NewSurv, "SummEIC" = NewIC))
@@ -120,7 +118,7 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, Censored, TargetEvent, Target
     return(Estimates)
 }
 
-updateHazard <- function(GStar, Hazards, TotalSurv, NuisanceWeight, Events, EvalTimes, T.tilde,
+updateHazard <- function(GStar, Hazards, TotalSurv, NuisanceWeight, EvalTimes, T.tilde,
                          Delta, PnEIC, NormPnEIC, OneStepEps, TargetEvent, TargetTime) {
     eps <- Time <- Event <- NULL
     Iterative <- FALSE
@@ -149,8 +147,7 @@ updateHazard <- function(GStar, Hazards, TotalSurv, NuisanceWeight, Events, Eval
                                                                TotalSurv = TotalSurv,
                                                                NuisanceWeight = NuisanceWeight,
                                                                TargetEvent = TargetEvent,
-                                                               TargetTime = TargetTime,
-                                                               Events = Events, T.tilde = T.tilde,
+                                                               TargetTime = TargetTime, T.tilde = T.tilde,
                                                                Delta = Delta, EvalTimes = EvalTimes,
                                                                GComp = FALSE, l = attr(haz.al, "j"),
                                                                fluct.eps = eps))$x
@@ -160,8 +157,7 @@ updateHazard <- function(GStar, Hazards, TotalSurv, NuisanceWeight, Events, Eval
                                                                     TotalSurv = TotalSurv,
                                                                     NuisanceWeight = NuisanceWeight,
                                                                     TargetEvent = j,
-                                                                    TargetTime = TargetTime,
-                                                                    Events = Events, T.tilde = T.tilde,
+                                                                    TargetTime = TargetTime, T.tilde = T.tilde,
                                                                     Delta = Delta, EvalTimes = EvalTimes,
                                                                     GComp = FALSE, l = attr(haz.al, "j"),
                                                                     fluct.eps = eps))$x
@@ -170,8 +166,7 @@ updateHazard <- function(GStar, Hazards, TotalSurv, NuisanceWeight, Events, Eval
                                                                          TotalSurv = TotalSurv,
                                                                          NuisanceWeight = NuisanceWeight,
                                                                          TargetEvent = j,
-                                                                         TargetTime = tau,
-                                                                         Events = Events, T.tilde = T.tilde,
+                                                                         TargetTime = tau, T.tilde = T.tilde,
                                                                          Delta = Delta, EvalTimes = EvalTimes,
                                                                          GComp = FALSE, l = attr(haz.al, "j"),
                                                                          fluct.eps = eps))$x
@@ -209,8 +204,8 @@ updateHazard <- function(GStar, Hazards, TotalSurv, NuisanceWeight, Events, Eval
     })
 }
 
-getFluctPnEIC <- function(GStar, Hazards, TotalSurv, NuisanceWeight, TargetEvent, TargetTime,
-                          Events, T.tilde, Delta, EvalTimes, GComp, l = NULL, fluct.eps = NULL) {
+getFluctPnEIC <- function(GStar, Hazards, TotalSurv, NuisanceWeight, TargetEvent, TargetTime, 
+                          T.tilde, Delta, EvalTimes, GComp, l = NULL, fluct.eps = NULL) {
     IC <- F.j.tau <- eps <- NULL
     Target <- expand.grid("Time" = TargetTime, "Event" = TargetEvent)
     IC.a <- do.call(rbind, lapply(1:ncol(NuisanceWeight), function(i) {

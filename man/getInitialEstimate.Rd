@@ -6,7 +6,6 @@
 \usage{
 getInitialEstimate(
   Data,
-  CovDataTable,
   Model,
   CVFolds,
   MinNuisance,
@@ -15,13 +14,11 @@ getInitialEstimate(
   Regime,
   PropScoreBackend,
   HazEstBackend,
-  Censored
+  ReturnModels
 )
 }
 \arguments{
 \item{Data}{data.table}
-
-\item{CovDataTable}{data.table}
 
 \item{Model}{list}
 
@@ -39,7 +36,7 @@ getInitialEstimate(
 
 \item{HazEstBackend}{character}
 
-\item{Censored}{boolean}
+\item{ReturnModels}{boolean}
 }
 \description{
 Title
