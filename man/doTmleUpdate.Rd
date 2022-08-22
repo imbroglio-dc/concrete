@@ -8,10 +8,8 @@ doTmleUpdate(
   Estimates,
   SummEIC,
   Data,
-  Censored,
   TargetEvent,
   TargetTime,
-  Events,
   MaxUpdateIter,
   OneStepEps,
   NormPnEIC,
@@ -25,13 +23,9 @@ doTmleUpdate(
 
 \item{Data}{data.table}
 
-\item{Censored}{boolean}
-
 \item{TargetEvent}{numeric vector}
 
 \item{TargetTime}{numeric vector}
-
-\item{Events}{numeric vector}
 
 \item{MaxUpdateIter}{numeric}
 

@@ -8,10 +8,8 @@ getEIC(
   Estimates,
   Data,
   Regime,
-  Censored,
   TargetEvent,
   TargetTime,
-  Events,
   MinNuisance,
   GComp = FALSE
 )
@@ -23,13 +21,9 @@ getEIC(
 
 \item{Regime}{list}
 
-\item{Censored}{boolean}
-
 \item{TargetEvent}{numeric vector}
 
 \item{TargetTime}{numeric vector}
-
-\item{Events}{numeric vector}
 
 \item{MinNuisance}{numeric}
 

@@ -23,8 +23,8 @@
 #' @param EventType character: the column name of the observed event type. (0 indicating censoring)
 #' @param Treatment character: the column name of the observed treatment assignment
 #' @param ID character (default: NULL): the column name of the observed subject id
-#' @param LongTime character (not ready): the column name of the monitoring times for
-#'                                        longitudinal data structures
+#' @param LongTime character (not used): the column name of the monitoring times for
+#'                                       longitudinal data structures
 #' @param Intervention list: a list of desired interventions on the treatment variable.
 #'                           Each intervention must be a list containing two named functions: 
 #'                             'intervention' = function(treatment vector, covariate data) and 
@@ -48,13 +48,43 @@
 #' clever covariate
 #' @param Verbose boolean
 #' @param GComp boolean
+#' @param ReturnModels boolean
 #' @param ... ...
 #'
-#' @return tbd
+#' @return a list of class "ConcreteArgs"
+#' \itemize{
+#'   \item{"Data"}{: data.table containing EventTime, EventType, Treatment, and baseline covariates}
+#'   \item{"Events"}{: numeric vector encoding unique failure event types}
+#'   \item{"TargetTime"}{: numeric vector of target times to evaluate risk/survival}
+#'   \item{"TargetEvent"}{: numeric vector of target events}
+#'   \item{"Regime"}{: named list of interventions, comprised of two functions}
+#'     \itemize{
+#'       \item{"intervention"}{: function of Treatment and Covariates, outputting a vector of desired treatment assignments}
+#'       \item{"g.star"}{: function of Treatment and Covariates, outputting a vector of desired treatment assignment probabilities}
+#'     }
+#'   \item{"CVFolds"}{: list of cross-validation fold assignments in the structure as output by origami::make_folds()}
+#'   \item{"Model"}{: list of cross-validation fold assignments in the structure as output by origami::make_folds()}
+#'   \item{"PropScoreBackend"}{: list of cross-validation fold assignments in the structure as output by origami::make_folds()}
+#'   \item{"HazEstBackend"}{: list of cross-validation fold assignments in the structure as output by origami::make_folds()}
+#'   \item{"MaxUpdateIter"}{: list of cross-validation fold assignments in the structure as output by origami::make_folds()}
+#'   \item{"OneStepEps"}{: list of cross-validation fold assignments in the structure as output by origami::make_folds()}
+#'   \item{"MinNuisance"}{: numeric cutoff}
+#'   \item{"Verbose"}{: boolean}
+#'   \item{"GComp"}{: boolean, to return g-computation formula plug-in estimates or not}
+#' }
+#' May include
+#' \itemize{
+#'   \item{"ID"}{: factor, character, or numeric; unique subject id. If ID column is missing, row 
+#'   numbers will be used as ID. For longitudinal data, ID must be provided}
+#'   \item{"LongTime"}{: numeric; Specifies monitoring times for longitudinal data structures}
+#'   \item{"Baseline Covariates"}{: factor, character, or numeric; }
+#' }
 #'
 #' @importFrom stats model.matrix as.formula
 #' @importFrom utils tail
+#' @importFrom survival Surv coxph
 #' @import origami
+#' @import data.table
 #'
 #' @examples 
 #' library(data.table)
@@ -101,263 +131,324 @@
 #' 
 #' @export formatArguments
 
-formatArguments <- function(DataTable, DataStructure = NULL, EventTime, EventType, Treatment, ID = NULL, 
-                            LongTime = NULL, Intervention, TargetTime, TargetEvent, Target = NULL,
+formatArguments <- function(ConcreteArgs = NULL, DataTable, DataStructure = NULL, EventTime, EventType, Treatment, ID = NULL, 
+                            LongTime = NULL, Intervention, TargetTime, TargetEvent = NULL, Target = NULL,
                             CVArg = list(n = nrow(DataTable), fold_fun = folds_vfold,
                                          cluster_ids = NULL, strata_ids = NULL),
                             Model = NULL, PropScoreBackend = "SuperLearner", HazEstBackend = "coxph",
                             MaxUpdateIter = 100, OneStepEps = 0.1, MinNuisance = 0.05,
-                            Verbose = TRUE, GComp = TRUE, ConcreteArgs = NULL, ...)
+                            Verbose = TRUE, GComp = TRUE, ReturnModels = TRUE, ...)
 {
     ## Data Structure ----
     # incorporate prodlim::EventHistory.frame?
     if (!is.null(ConcreteArgs)) {
-        stop("re-checking formatArguments output not yet ready")
-    } else {
-        data.tbl <- formatDataTable(x = DataTable, EventTime = EventTime, EventType = EventType,
-                                    Treatment = Treatment, ID = ID, LongTime = LongTime)
-        attr(data.tbl, "EventTime") <- EventTime
-        attr(data.tbl, "EventType") <- EventType
-        attr(data.tbl, "Treatment") <- Treatment
-        attr(data.tbl, "LongTime") <- LongTime
-        attr(data.tbl, "ID") <- ID
-        
-        event.time <- getEventTime(x = EventTime, DataTable = data.tbl)
-        event.type <- getEventType(x = EventType, DataTable = data.tbl)
-        treatment <- getTreatment(x = Treatment, DataTable = data.tbl)
-        id <- getID(x = ID, DataTable = DataTable)
-        long.time <- getLongTime(x = LongTime, DataTable = data.tbl)
-        cov.data.table <- getCovDataTable(DataTable = data.tbl, EventTime = EventTime,
-                                          EventType = EventType, Treatment = Treatment, ID = ID,
-                                          LongTime = LongTime, Verbose = Verbose)
-        censored <- 0 %in% event.type
-        event.type.unique <- setdiff(sort(unique(event.type)), 0)
+        if (!inherits(ConcreteArgs, "ConcreteArgs"))
+            stop("ConcreteArgs must be of class 'ConcreteArgs', the output of ", 
+                 "concrete::formatArguments()")
+        DataTable <- ConcreteArgs[["Data"]]
+        EventTime <- attr(DataTable, "EventTime")
+        EventType <- attr(DataTable, "EventType")
+        Treatment <- attr(DataTable, "Treatment")
+        LongTime <- attr(DataTable, "LongTime")
+        ID <- attr(DataTable, "ID")
+        Intervention <- ConcreteArgs[["Regime"]]
+        TargetEvent <- ConcreteArgs[["TargetEvent"]]
+        TargetTime <- ConcreteArgs[["TargetTime"]]
+        CVArg <- attr(ConcreteArgs[["CVFolds"]], "CVArg")
+        CVSeed <- attr(ConcreteArgs[["CVFolds"]], "CVSeed")
+        PropScoreBackend <- ConcreteArgs[["PropScoreBackend"]]
+        HazEstBackend <- ConcreteArgs[["HazEstBackend"]]
+        Model <- ConcreteArgs[["Model"]]
+        MaxUpdateIter <- ConcreteArgs[["MaxUpdateIter"]]
+        OneStepEps <- ConcreteArgs[["OneStepEps"]]
+        MinNuisanc <- ConcreteArgs[["MinNuisanc"]]
+        Verbose <- ConcreteArgs[["Verbose"]]
+        GComp <- ConcreteArgs[["GComp"]]
+        ReturnModels <- ConcreteArgs[["ReturnModels"]]
     }
+    DataTable <- formatDataTable(DT = DataTable, EventTime = EventTime, EventType = EventType, ID = ID, 
+                                 Treatment = Treatment, LongTime = LongTime, Verbose = Verbose)
+    
+    TimeVal <- DataTable[[EventTime]]
+    TypeVal <- DataTable[[EventType]]
+    TrtVal <- DataTable[[Treatment]]
+    CovNames <- setdiff(colnames(DataTable), c(EventTime, EventType, Treatment, ID, LongTime))
+    CovDT <- subset(DataTable, select = CovNames)
+    attr(CovDT, "CovNames") <- attr(DataTable, "CovNames")
+    Censored <- 0 %in% TypeVal
+    UniqueEvents <- setdiff(sort(unique(TypeVal)), 0)
     
     ## Interventions & Targets ----
-    regime <- getRegime(Intervention = Intervention, Treatment = treatment,
-                        CovDataTable = cov.data.table)
+    Regime <- getRegime(Intervention = Intervention, TrtVal = TrtVal, CovDT = CovDT)
     
-    target.event <- getTargetEvent(TargetEvent = TargetEvent, UniqueEvents = event.type.unique)
-    checkTargetTime(TargetTime = TargetTime, EventTime = event.time, TargetEvent = TargetEvent,
-                    EventType = event.type)
+    TargetEvent <- getTargetEvent(TargetEvent = TargetEvent, UniqueEvents = UniqueEvents)
+    checkTargetTime(TargetTime = TargetTime, TimeVal = TimeVal, TargetEvent = TargetEvent,
+                    TypeVal = TypeVal)
     
     ## Estimation Paramters ----
-    cv.folds <- getCVFolds(CVArg)
+    if (!exists("CVSeed")) CVSeed <- sample(0:1e8, 1)
+    CVFolds <- getCVFolds(CVArg = CVArg, CVSeed = CVSeed)
     checkPropScoreBackend(PropScoreBackend)
     checkHazEstBackend(HazEstBackend)
-    model <- getModel(Model = Model, UniqueEvent = event.type.unique, Censored = censored, 
+    Model <- getModel(Model = Model, UniqueEvents = UniqueEvents, Censored = Censored, 
                       HazEstBackend = HazEstBackend, PropScoreBackend = PropScoreBackend,
-                      EventTime = EventTime, EventType = EventType, Treatment = Treatment)
+                      EventTime = EventTime, EventType = EventType, Treatment = Treatment, 
+                      CovDT = CovDT)
     
     ## TMLE Update Parameters ----
-    max.update.iter <- getMaxUpdateIter(MaxUpdateIter)
+    MaxUpdateIter <- getMaxUpdateIter(MaxUpdateIter)
     checkOneStepEps(OneStepEps)
-    
-    # min.nuisance <- getMinNuisance()
+    MinNuisance <- getMinNuisance(MinNuisance)
     
     ## Misc. Parameters
     checkVerbose(Verbose)
-    
     checkGComp(GComp)
     
     ## return
-    concrete.args <- list(Data = data.tbl,
-                          CovDataTable = cov.data.table,
-                          LongTime = long.time,
-                          ID = id,
-                          Events = event.type.unique,
-                          Censored = censored,
-                          TargetTime = TargetTime,
-                          TargetEvent = target.event,
-                          Regime = regime,
-                          CVFolds = cv.folds,
-                          Model = model,
-                          PropScoreBackend = PropScoreBackend,
-                          HazEstBackend = HazEstBackend,
-                          MaxUpdateIter = max.update.iter,
-                          OneStepEps = OneStepEps,
-                          MinNuisance = MinNuisance,
-                          Verbose = Verbose,
-                          GComp = GComp)
-    class(concrete.args) <- union(class(concrete.args), "concrete.args")
-    return(concrete.args)
+    ConcreteArgs <- list(Data = DataTable,
+                         TargetTime = TargetTime,
+                         TargetEvent = TargetEvent,
+                         Regime = Regime,
+                         CVFolds = CVFolds,
+                         Model = Model,
+                         PropScoreBackend = PropScoreBackend,
+                         HazEstBackend = HazEstBackend,
+                         MaxUpdateIter = MaxUpdateIter,
+                         OneStepEps = OneStepEps,
+                         MinNuisance = MinNuisance,
+                         Verbose = Verbose,
+                         GComp = GComp, 
+                         ReturnModels = ReturnModels)
+    class(ConcreteArgs) <- union(class(ConcreteArgs), "ConcreteArgs")
+    return(ConcreteArgs)
 }
 
-formatDataTable <- function(x, EventTime, EventType, Treatment, ID, LongTime) {
-    data_types <- c("matrix", "data.frame", "data.table")
-    if (!any(sapply(data_types, function(class) inherits(x, class))))
-        stop("CovDataTable must be a data.table or a matrix / data.frame coercible into data.table.")
-    if (!inherits(x, "data.table"))
-        x <- data.table::as.data.table(x)
-    if (any(is.infinite(unlist(x)), anyNA(unlist(x))))
+formatDataTable <- function(DT, EventTime, EventType, Treatment, ID, LongTime, Verbose) {
+    if (!inherits(DT, "data.table"))
+        DT <- try(data.table::as.data.table(DT))
+    if (!inherits(DT, "data.table"))
+        stop("CovDataTable must be a data.table or coercible into a data.table.")
+    if (any(is.infinite(unlist(DT)), anyNA(unlist(DT))))
         stop("CovDataTable contains infinite or missing values; regression models may break")
-    return(x)
-}
-
-getEventTime <- function(x, DataTable = NULL) {
-    if (is.character(x)) {
-        tmp <- try(DataTable[[x]])
-        if (inherits(tmp, "try-error"))
-            stop("No column named '", x, "' was found in the supplied data. Check spelling ", 
-                 "or input argument into DataTable")
-        attr(tmp, "var.name") <- x
-        x <- tmp
+    
+    checkEventTime(EventTime = EventTime, DataTable = DT)
+    checkEventType(EventType = EventType, DataTable = DT)
+    checkTreatment(Treatment = Treatment, DataTable = DT)
+    ID <- getID(ID = ID, DataTable = DT)
+    DT[[ID[["IDName"]]]] <- ID[["IDVal"]]
+    ID <- ID[["IDName"]]
+    LongTime <- NULL # LongTime <- getLongTime(LongTime = LongTime, DataTable = DT)
+    
+    CovNames <- setdiff(colnames(DT), c(EventTime, EventType, Treatment, ID, LongTime))
+    if (identical(unlist(regmatches(CovNames, gregexpr("L\\d+", CovNames))), character(0))) {
+        CovDT <- getCovDataTable(DataTable = DT, EventTime = EventTime, EventType = EventType, 
+                                 Treatment = Treatment, ID = ID, LongTime = LongTime, 
+                                 Verbose = Verbose)
+        DT <- cbind(subset(DT, select = c(EventTime, EventType, Treatment, ID, LongTime)), CovDT)
+        attr(DT, "CovNames") <- attr(CovDT, "CovNames")
     }
-    if (any(!is.numeric(x), try(x <= 0), inherits(try(x <= 0), "try-error"),
-            is.infinite(x), is.list(x)))
-        stop("EventTime must be a numeric vector with positive, finite values")
-    return(x)
+    attr(DT, "EventTime") <- EventTime
+    attr(DT, "EventType") <- EventType
+    attr(DT, "Treatment") <- Treatment
+    attr(DT, "LongTime") <- LongTime
+    attr(DT, "ID") <- ID
+    return(DT)
 }
 
-getEventType <- function(x, DataTable = NULL) {
-    if (is.character(x)) {
-        tmp <- try(DataTable[[x]])
+checkEventTime <- function(EventTime, DataTable = NULL) {
+    if (is.character(EventTime)) {
+        tmp <- try(DataTable[[EventTime]])
         if (inherits(tmp, "try-error"))
-            stop("No column named '", x, "' was found in the supplied data. Check spelling ", 
-                 "or input argument into DataTable")
-        attr(tmp, "var.name") <- x
-        x <- tmp
-    }
-    if (any(!is.numeric(x), try(x < 0), inherits(try(x < 0), "try-error"), is.list(x)))
-        stop("EventType must be a numeric vector with non-negative values (0 indicating censoring)")
-    return(x)
+            stop("No column named '", EventTime, "' was found in the supplied data. Check the ", 
+                 "`EventTime=` and the `DataTable=` argument inputs")
+        attr(tmp, "var.name") <- EventTime
+        EventTime <- tmp
+        if (any(!is.numeric(EventTime), try(EventTime <= 0), is.infinite(EventTime), 
+                inherits(try(EventTime <= 0), "try-error"), is.list(EventTime)))
+            stop("EventTime must be a numeric vector with positive, finite values")
+    } else 
+        stop("`EventTime` must be the name of the column containing the observed event times.")
 }
 
-getTreatment <- function(x, DataTable = NULL) {
-    if (is.character(x)) {
-        tmp <- try(DataTable[[x]])
+checkEventType <- function(EventType, DataTable = NULL) {
+    if (is.character(EventType)) {
+        tmp <- try(DataTable[[EventType]])
         if (inherits(tmp, "try-error"))
-            stop("No column named '", x, "' was found in the supplied data. Check spelling ", 
+            stop("No column named '", EventType, "' was found in the supplied data. Check spelling ", 
                  "or input argument into DataTable")
-        attr(tmp, "var.name") <- x
-        x <- tmp
-    }
-    if (any(!is.numeric(x), is.nan(x), is.infinite(x), is.list(x)))
-        stop("Treatment must be a numeric vector with finite values")
-    return(x)
+        attr(tmp, "var.name") <- EventType
+        EventType <- tmp
+        if (any(!is.numeric(EventType), try(EventType < 0), 
+                inherits(try(EventType < 0), "try-error"), is.list(EventType)))
+            stop("EventType must be a numeric vector with non-negative values (0 indicating censoring)")
+    } else 
+        stop("`EventType` must be the name of the column containing the observed event types (", 
+             "with 0 indicating censoring).")
 }
 
-getID <- function(x, DataTable = NULL) {
-    if (is.null(x)) {
-        x <- 1:nrow(DataTable)
+checkTreatment <- function(Treatment, DataTable = NULL) {
+    if (is.character(Treatment)) {
+        tmp <- try(DataTable[[Treatment]])
+        if (inherits(tmp, "try-error"))
+            stop("No column named '", Treatment, "' was found in the supplied data. Check spelling ", 
+                 "or input argument into DataTable")
+        attr(tmp, "var.name") <- Treatment
+        Treatment <- tmp
+        if (any(!is.numeric(Treatment), is.nan(Treatment), is.infinite(Treatment), is.list(Treatment)))
+            stop("Treatment must be a numeric vector with finite values")
+    } else 
+        stop("`Treatment` must be the name of the column containing the intervention variable.")
+    return(Treatment)
+}
+
+getID <- function(ID, DataTable = NULL) {
+    if (is.null(ID)) {
+        ID <- "ID"
+        IDVal <- 1:nrow(DataTable)
         message("No ID column specified. DataTable row numbers will be used as subject IDs, ",
                 "which will not be appropriate for longitudinal data structures.")
     }
-    if (is.character(x)) {
-        tmp <- try(DataTable[[x]])
-        if (inherits(tmp, "try-error"))
-            stop("No column named '", x, "' was found in the supplied data. Check spelling ", 
+    if (is.character(ID)) {
+        IDVal <- try(DataTable[[ID]])
+        if (inherits(IDVal, "try-error"))
+            stop("No column named '", ID, "' was found in the supplied data. Check spelling ", 
                  "or input argument into DataTable")
-        attr(tmp, "var.name") <- x
-        x <- tmp
+        attr(IDVal, "var.name") <- ID
     }
-    if (any(is.list(x), is.null(x), is.nan(x), is.na(x)))
+    if (any(is.list(IDVal), is.null(IDVal), is.nan(IDVal), is.na(IDVal)))
         stop("ID column must not include missing values")
-    return(x)
+    return(list(IDVal = IDVal, IDName = ID))
 }
 
-getLongTime <- function(x, DataTable = NULL) {
-    if (!is.null(x)) warning("Longitudinal data structures not yet supported.")
+getLongTime <- function(LongTime, DataTable = NULL) {
+    if (!is.null(LongTime)) stop("Longitudinal data structures not yet supported.")
     return(NULL)
 }
 
 getCovDataTable <- function(DataTable, EventTime, EventType, Treatment, ID, LongTime, Verbose) {
     "(Intercept)" <- NULL
-    cov.names <- setdiff(colnames(DataTable), c(EventTime, EventType, Treatment, ID, LongTime))
-    cov.dt <- DataTable[, .SD ,.SDcols = cov.names]
-    non.num.ind <- sapply(cov.names, function(cov.name) {!inherits(cov.dt[[cov.name]], c("numeric", "integer"))})
-    cov.names.1hot <- data.table()
+    CovNames <- setdiff(colnames(DataTable), c(EventTime, EventType, Treatment, ID, LongTime))
+    CovDT <- DataTable[, .SD ,.SDcols = CovNames]
+    NonNumInd <- sapply(CovNames, function(CovName) {!inherits(CovDT[[CovName]], c("numeric", "integer"))})
+    CovNames1Hot <- data.table()
     
-    if (length(cov.names[!non.num.ind]) == 0) {
-        cov.dt.1hot <- data.table()
+    if (length(CovNames[NonNumInd]) == 0) {
+        return(CovDT)
+    } else 
+        message("Categorical covariates detected: DataTable will be 1-hot encoded.")
+    
+    if (length(CovNames[!NonNumInd]) == 0) {
+        CovDT1Hot <- data.table()
         l <- 0
     } else {
-        cov.dt.1hot <- cov.dt[, .SD, .SDcols = cov.names[!non.num.ind]]
-        cov.names.1hot[, list(col.name = paste0("L", 1:ncol(cov.dt.1hot)),
-                              cov.name = colnames(cov.dt.1hot), 
-                              cov.val = colnames(cov.dt.1hot))]
-        setnames(cov.dt.1hot, colnames(cov.dt.1hot), paste0("L", 1:ncol(cov.dt.1hot)))
-        l <- ncol(cov.dt.1hot)
+        CovDT1Hot <- CovDT[, .SD, .SDcols = CovNames[!NonNumInd]]
+        CovNames1Hot <- CovNames1Hot[, list(ColName = paste0("L", 1:ncol(CovDT1Hot)),
+                                            CovName = colnames(CovDT1Hot), 
+                                            CovVal = colnames(CovDT1Hot))]
+        setnames(CovDT1Hot, colnames(CovDT1Hot), paste0("L", 1:ncol(CovDT1Hot)))
+        l <- ncol(CovDT1Hot)
     }
     
-    for (cov.name in cov.names[non.num.ind]) {
-        cov.1hot <- as.data.table(model.matrix(~., subset(cov.dt, select = cov.name)))[, `(Intercept)` := NULL]
-        cov.names.1hot <- rbind(cov.names.1hot,
-                                data.table(col.name = paste0("L", l + 1:ncol(cov.1hot)),
-                                           cov.name = cov.name,
-                                           cov.val = colnames(cov.1hot)))
-        setnames(cov.1hot, colnames(cov.1hot), paste0("L", l + 1:ncol(cov.1hot)))
-        l <- l + ncol(cov.1hot)
+    for (CovName in CovNames[NonNumInd]) {
+        Cov1Hot <- as.data.table(model.matrix(~., subset(CovDT, select = CovName)))[, `(Intercept)` := NULL]
+        CovNames1Hot <- rbind(CovNames1Hot,
+                              data.table(ColName = paste0("L", l + 1:ncol(Cov1Hot)),
+                                         CovName = CovName,
+                                         CovVal = colnames(Cov1Hot)))
+        setnames(Cov1Hot, colnames(Cov1Hot), paste0("L", l + 1:ncol(Cov1Hot)))
+        l <- l + ncol(Cov1Hot)
         
-        cov.dt.1hot <- cbind(cov.dt.1hot, cov.1hot)
+        CovDT1Hot <- cbind(CovDT1Hot, Cov1Hot)
     }
     
-    attr(cov.dt.1hot, "cov.names") <- cov.names.1hot
+    attr(CovDT1Hot, "CovNames") <- CovNames1Hot
     
     if (Verbose) {
-        # try(superheat::superheat(cov(scale(model.matrix(~., cov.dt.1hot)))))
+        # try(superheat::superheat(cov(scale(model.matrix(~., CovDT1Hot)))))
     }
-    
-    return(cov.dt.1hot)
+    return(CovDT1Hot)
 }
 
-getRegime <- function(Intervention, Treatment, CovDataTable) {
+getRegime <- function(Intervention, TrtVal, CovDT) {
     if (is.list(Intervention)) {
-        Regime <- lapply(seq_along(Intervention), function(i) {
-            regime <- Intervention[[i]]
-            reg_name <- names(Intervention)[i]
-            if (is.function(regime$intervention)) {
-                Regime <- try(do.call(regime$intervention, list(Treatment, CovDataTable)))
-                if (inherits(Regime, "try-error"))
+        Regimes <- lapply(seq_along(Intervention), function(i) {
+            Regime <- Intervention[[i]]
+            if (is.null(names(Intervention))) {
+                RegName <- paste0("intervention", i)
+            } else if (names(Intervention)[i] == "") {
+                RegName <- paste0("intervention", i)
+            } else 
+                RegName <- names(Intervention)[i]
+            
+            # regime ----
+            if (is.numeric(unlist(Regime))) {
+                RegimeVal <- Regime
+            } else if (is.function(Regime[["intervention"]])) {
+                RegimeVal <- try(do.call(Regime[["intervention"]], list(TrtVal, CovDT)))
+                if (inherits(RegimeVal, "try-error"))
                     stop("Intervention must be a list of regimes specificed as list(intervention",
                          " = f(A, L), g.star = g(A, L)), and intervention function f(A, L) must ",
                          "be a function of treatment and covariates that returns numeric desired",
                          " treatment assignments (a*) with the same dimensions as the observed ",
-                         "treatment. Amend Intervention[[", reg_name, "]] and try again")
-                if (any(length(unlist(Regime)) != length(unlist(Treatment)), !is.numeric(unlist(Regime))))
-                    stop("The intervention functions f(A, L) must be functions of treatment and ",
-                         "covariates that return numeric desired treatment assignments (a*) with ",
-                         "the same dimensions as the observed treatment. Amend Intervention[[",
-                         reg_name, "]] and try again")
-                if (mean(unlist(Regime) == unlist(Treatment)) < 0.05)
-                    warning("The intervention function f(A, L) specified in Intervention[[", reg_name,
-                            "]] is likely to cause near-positivity issues, resulting in inflated ",
-                            "variance and perhaps instability. Highly recommend reconsidering this",
-                            "choice of intervention.")
-                if (is.null(regime$g.star)) {
-                    attr(Regime, "g.star") <- function(a) as.numeric(a == Regime)
-                    message("No g.star function specified, defaulting to the indicator that observed",
-                            "treatment equals the intervention output treatment level, 1(A = a*).")
-                } else {
-                    attr(Regime, "g.star") <- regime$g.star
-                    testRegGStar <- try(do.call(regime$g.star, list(Treatment, CovDataTable)))
-                    if (inherits(testRegGStar, "try-error"))
-                        stop("Intervention must be a list of regimes specificed as list(intervention",
-                             " = f(A, L), g.star = g(A, L)), and the g.star function f(A, L) must ",
-                             "be a function of treatment and covariates that returns numeric ",
-                             "probabilities bounded in [0, 1]. Amend Intervention[[", reg_name,
-                             "]] and try again")
-                }
-                return(Regime)
+                         "treatment. Amend Intervention[[", RegName, "]] and try again")
             }
-            else
-                stop("Intervention must be a list of named regimes, each specificed as ",
-                     "list(intervention = f(A, L), g.star = g(A, L)). The intervention ",
-                     "function f(A, L) must be a function of treatment and covariates that ",
-                     "returns numeric desired treatment assignments (a*) with the same dimensions",
-                     " as the observed treatment. The g.star function f(A, L) must be a function ",
-                     "of treatment and covariates that returns numeric probabilities bounded in",
-                     "[0, 1]. Amend Intervention[[", reg_name, "]] and try again.")
-        })
-    } else if (all(try(as.character(Intervention)) %in% c("0", "1"))) {
-        Regime <- list()
-        if ("1" %in% try(as.character(Intervention)))
-            Regime[["A=1"]] <- list("intervention" = function(a, L) {rep_len(1, length(a))},
-                                    "g.star" = function(a, L) {as.numeric(a == 1)})
-        if ("0" %in% try(as.character(Intervention)))
-            Regime[["A=0"]] <- list("intervention" = function(a, L) {rep_len(0, length(a))},
-                                    "g.star" = function(a, L) {as.numeric(a == 0)})
+            
+            if (!all(length(unlist(RegimeVal)) == length(unlist(TrtVal)),
+                     min(unlist(RegimeVal)) >= min(unlist(TrtVal)), 
+                     max(unlist(RegimeVal)) <= max(unlist(TrtVal))))
+                stop("If providing an intervention function, the function output must return a ",
+                     "numeric vector of desired treatment assignments (a*) with the same ",
+                     "dimensions as the observed treatment and with values within the observed ", 
+                     "range. If providing intervention values, then the input must have the same ", 
+                     "dimensions as the observed treatment withvalues within the observed range.",
+                     "Amend Intervention[[", RegName, "]] and try again")
+            
+            if (mean(unlist(RegimeVal) == unlist(TrtVal)) < 0.05)
+                warning("The intervention function f(A, L) specified in Intervention[[", RegName,
+                        "]] is likely to cause near-positivity issues, resulting in inflated ",
+                        "variance and perhaps instability. Recommend specifying an intervention",
+                        "better supported in the observed data.")
+            
+            # g.star ----
+            if (!is.null(attr(Regime, "g.star"))) {
+                attr(RegimeVal, "g.star") <- attr(Regime, "g.star")
+            } else if (is.list(Regime)) {
+                attr(RegimeVal, "g.star") <- Regime[["g.star"]]
+            } 
+            if (is.null(attr(RegimeVal, "g.star"))) {
+                attr(RegimeVal, "g.star") <- function(a) as.numeric(a == RegimeVal)
+                message("No g.star function specified, defaulting to the indicator that observed",
+                        "treatment equals the desired treatment assignment, 1(A = a*).")
+            } 
+            
+            GStarOK <- try(do.call(attr(RegimeVal, "g.star"), list(TrtVal, CovDT)))
+            if (inherits(GStarOK, "try-error") | !is.numeric(GStarOK)) {
+                stop("Intervention must be a list of regimes specificed as list(intervention",
+                     " = f(A, L), g.star = g(A, L)), and the g.star function f(A, L) must ",
+                     "be a function of treatment and covariates that returns numeric ",
+                     "probabilities bounded in [0, 1]. Amend Intervention[[", RegName,
+                     "]] and try again")
+            } else {
+                if (min(unlist(GStarOK)) < 0 | max(unlist(GStarOK)) > 1)
+                    stop("Intervention must be a list of regimes specificed as list(intervention",
+                         " = f(A, L), g.star = g(A, L)), and the g.star function f(A, L) must ",
+                         "be a function of treatment and covariates that returns numeric ",
+                         "probabilities bounded in [0, 1]. Amend Intervention[[", RegName,
+                         "]] and try again")
+            }
+            return(RegimeVal)
+        }) 
+    }
+    else if (all(try(as.character(Intervention)) %in% c("0", "1"))) {
+        Regimes <- list()
+        if ("1" %in% try(as.character(Intervention))) {
+            Regimes[["Treated"]] <- rep_len(1, length(TrtVal))
+            attr(Regimes[["Treated"]], "g.star") <- function(a, L) {as.numeric(a == 1)}
+        }
+        if ("0" %in% try(as.character(Intervention))) {
+            Regimes[["Control"]] <- rep_len(0, length(TrtVal))
+            attr(Regimes[["Control"]], "g.star") <- function(a, L) {as.numeric(a == 0)}
+        }
     } else
         stop("Intervention must be \"0\", \"1\", c(\"0\", \"1\"), or a list of named regimes, ",
              "each specificed as list(intervention = f(A, L), g.star = g(A, L)). The ",
@@ -366,13 +457,14 @@ getRegime <- function(Intervention, Treatment, CovDataTable) {
              " as the observed treatment. The g.star function f(A, L) must be a function ",
              "of treatment and covariates that returns numeric probabilities bounded in",
              "[0, 1].")
-    names(Regime) <- names(Intervention)
-    return(Regime)
+    names(Regimes) <- names(Intervention)
+    return(Regimes)
 }
 
 getTargetEvent <- function(TargetEvent, UniqueEvents) {
     if (is.null(TargetEvent))
-        TargetEvent <- UniqueEvents
+        message("No TargetEvent specified; targeting all observed event types except for censoring")
+    TargetEvent <- UniqueEvents
     if (any(!is.vector(TargetEvent), !is.numeric(TargetEvent), is.list(TargetEvent),
             length(setdiff(TargetEvent, UniqueEvents)) > 0))
         stop("TargetEvent must be a numeric vector that is a subset of observed event types,",
@@ -380,58 +472,64 @@ getTargetEvent <- function(TargetEvent, UniqueEvents) {
     return(TargetEvent)
 }
 
-checkTargetTime <- function(TargetTime, EventTime, TargetEvent, EventType) {
+checkTargetTime <- function(TargetTime, TimeVal, TargetEvent, TypeVal) {
     if (any(!is.vector(TargetTime), !is.numeric(TargetTime), is.list(TargetTime), try(TargetTime <= 0)))
         stop("TargetTime must be a positive numeric vector.")
-    tm.evnt <- data.table::data.table("EventTime" = EventTime, "EventType" = EventType)
-    max.time <- tm.evnt[EventType > 0, ][, max(EventTime)]
-    min.time <- tm.evnt[EventType > 0, ][, list(EventTime = min(EventTime)), by = "EventType"]
-    min.time.event <- min.time[["EventType"]]
-    min.time <- min.time[["EventTime"]]
+    Times <- data.table::data.table("TimeVal" = TimeVal, "TypeVal" = TypeVal)
+    MaxTime <- Times[TypeVal > 0, ][, max(TimeVal)]
+    MinTime <- Times[TypeVal > 0, ][, list(TimeVal = min(TimeVal)), by = "TypeVal"]
+    MinTimeEvents <- MinTime[["TypeVal"]]
+    MinTime <- MinTime[["TimeVal"]]
     
-    if (max(TargetTime) > max.time)
-        stop("TargetTime must not target times after which all individuals are censored, ", max.time)
+    if (max(TargetTime) > MaxTime)
+        stop("TargetTime must not target times after which all individuals are Censored, ", MaxTime)
     
-    if (any(min(TargetTime) < min.time))
+    if (any(min(TargetTime) < MinTime))
         warning("TargetTime is targeting times before any events of type(s): ", 
-                paste(min.time.event[min(TargetTime) < min.time], collapse = ", "))
+                paste(MinTimeEvents[min(TargetTime) < MinTime], collapse = ", "))
 }
 
-getCVFolds <- function(CVArg) {
+getCVFolds <- function(CVArg, CVSeed = sample(0:1e8, 1)) {
     ## cross validation setup ----
     # stratifying cv so that folds are balanced for treatment assignment & outcomes
     # theory? but regressions may fail in practice with rare events otherwise ### make efficient CV representation ----
-    cv.folds <- try(do.call(origami::make_folds, CVArg))
-    if (inherits(cv.folds, "try-error"))
+    set.seed(CVSeed)
+    CVFolds <- try(do.call(origami::make_folds, CVArg))
+    if (inherits(CVFolds, "try-error"))
         stop("CVArg must be a list of arguments to be passed into do.call(origami::make_folds, ...)")
-    return(cv.folds)
+    attr(CVFolds, "CVArg") <- CVArg
+    attr(CVFolds, "CVSeed") <- CVSeed
+    return(CVFolds)
 }
 
-getModel <- function(Model, UniqueEvent, Censored, PropScoreBackend, 
-                     HazEstBackend, EventTime, EventType, Treatment) {
+getModel <- function(Model, UniqueEvents, Censored, PropScoreBackend, HazEstBackend, 
+                     EventTime, EventType, Treatment, CovDT) {
+    CovName <- NULL
     if (is.null(Model)) {
         message("Model input missing. An example template will be returned but should be amended to",  
                 " suit your application. See examples in the concrete::formatArguments() documentation.")
-        return(getModelTemplate(Treatment = Treatment, UniqueEvent = UniqueEvent, Censored = Censored, 
+        return(getModelTemplate(Treatment = Treatment, UniqueEvents = UniqueEvents, Censored = Censored, 
                                 EventTime = EventTime, EventType = EventType))
     }
     ## check that treatment and every event (including censoring) has a model
-    if (!all(is.list(Model), length(Model) == length(UniqueEvent) + 1 + Censored))
-        stop("Model must be a named list, one for each event type observed in the dataset")
+    if (!all(is.list(Model), length(Model) == length(UniqueEvents) + 1 + Censored))
+        stop("Model must be a named list, one for each event type observed in the dataset, ", 
+             "including censoring, and one for the treatment variable.")
     
     ## check that model specifications are named correctly
     if (!(Treatment %in% names(Model)))
-        stop("A named list of some model(s) must be provided for the treatment variable. This list ", 
-             "must be named with the treatment variable name (i.e. formatArguments(Treatment = ...). ", 
-             "Run formatArguments(..., Models=NULL) to get an example of the required formatting.")
+        stop("A named list must be provided, containg model specifications for the treatment ", 
+             "variable. This list must be named with the treatment variable name (i.e.", 
+             "formatArguments(Treatment = ...). Run formatArguments(Models=NULL) to get ", 
+             "an example of the required formatting.")
     if (Censored & !("0" %in% names(Model)))
-        stop("Data includes an EventType = 0, indicating the presence of right-censoring, so some ", 
-             "model(s) for censoring must be provided and be named `0`. Run formatArguments(..., ", 
-             "Models=NULL) to get an example of the required model argument formatting.")
-    if (!all(as.character(UniqueEvent) %in% names(Model)))
-        stop("Some model(s) must be provided for every unique value of EventType, and named the ", 
-             "corresponding unique value. Run formatArguments(..., Models=NULL) to get an example ", 
-             "of the required model argument formatting.")
+        stop("Data includes an EventType = 0, indicating the presence of right-censoring, so a ", 
+             "list named `0` containing model specifications for censoring must be provided. Run ", 
+             "formatArguments(Models=NULL) to get an example of the required formatting.")
+    if (!all(as.character(UniqueEvents) %in% names(Model)))
+        stop("For every unique value of EventType, a list named with the corresponding numeric ", 
+             "value must be provided, containing the model specifications for the time-to-event. ", 
+             "Run formatArguments(..., Models=NULL) to get an example of the required formatting.")
     
     ## check trt model fits with backend
     if (PropScoreBackend == "sl3") {
@@ -441,52 +539,81 @@ getModel <- function(Model, UniqueEvent, Censored, PropScoreBackend,
                  "formatArguments() documentation or the sl3 chapter of the tlverse handbook (", 
                  "https://tlverse.org/tlverse-handbook/sl3.html)")
     } else if (PropScoreBackend == "SuperLearner") {
-        warning("Superlearner model checking not yet written")
-        # check input is either sl.lib argument or is a fitted superlearner object
-        if (FALSE) stop()
-    } else stop("PropScoreBackend must be either `sl3` or `SuperLearner`.")
+        message("Superlearner model specifications are not checked here. The input must be a valid", 
+                " argument into the `sl.lib = ` argument of Superlearner::Superlearner()")
+    } else 
+        stop("PropScoreBackend must be either `sl3` or `SuperLearner`.")
+    
+    CovNames <- attr(CovDT, "CovNames")
+    if (!is.null(CovNames)) {
+        message("Cox model specifications have been renamed where necessary to reflect", 
+                " changed covariate names. Model specifications in .[['Model']] can be ", 
+                "checked against the covariate names in attr(.[['Data']], 'CovNames')")
+    }
     
     for (i in 1:length(Model)) {
-        if (names(Model)[i] == Treatment) {
-            ################################## need to write some checks here
-        } else if (grepl("\\d+", names(Model)[i])) {
+        if (grepl("\\d+", names(Model)[i])) {
             if (is.list(Model[[i]])) {
                 if (is.null(names(Model[[i]]))) {
                     names(Model[[i]]) <- paste0("model", 1:length(Model[[i]]))
-                } else if (any(names(Model[[i]])) == "") {
+                } else if (any(names(Model[[i]]) == "")) {
                     j <- which(names(Model[[i]]) == "")
                     names(Model[[i]])[j] <- paste0("model", j)
                 }
             } else 
                 Model[[i]] <- list("model1" = Model[[i]])
-        } else 
-            stop("something weird is happening with model names")
+            
+            if (HazEstBackend == "coxph") {
+                CoxLeft <- paste0("Surv(", EventTime, ", ", EventType, 
+                                  " == ", names(Model)[i], ") ~ ")
+                CoxLeftRegex <- paste0("^Surv\\(\\s*", EventTime, "\\s*,\\s*", EventType, 
+                                       "\\s*==\\s*", names(Model)[i], "\\s*\\)\\s*~\\s*")
+                for (j in seq_along(Model[[i]])) {
+                    Formula <- as.character(Model[[i]][j])
+                    if (!grepl(CoxLeftRegex, Formula)) {
+                        message("The left hand side of the cox formula for Model[[", names(Model)[i], 
+                                "]][[", j, "]] has been corrected to ", "Surv(", EventTime, ", ", 
+                                EventType, " == ", names(Model)[i], ") ~ ")
+                    }
+                    
+                    CoxRight <- regmatches(Formula, regexpr("^.*~", Formula), invert = TRUE)
+                    CoxRight <- tail(unlist(CoxRight), 1)  
+                    
+                    # rename covariates ----
+                    if (!is.null(CovNames)) {
+                        for (covar in unique(CovNames[["CovName"]])) {
+                            NewCol <- CovNames[CovName == covar, ][["ColName"]]
+                            if (length(NewCol) > 1)
+                                NewCol <- paste0(NewCol, collapse = "+")
+                            NewCol <- paste0("(", NewCol, ")")
+                            OldCol <- regexpr(covar, CoxRight)
+                            regmatches(CoxRight, OldCol, invert = FALSE) <- NewCol
+                        }
+                    }
+                    Model[[i]][[j]] <- as.formula(paste0(CoxLeft, CoxRight))
+                }
+            } else 
+                stop("Models must be named for the treatment variable, or the numeric value ", 
+                     "representing the failure or censoring event type")
+        }
     }
-    
-    ## tag every model/model list as an target event, censoring, or treatment
-    ## check model specifications match data set. Translate model specifications with factor variable 
-    ##  names into model specs using 1-hot encoded variable names.
-    
-    
-    warning("model checks not yet complete")
-    
+    # warning("model checks not yet complete")
     return(Model)
 }
 
-getModelTemplate <- function(Treatment, UniqueEvent, Censored, EventType, EventTime) {
-    trt.model <- "SL.glm"
-    events <- utils::tail(c(0, UniqueEvent), length(UniqueEvent) + Censored)
-    event.model <- lapply(sort(events), function(j) {
-        j.model <- list("model1" = as.formula(paste0("Surv(", EventTime, ", ", 
-                                                     EventType, " == ", j, ") ~ .")))
-        return(j.model)
+getModelTemplate <- function(Treatment, UniqueEvents, Censored, EventType, EventTime) {
+    TrtModel <- "SL.glmnet"
+    Events <- utils::tail(c(0, UniqueEvents), length(UniqueEvents) + Censored)
+    EventModels <- lapply(sort(Events), function(j) {
+        EventModel <- list("model1" = as.formula(paste0("Surv(", EventTime, ", ", 
+                                                        EventType, " == ", j, ") ~ .")))
+        return(EventModel)
     })
-
-    model <- c(trt.model, event.model) ;
-    names(model) <- c(Treatment, sort(events))
-    return(model)
+    
+    Model <- c(TrtModel, EventModels) ;
+    names(Model) <- c(Treatment, sort(Events))
+    return(Model)
 }
-
 
 checkPropScoreBackend <- function(PropScoreBackend) {
     PropScoreBackendOK <- try(length(setdiff(PropScoreBackend, c("sl3", "SuperLearner"))) == 0)
@@ -520,6 +647,14 @@ checkOneStepEps <- function(OneStepEps) {
         stop("OneStepEps must a positive number between (0, 1]")
     }
 }
+getMinNuisance <- function(MinNuisance = 0.05) {
+    MinNuisanceOK <- try(all(is.numeric(MinNuisance), length(MinNuisance) == 1,
+                             MinNuisance > 0, MinNuisance <= 1))
+    if (any(inherits(MinNuisanceOK, "try-error"), !MinNuisanceOK)) {
+        stop("MinNuisance must a positive number between (0, 1]")
+    }
+    return(MinNuisance)
+}
 
 checkVerbose <- function(Verbose) {
     VerboseOK <- try(all(is.logical(Verbose), length(Verbose) == 1))
@@ -535,9 +670,17 @@ checkGComp <- function(GComp) {
     }
 }
 
-ITT <- list("A == 1" = list("intervention" = function(trt, covars) {rep_len(1, length(trt))},
-                                      "g.star" = function(trt, covars) {as.numeric(trt == 1)}),
-                      "A == 0" = list("intervention" = function(trt, covars) {rep_len(0, length(trt))},
-                                      "g.star" = function(trt, covars) {as.numeric(trt == 0)}))
+checkReturnModels <- function(ReturnModels) {
+    ReturnModelsOK <- try(all(is.logical(ReturnModels), length(ReturnModels) == 1))
+    if (any(inherits(ReturnModelsOK, "try-error"), !ReturnModelsOK)) {
+        stop("ReturnModels must either be TRUE or FALSE")
+    }
+}
+
+
+ITT <- list("A==1" = list("intervention" = function(Trt, CovDT) {rep_len(1, length(Trt))},
+                          "g.star" = function(Trt, CovDT) {as.numeric(Trt == 1)}),
+            "A==0" = list("intervention" = function(Trt, CovDT) {rep_len(0, length(Trt))},
+                          "g.star" = function(Trt, CovDT) {as.numeric(Trt == 0)}))
 
 

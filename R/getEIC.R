@@ -3,18 +3,16 @@
 #' @param Estimates list
 #' @param Data data.table
 #' @param Regime list
-#' @param Censored boolean
 #' @param TargetEvent numeric vector
 #' @param TargetTime numeric vector
-#' @param Events numeric vector
 #' @param MinNuisance numeric
 #' @param GComp boolean
 #'
 #'
 
-getEIC <- function(Estimates, Data, Regime, Censored, TargetEvent, TargetTime,
-                   Events, MinNuisance, GComp = FALSE) {
+getEIC <- function(Estimates, Data, Regime, TargetEvent, TargetTime, MinNuisance, GComp = FALSE) {
     EvalTimes <- attr(Estimates, "times")
+    # Censored <- 0 %in% Data[[attr(Data, "EventType")]]
     T.tilde <- Data[[attr(Data, "EventTime")]]
     Delta <- Data[[attr(Data, "EventType")]]
 
@@ -26,7 +24,7 @@ getEIC <- function(Estimates, Data, Regime, Censored, TargetEvent, TargetTime,
 
         IC.a <- getIC(GStar = GStar, Hazards = Hazards, TotalSurv = TotalSurv,
                       NuisanceWeight = NuisanceWeight, TargetEvent = TargetEvent,
-                      TargetTime = TargetTime, Events = Events, T.tilde = T.tilde,
+                      TargetTime = TargetTime, T.tilde = T.tilde,
                       Delta = Delta, EvalTimes = EvalTimes, GComp = GComp)
 
         if (GComp)
@@ -37,9 +35,10 @@ getEIC <- function(Estimates, Data, Regime, Censored, TargetEvent, TargetTime,
     return(Estimates)
 }
 
-getIC <- function(GStar, Hazards, TotalSurv, NuisanceWeight, TargetEvent, TargetTime,
-                  Events, T.tilde, Delta, EvalTimes, GComp) {
+getIC <- function(GStar, Hazards, TotalSurv, NuisanceWeight, TargetEvent, TargetTime, 
+                  T.tilde, Delta, EvalTimes, GComp) {
     Target <- expand.grid("Time" = TargetTime, "Event" = TargetEvent)
+    UniqueEvents <- setdiff(sort(unique(Delta)), 0)
     IC <- F.j.tau <- NULL
     IC.a <- do.call(rbind, lapply(1:ncol(NuisanceWeight), function(i) {
         Nuisance.i <- NuisanceWeight[, i]
@@ -68,7 +67,7 @@ getIC <- function(GStar, Hazards, TotalSurv, NuisanceWeight, TargetEvent, Target
             haz.J.ik <- lapply(Hazards.i, function(r) r[TimeIndices.ik])
             F.j.t <- Risks.i[[as.character(j)]][TimeIndices.ik]
 
-            IC.jk <- sum(sapply(Events, function(l) {
+            IC.jk <- sum(sapply(UniqueEvents, function(l) {
                 h.jk <- GStar[i] * Nuisance.ik * ((l == j) - (F.j.tau - F.j.t) / Surv.ik)
                 IC.ljk <- sum(h.jk * ((s.ik == t.tilde) * (Delta[i] == l) - haz.J.ik[[as.character(l)]]))
                 ## the second EIC component ( ... + F_j(tau | a, L) - Psi ) is done outside

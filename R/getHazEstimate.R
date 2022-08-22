@@ -5,62 +5,70 @@
 #' @param CVFolds list
 #' @param Hazards list
 #' @param HazEstBackend : character
+#' @param ReturnModels boolean
 # #' @param HazFits list
 # #' @param MinNuisance numeric (in the future a function)
 # #' @param TargetEvent numeric vector
 # #' @param TargetTime numeric vector
 # #' @param Regime list
 # #' @param Censored boolean
+#' @import survival
 #'
 
-getHazFit <- function(Data, Model, CVFolds, Hazards, HazEstBackend) {
+getHazFit <- function(Data, Model, CVFolds, Hazards, HazEstBackend, ReturnModels) {
     Time <- Event <- FitLP <- AtRisk <- basehaz <- BaseHaz <- NULL
     HazModel <- Model[grep("\\d+", names(Model))]
     HazModel <- lapply(seq_along(HazModel), function(j) {
-        haz.model <- HazModel[[j]]
-        attr(haz.model, "j") <- as.numeric(gsub(".*(\\d+).*", "\\1", names(HazModel[j])))
-        return(haz.model)
+        HazModelJ <- HazModel[[j]]
+        attr(HazModelJ, "j") <- as.numeric(gsub(".*(\\d+).*", "\\1", names(HazModel[j])))
+        return(HazModelJ)
     })
     if (grepl("cox", tolower(HazEstBackend))) {
-        SupLrnModel <- lapply(HazModel, function(Model_j) {
-            SupLrnLibRisk <- data.table::data.table(matrix(NaN, nrow = nrow(Data), ncol = length(Model_j)))
-            colnames(SupLrnLibRisk) <- names(Model_j)
-            j <- attr(Model_j, "j")
-            id.col <- attr(Data, "ID")
-            time.col <- attr(Data, "EventTime")
-            event.col <- attr(Data, "EventType")
-
+        SupLrnModel <- lapply(HazModel, function(ModelJ) {
+            SupLrnLibRisk <- data.table::data.table(matrix(NaN, nrow = nrow(Data), ncol = length(ModelJ)))
+            colnames(SupLrnLibRisk) <- names(ModelJ)
+            j <- attr(ModelJ, "j")
+            IDCol <- attr(Data, "ID")
+            TimeCol <- attr(Data, "EventTime")
+            TypeCol <- attr(Data, "EventType")
+            
             for (Fold_v in CVFolds) {
                 TrainIndices <- Fold_v[["training_set"]]
                 ValidIndices <- Fold_v[["validation_set"]]
-                TrainData <- Data[TrainIndices, .SD, .SDcols = setdiff(colnames(Data), id.col)]
-                ValidData <- Data[ValidIndices, .SD, .SDcols = setdiff(colnames(Data), id.col)]
-                setorderv(ValidData, cols = time.col, order = -1)
-
-                for (i in seq_along(Model_j)) {
+                TrainData <- Data[TrainIndices, .SD, .SDcols = setdiff(colnames(Data), IDCol)]
+                ValidData <- Data[ValidIndices, .SD, .SDcols = setdiff(colnames(Data), IDCol)]
+                setorderv(ValidData, cols = TimeCol, order = -1)
+                
+                ModelFits <- list()
+                for (i in seq_along(ModelJ)) {
                     ## train model ----
-                    CoxphArgs <- list("formula" = Model_j[[i]], "data" = TrainData)
+                    CoxphArgs <- list("formula" = ModelJ[[i]], "data" = TrainData)
                     ModelFit <- do.call(survival::coxph, CoxphArgs)
-
+                    if (ReturnModels) ModelFits[[i]] <- ModelFit
+                    
                     ## validation loss (-log partial likelihood) ----
                     ValidData[, FitLP := stats::predict(ModelFit, type = "lp", newdata = ValidData)]
                     ValidData[, AtRisk := cumsum(exp(FitLP))]
                     ValidData[AtRisk == 0, AtRisk := 1]
-                    ValidData[, names(Model_j)[i] := (.SD == j) * (FitLP - log(AtRisk)), .SDcols = event.col]
+                    ValidData[, names(ModelJ)[i] := (.SD == j) * (FitLP - log(AtRisk)), .SDcols = TypeCol]
                 }
-                SupLrnLibRisk[ValidIndices, names(Model_j) := subset(ValidData, select = names(Model_j))]
+                SupLrnLibRisk[ValidIndices, names(ModelJ) := subset(ValidData, select = names(ModelJ))]
             }
             ## metalearner (discrete selector) ----
             SLCVRisk <- -colSums(SupLrnLibRisk)
-            SLModel <- Model_j[[which.min(SLCVRisk)]]
-
-            return(list("SupLrnCVRisks" = SLCVRisk, "SupLrnModel" = SLModel, "j" = j))
+            SLModel <- ModelJ[[which.min(SLCVRisk)]]
+            
+            if (ReturnModels) {
+                return(c(list("SupLrnCVRisks" = SLCVRisk, "SupLrnModel" = SLModel, "j" = j), 
+                         "ModelFits" = ModelFits))
+            } else 
+                return(list("SupLrnCVRisks" = SLCVRisk, "SupLrnModel" = SLModel, "j" = j))
         })
     } else {
         stop("Other hazard estimation methods not yet implemented")
     }
-
-
+    
+    
     ## fit sl selection on full data ----
     HazFits <- lapply(SupLrnModel, function(SLMod) {
         if (grepl("cox", tolower(HazEstBackend))) {
@@ -68,15 +76,16 @@ getHazFit <- function(Data, Model, CVFolds, Hazards, HazEstBackend) {
             ModelFit <- do.call(survival::coxph, list("formula" = SLMod$SupLrnModel, "data" = Data))
             ## selected model must not contain interactions without including the separate terms also, e.g.
             #   we can't have ~ trt:sex without trt + sex. easiest way is to force e.g. trt*sex
-            BaseHaz.j <- rbind(data.table(time = 0, hazard = 0),
-                               suppressWarnings(setDT(basehaz(ModelFit, centered = TRUE))))
-            colnames(BaseHaz.j) <- c("Time", "BaseHaz")
-            BaseHaz.j <- merge(Hazards, BaseHaz.j, by = "Time", all.x = T)
-            BaseHaz.j[, BaseHaz := c(0, diff(zoo::na.locf(BaseHaz)))]
+            BaseHazJ <- rbind(data.table(time = 0, hazard = 0),
+                              suppressWarnings(setDT(basehaz(ModelFit, centered = TRUE))))
+            colnames(BaseHazJ) <- c("Time", "BaseHaz")
+            BaseHazJ <- merge(Hazards, BaseHazJ, by = "Time", all.x = T)
+            BaseHazJ[, BaseHaz := c(0, diff(zoo::na.locf(BaseHaz)))]
         }
-
-        HazFitOut <- list("HazFit" = ModelFit, "BaseHaz" = BaseHaz.j, "HazModel" = SLMod)
+        
+        HazFitOut <- list("HazFit" = ModelFit, "BaseHaz" = BaseHazJ, "HazModel" = SLMod)
         attr(HazFitOut, "j") <- SLMod[["j"]]
+        attr(HazFitOut, "HazSL") <- SLMod
         return(HazFitOut)
     })
     names(HazFits) <- grep("\\d+", names(Model), value = TRUE)
@@ -84,7 +93,8 @@ getHazFit <- function(Data, Model, CVFolds, Hazards, HazEstBackend) {
 }
 
 getHazSurvPred <- function(Data, HazFits, MinNuisance, TargetEvent,
-                            TargetTime, Regime, HazEstBackend, Censored) {
+                           TargetTime, Regime, HazEstBackend) {
+    Censored <- 0 %in% Data[[attr(Data, "EventType")]]
     Target <- expand.grid("Time" = TargetTime, "Event" = TargetEvent)
     PredHazSurv <- lapply(Regime, function(Reg) {
         PredData <- as.data.table(Data)
@@ -93,20 +103,20 @@ getHazSurvPred <- function(Data, HazFits, MinNuisance, TargetEvent,
             exp.coef <- stats::predict(HazFit[["HazFit"]], newdata = PredData, type = "risk")
             haz <- sapply(exp.coef, function(expLP) HazFit[["BaseHaz"]][["BaseHaz"]] * expLP)
             attr(haz, "j") <- attr(HazFit, "j")
-            return(haz)(HazFit, "j")
+            return(haz)
         })
         names(PredHaz) <- names(HazFits)
-
+        
         CensInd <- which(sapply(PredHaz, function(haz) attr(haz, "j") == 0))
         TotalSurv <- apply(Reduce(`+`, PredHaz[-CensInd]), 2, function(haz) exp(-cumsum(haz)))
-
+        
         if (Censored) {
             LaggedCensSurv <- apply(PredHaz[[CensInd]], 2, function(haz) c(1, utils::head(exp(-cumsum(haz)), -1)))
             PredHaz <- PredHaz[-CensInd]
         } else {
             LaggedCensSurv <- 1
         }
-
+        
         Survival <- list("TotalSurv" = TotalSurv, "LaggedCensSurv" = LaggedCensSurv)
         return(list("Hazards" = PredHaz, "Survival" = Survival))
     })

@@ -5,6 +5,7 @@
 \title{Title}
 \usage{
 formatArguments(
+  ConcreteArgs = NULL,
   DataTable,
   DataStructure = NULL,
   EventTime,
@@ -14,7 +15,7 @@ formatArguments(
   LongTime = NULL,
   Intervention,
   TargetTime,
-  TargetEvent,
+  TargetEvent = NULL,
   Target = NULL,
   CVArg = list(n = nrow(DataTable), fold_fun = folds_vfold, cluster_ids = NULL,
     strata_ids = NULL),
@@ -26,11 +27,14 @@ formatArguments(
   MinNuisance = 0.05,
   Verbose = TRUE,
   GComp = TRUE,
-  ConcreteArgs,
+  ReturnModels = TRUE,
   ...
 )
 }
 \arguments{
+\item{ConcreteArgs}{list (default: NULL, not yet ready) : Use to recheck amended output from previous formatArguments()
+calls. A non-NULL input will cause all other arguments to be ignored.}
+
 \item{DataTable}{data.table (n x (d + (3:5)); data.table of the observed data, with rows n =
 the number of observations and d = the number of baseline covariates. DataTable must include
 the following columns:
@@ -58,7 +62,7 @@ numbers will be used as ID. For longitudinal data, ID must be provided}
 
 \item{ID}{character (default: NULL): the column name of the observed subject id}
 
-\item{LongTime}{character (not ready): the column name of the monitoring times for
+\item{LongTime}{character (not used): the column name of the monitoring times for
 longitudinal data structures}
 
 \item{Intervention}{list: a list of desired interventions on the treatment variable.
@@ -97,13 +101,39 @@ clever covariate}
 
 \item{GComp}{boolean}
 
-\item{ConcreteArgs}{list (default: NULL, not yet ready) : Use to recheck amended output from previous formatArguments()
-calls. A non-NULL input will cause all other arguments to be ignored.}
+\item{ReturnModels}{boolean}
 
 \item{...}{...}
 }
 \value{
-tbd
+a list of class "ConcreteArgs"
+\itemize{
+\item{"Data"}{: data.table containing EventTime, EventType, Treatment, and baseline covariates}
+\item{"Events"}{: numeric vector encoding unique failure event types}
+\item{"TargetTime"}{: numeric vector of target times to evaluate risk/survival}
+\item{"TargetEvent"}{: numeric vector of target events}
+\item{"Regime"}{: named list of interventions, comprised of two functions}
+\itemize{
+\item{"intervention"}{: function of Treatment and Covariates, outputting a vector of desired treatment assignments}
+\item{"g.star"}{: function of Treatment and Covariates, outputting a vector of desired treatment assignment probabilities}
+}
+\item{"CVFolds"}{: list of cross-validation fold assignments in the structure as output by origami::make_folds()}
+\item{"Model"}{: list of cross-validation fold assignments in the structure as output by origami::make_folds()}
+\item{"PropScoreBackend"}{: list of cross-validation fold assignments in the structure as output by origami::make_folds()}
+\item{"HazEstBackend"}{: list of cross-validation fold assignments in the structure as output by origami::make_folds()}
+\item{"MaxUpdateIter"}{: list of cross-validation fold assignments in the structure as output by origami::make_folds()}
+\item{"OneStepEps"}{: list of cross-validation fold assignments in the structure as output by origami::make_folds()}
+\item{"MinNuisance"}{: numeric cutoff}
+\item{"Verbose"}{: boolean}
+\item{"GComp"}{: boolean, to return g-computation formula plug-in estimates or not}
+}
+May include
+\itemize{
+\item{"ID"}{: factor, character, or numeric; unique subject id. If ID column is missing, row
+numbers will be used as ID. For longitudinal data, ID must be provided}
+\item{"LongTime"}{: numeric; Specifies monitoring times for longitudinal data structures}
+\item{"Baseline Covariates"}{: factor, character, or numeric; }
+}
 }
 \description{
 Title
