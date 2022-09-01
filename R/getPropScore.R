@@ -45,7 +45,7 @@ getSl3PropScore <- function(TrtVal, CovDT, TrtModel, Regime, CVFolds, ReturnMode
     PropScores <- lapply(Regime, function(a) {
         if (is.numeric(a) & length(a) == length(TrtVal)) {
             if (all(a %in% c(0, 1))) {
-                ga1 <- TrtFit$predict()
+                ga1 <- unlist(TrtFit$predict())
                 PropScore <- ga1
                 PropScore[a == 0] <- 1 - PropScore[a == 0]
             } else {

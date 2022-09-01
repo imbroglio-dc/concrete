@@ -3,6 +3,7 @@
 export(doConcrete)
 export(formatArguments)
 export(getOutput)
+export(makeITT)
 import(SuperLearner)
 import(data.table)
 import(origami)

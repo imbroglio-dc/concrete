@@ -4,8 +4,8 @@ set.seed(12345)
 data[is.na(trt), trt := sample(1:2, sum(is.na(trt)), replace = TRUE)][, trt := trt - 1]
 
 # data[, status := as.numeric(status >= 1)] # competing risk or not
-intervention <- concrete:::ITT
-target.time <- 500 * (3:4)
+intervention <- makeITT()
+target.time <- 500 * (5:7)
 target.event <- sort(unique(data[status > 0, status]))
 # a_lrnrs <- make_learner(Stack, Lrnr_glm$new(), Lrnr_glmnet$new())
 # model <- list("trt" = a_lrnrs,
@@ -20,6 +20,6 @@ concrete.args <- formatArguments(DataTable = data[, c("time", "status", "trt", "
 concrete.args <- formatArguments(ConcreteArgs = concrete.args)
 concrete.est <- doConcrete(ConcreteArgs = concrete.args)
 
-concrete.ate <- getOutput(Estimate = concrete.est, Estimand = c("rd"), TargetTime = target.time,
+concrete.ate <- getOutput(Estimate = concrete.est, Estimand = "Risk", TargetTime = target.time,
                           TargetEvent = target.event, GComp = TRUE)
 concrete.ate$RD[order(Time, Event, Estimator)]

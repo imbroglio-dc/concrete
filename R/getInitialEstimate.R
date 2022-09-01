@@ -16,6 +16,7 @@ getInitialEstimate <- function(Data, Model, CVFolds, MinNuisance, TargetEvent, T
     Time <- NULL
     TrtVal <- Data[[attr(Data, "Treatment")]]
     TimeVal <- Data[[attr(Data, "EventTime")]]
+    Censored <- 0 %in% Data[[attr(Data, "EventType")]]
     CovDT <- subset(Data, select = attr(Data, "CovNames")[["ColName"]])
     TrtModel <- try(Model[[attr(Data, "Treatment")]])
     if (inherits(TrtModel, "try-error"))
@@ -40,9 +41,13 @@ getInitialEstimate <- function(Data, Model, CVFolds, MinNuisance, TargetEvent, T
                                    TargetEvent = TargetEvent, TargetTime = TargetTime,
                                    Regime = Regime, HazEstBackend)
     InitialEstimates <- lapply(seq_along(PropScores), function(a) {
-        NuisanceWeight <- sapply(seq_along(PropScores[[a]]), function(i) {
-            PropScores[[a]][i] * HazSurvPreds[[a]][["Survival"]][["LaggedCensSurv"]][, i]
-        })
+        if (Censored) {
+            NuisanceWeight <- sapply(seq_along(PropScores[[a]]), function(i) {
+                PropScores[[a]][i] * HazSurvPreds[[a]][["Survival"]][["LaggedCensSurv"]][, i]
+            })   
+        } else {
+            NuisanceWeight <- PropScores 
+        }
         NuisanceWeight <- 1 / truncNuisanceDenom(NuisanceWeight, MinNuisance)
         return(list("PropScore" = PropScores[[a]],
                     "Hazards" = HazSurvPreds[[a]][["Hazards"]],
@@ -54,7 +59,7 @@ getInitialEstimate <- function(Data, Model, CVFolds, MinNuisance, TargetEvent, T
     attr(InitialEstimates, "times") <- Hazards[["Time"]]
     if (ReturnModels) {
         ModelFits <- c(list(attr(PropScores, "TrtFit")), 
-                          lapply(HazFits, function(HF) return(attr(HF, "HazSL"))))
+                       lapply(HazFits, function(HF) return(attr(HF, "HazSL"))))
         names(ModelFits)[1] <- attr(Data, "Treatment")
         attr(InitialEstimates, "ModelFits") <- ModelFits
     }

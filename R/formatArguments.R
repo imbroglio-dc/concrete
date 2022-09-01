@@ -1,5 +1,7 @@
 
-#' Title
+#' formatArguments
+#' @description formatArguments() checks and reformats inputs into a form that can be interpreted by doConcrete(). 
+#'              makeITT() returns an Intervention list for a single, binary, point-treatment variable
 #' @param ConcreteArgs list (default: NULL, not yet ready) : Use to recheck amended output from previous formatArguments() 
 #'                                            calls. A non-NULL input will cause all other arguments to be ignored.
 #' @param DataTable data.table (n x (d + (3:5)); data.table of the observed data, with rows n = 
@@ -15,34 +17,36 @@
 #' \itemize{
 #'   \item{"ID"}{: factor, character, or numeric; unique subject id. If ID column is missing, row 
 #'   numbers will be used as ID. For longitudinal data, ID must be provided}
-#'   \item{"LongTime"}{: numeric; Specifies monitoring times for longitudinal data structures}
+# #'   \item{"LongTime"}{: numeric; Specifies monitoring times for longitudinal data structures}
 #'   \item{"Baseline Covariates"}{: factor, character, or numeric; }
 #' }
-#' @param DataStructure formula (not ready): e.g. Surv(time, type) ~ Intervention(trt) + ...
+# #' @param DataStructure formula (not ready): e.g. Surv(time, type) ~ Intervention(trt) + ...
 #' @param EventTime character: the column name of the observed event or censoring time
 #' @param EventType character: the column name of the observed event type. (0 indicating censoring)
 #' @param Treatment character: the column name of the observed treatment assignment
 #' @param ID character (default: NULL): the column name of the observed subject id
-#' @param LongTime character (not used): the column name of the monitoring times for
+# #' @param LongTime character (not used): the column name of the monitoring times for
 #'                                       longitudinal data structures
 #' @param Intervention list: a list of desired interventions on the treatment variable.
 #'                           Each intervention must be a list containing two named functions: 
 #'                             'intervention' = function(treatment vector, covariate data) and 
 #'                             'gstar' = function(treatment vector, covariate data)
-#'                           concrete:::ITT can be used to specify an intent-to-treat analysis for a
+#'                           concrete::makeITT() can be used to specify an intent-to-treat analysis for a
 #'                           binary intervention variable 
-#' @param TargetTime numeric: vector of target times
-#' @param TargetEvent numeric: vector of target events - some subset of unique EventTypes. 
-#' @param Target (not yet implemented) data.table / data.frame (?? x 2); a table containing all 
-#' combinations of target events (column 1) and target times (column 2).
-#' @param CVArg list: arguments to be passed into do.call(origami::make_folds). The default is 
+#' @param TargetTime numeric: vector of target times. If NULL, the last observed non-censoring event
+#'                            time will be targeted.
+#' @param TargetEvent numeric: vector of target events - some subset of unique EventTypes. If NULL, 
+#'                             all non-censoring observed event types will be targeted.
+# #' @param Target (not yet implemented) data.table / data.frame (?? x 2); a table containing all 
+# #' combinations of target events (column 1) and target times (column 2).
+#' @param CVArg list: arguments to be passed into do.call(origami::make_folds). If NULL, the default is 
 #'                    list(n = nrow(DataTable), fold_fun = folds_vfold, cluster_ids = NULL, strata_ids = NULL)
 #' @param Model list (default: NULL): named list of models, one for each failure or censoring event
 #'                                    and one for the 'Treatment' variable. If Model = NULL, then  
 #'                                    a template will be generated for the user to amend. 
 #' @param PropScoreBackend character (default: "Superlearner"): currently must be either "sl3" or "Superlearner"
 #' @param HazEstBackend character (default: "coxph"): currently must be "coxph"
-#' @param MaxUpdateIter numeric: the number of one-step update steps
+#' @param MaxUpdateIter numeric (default: 100): the number of one-step update steps
 #' @param OneStepEps numeric: the one-step tmle step size
 #' @param MinNuisance numeric: the minimum value of the nuisance parameter denominator in the 
 #' clever covariate
@@ -50,41 +54,33 @@
 #' @param GComp boolean
 #' @param ReturnModels boolean
 #' @param ... ...
-#'
+#' 
 #' @return a list of class "ConcreteArgs"
 #' \itemize{
-#'   \item{"Data"}{: data.table containing EventTime, EventType, Treatment, and baseline covariates}
-#'   \item{"Events"}{: numeric vector encoding unique failure event types}
-#'   \item{"TargetTime"}{: numeric vector of target times to evaluate risk/survival}
-#'   \item{"TargetEvent"}{: numeric vector of target events}
-#'   \item{"Regime"}{: named list of interventions, comprised of two functions}
+#'   \item{Data}{: data.table containing EventTime, EventType, Treatment, and potentially ID and baseline covariates}
+#'   \item{TargetTime}{: numeric vector of target times to evaluate risk/survival}
+#'   \item{TargetEvent}{: numeric vector of target events}
+#'   \item{Regime}{: named list of desired regimes, each tagged with a 'g.star' attribute function}
 #'     \itemize{
-#'       \item{"intervention"}{: function of Treatment and Covariates, outputting a vector of desired treatment assignments}
-#'       \item{"g.star"}{: function of Treatment and Covariates, outputting a vector of desired treatment assignment probabilities}
+#'       \item{Regime\[\[i\]\]}{: a vector of desired treatment assignments}
+#'       \item{attr(Regime\[\[i\]\], "g.star")}{: function of Treatment and Covariates, outputting a vector of desired treatment assignment probabilities}
 #'     }
-#'   \item{"CVFolds"}{: list of cross-validation fold assignments in the structure as output by origami::make_folds()}
-#'   \item{"Model"}{: list of cross-validation fold assignments in the structure as output by origami::make_folds()}
-#'   \item{"PropScoreBackend"}{: list of cross-validation fold assignments in the structure as output by origami::make_folds()}
-#'   \item{"HazEstBackend"}{: list of cross-validation fold assignments in the structure as output by origami::make_folds()}
-#'   \item{"MaxUpdateIter"}{: list of cross-validation fold assignments in the structure as output by origami::make_folds()}
-#'   \item{"OneStepEps"}{: list of cross-validation fold assignments in the structure as output by origami::make_folds()}
-#'   \item{"MinNuisance"}{: numeric cutoff}
-#'   \item{"Verbose"}{: boolean}
-#'   \item{"GComp"}{: boolean, to return g-computation formula plug-in estimates or not}
-#' }
-#' May include
-#' \itemize{
-#'   \item{"ID"}{: factor, character, or numeric; unique subject id. If ID column is missing, row 
-#'   numbers will be used as ID. For longitudinal data, ID must be provided}
-#'   \item{"LongTime"}{: numeric; Specifies monitoring times for longitudinal data structures}
-#'   \item{"Baseline Covariates"}{: factor, character, or numeric; }
+#'   \item{CVFolds}{: list of cross-validation fold assignments in the structure as output by origami::make_folds()}
+#'   \item{Model}{: named list of model specifications, one for each unique 'EventType' and one for the 'Treatment' variable.}
+#'   \item{PropScoreBackend}{: either "sl3" or "Superlearner"}
+#'   \item{HazEstBackend}{: "coxph"}
+#'   \item{MaxUpdateIter}{: the number of one-step update steps}
+#'   \item{OneStepEps}{: list of cross-validation fold assignments in the structure as output by origami::make_folds()}
+#'   \item{MinNuisance}{: numeric lower bound for the propensity score denominator in the efficient influence function}
+#'   \item{Verbose}{: boolean to print additional information}
+#'   \item{GComp}{: boolean to return g-computation formula plug-in estimates or not}
+#'   \item{ReturnModels}{: boolean to return fitted models from the initial estimation stage}
 #' }
 #'
 #' @importFrom stats model.matrix as.formula
 #' @importFrom utils tail
 #' @importFrom survival Surv coxph
-#' @import origami
-#' @import data.table
+#' @import origami data.table
 #'
 #' @examples 
 #' library(data.table)
@@ -95,7 +91,10 @@
 #' cols <- c("id", "time", "status", "trt",
 #'           "age", "albumin", "sex", "bili")
 #' data <- data[, .SD, .SDcols = cols]
-#' intervention <- concrete:::ITT
+#' 
+#' # makeITT() creates a list of functions to specify intent-to-treat 
+#' #   regimes for a binary, single, point treatment variable
+#' intervention <- makeITT()
 #' target.time <- 2500
 #' target.event <- 1:2
 #' model <- list("trt" = c("SL.glm", "SL.glmnet"),
@@ -114,34 +113,38 @@
 #'                                  TargetEvent = target.event,
 #'                                  Model = model)
 #' 
-#' # if formatArguments(Model = NULL), a model template will be returned for the user to amend.
-#' # examples of editing models for censoring and failure events
-#' concrete.args[["Model"]][["0"]] <- list("model1" = Surv(time, status == 0) ~ trt:sex + age + bili)
-#' concrete.args[["Model"]][["1"]] <- list(Surv(time, status == 1) ~ trt, 
-#'                                        Surv(time, status == 1) ~ .)
+#' # if formatArguments(Model = NULL), a template will be returned for the user to modify
+#' # examples of modifying/adding models for censoring and failure events
+#' concrete.args[["Model"]][["0"]] <-
+#'     list(Surv(time, status == 0) ~ trt:sex + age + bili)
+#' concrete.args[["Model"]][["1"]] <- 
+#'     list("mod1" = Surv(time, status == 1) ~ trt,
+#'          "mod2" = Surv(time, status == 1) ~ .)
 #' 
-#' # examples of editing models for binary treatment, using PropScoreBackend = "Superlearner"
+#' # 
+#' # examples of modifying "Superlearner" treatment models
 #' concrete.args[["Model"]][["trt"]] <- c("SL.glm", "SL.glmnet", "SL.bayesglm")
 #' 
-#' # examples of editing models for binary treatment, using PropScoreBackend = "sl3"
+#' # examples of modifying "sl3" treatment models
 #' library(sl3)
-#' concrete.args[["Model"]][["trt"]] <- make_learner(Stack, Lrnr_hal9001$new(), 
-#'                                                  Lrnr_glmnet$new(), Lrnr_glm$new())
-#' 
+#' concrete.args[["Model"]][["trt"]] <-
+#'     make_learner(Stack, Lrnr_hal9001$new(), Lrnr_glmnet$new(), Lrnr_glm$new())
 #' 
 #' @export formatArguments
+#' @export makeITT
 
-formatArguments <- function(ConcreteArgs = NULL, DataTable, DataStructure = NULL, EventTime, EventType, Treatment, ID = NULL, 
-                            LongTime = NULL, Intervention, TargetTime, TargetEvent = NULL, Target = NULL,
-                            CVArg = list(n = nrow(DataTable), fold_fun = folds_vfold,
-                                         cluster_ids = NULL, strata_ids = NULL),
-                            Model = NULL, PropScoreBackend = "SuperLearner", HazEstBackend = "coxph",
+formatArguments <- function(DataTable, # DataStructure = NULL, 
+                            EventTime, EventType, Treatment, ID = NULL, # LongTime = NULL, 
+                            Intervention, TargetTime = NULL, TargetEvent = NULL, # Target = NULL,
+                            CVArg = NULL, Model = NULL, PropScoreBackend = "SuperLearner", HazEstBackend = "coxph",
                             MaxUpdateIter = 100, OneStepEps = 0.1, MinNuisance = 0.05,
-                            Verbose = TRUE, GComp = TRUE, ReturnModels = TRUE, ...)
+                            Verbose = TRUE, GComp = TRUE, ReturnModels = TRUE, ConcreteArgs = NULL, 
+                            ...)
 {
-    ## Data Structure ----
-    # incorporate prodlim::EventHistory.frame?
-    if (!is.null(ConcreteArgs)) {
+    ## Data Structure - incorporate prodlim::EventHistory.frame?
+    if (!is.null(ConcreteArgs) | isTRUE(try(inherits(DataTable, "ConcreteArgs"), silent = TRUE))) {
+        if (isTRUE(try(inherits(DataTable, "ConcreteArgs"), silent = TRUE)))
+            ConcreteArgs <- DataTable
         if (!inherits(ConcreteArgs, "ConcreteArgs"))
             stop("ConcreteArgs must be of class 'ConcreteArgs', the output of ", 
                  "concrete::formatArguments()")
@@ -166,6 +169,7 @@ formatArguments <- function(ConcreteArgs = NULL, DataTable, DataStructure = NULL
         GComp <- ConcreteArgs[["GComp"]]
         ReturnModels <- ConcreteArgs[["ReturnModels"]]
     }
+    LongTime <- NULL
     DataTable <- formatDataTable(DT = DataTable, EventTime = EventTime, EventType = EventType, ID = ID, 
                                  Treatment = Treatment, LongTime = LongTime, Verbose = Verbose)
     
@@ -182,12 +186,12 @@ formatArguments <- function(ConcreteArgs = NULL, DataTable, DataStructure = NULL
     Regime <- getRegime(Intervention = Intervention, TrtVal = TrtVal, CovDT = CovDT)
     
     TargetEvent <- getTargetEvent(TargetEvent = TargetEvent, UniqueEvents = UniqueEvents)
-    checkTargetTime(TargetTime = TargetTime, TimeVal = TimeVal, TargetEvent = TargetEvent,
-                    TypeVal = TypeVal)
+    TargetTime <- getTargetTime(TargetTime = TargetTime, TimeVal = TimeVal, TargetEvent = TargetEvent,
+                                TypeVal = TypeVal)
     
     ## Estimation Paramters ----
     if (!exists("CVSeed")) CVSeed <- sample(0:1e8, 1)
-    CVFolds <- getCVFolds(CVArg = CVArg, CVSeed = CVSeed)
+    CVFolds <- getCVFolds(CVArg = CVArg, DataTable = DataTable, CVSeed = CVSeed)
     checkPropScoreBackend(PropScoreBackend)
     checkHazEstBackend(HazEstBackend)
     Model <- getModel(Model = Model, UniqueEvents = UniqueEvents, Censored = Censored, 
@@ -313,7 +317,6 @@ getID <- function(ID, DataTable = NULL) {
         if (inherits(IDVal, "try-error"))
             stop("No column named '", ID, "' was found in the supplied data. Check spelling ", 
                  "or input argument into DataTable")
-        attr(IDVal, "var.name") <- ID
     }
     if (any(is.list(IDVal), is.null(IDVal), is.nan(IDVal), is.na(IDVal)))
         stop("ID column must not include missing values")
@@ -472,24 +475,33 @@ getTargetEvent <- function(TargetEvent, UniqueEvents) {
     return(TargetEvent)
 }
 
-checkTargetTime <- function(TargetTime, TimeVal, TargetEvent, TypeVal) {
-    if (any(!is.vector(TargetTime), !is.numeric(TargetTime), is.list(TargetTime), try(TargetTime <= 0)))
-        stop("TargetTime must be a positive numeric vector.")
+getTargetTime <- function(TargetTime, TimeVal, TargetEvent, TypeVal) {
+    
     Times <- data.table::data.table("TimeVal" = TimeVal, "TypeVal" = TypeVal)
     MaxTime <- Times[TypeVal > 0, ][, max(TimeVal)]
     MinTime <- Times[TypeVal > 0, ][, list(TimeVal = min(TimeVal)), by = "TypeVal"]
     MinTimeEvents <- MinTime[["TypeVal"]]
     MinTime <- MinTime[["TimeVal"]]
     
-    if (max(TargetTime) > MaxTime)
-        stop("TargetTime must not target times after which all individuals are Censored, ", MaxTime)
-    
-    if (any(min(TargetTime) < MinTime))
-        warning("TargetTime is targeting times before any events of type(s): ", 
-                paste(MinTimeEvents[min(TargetTime) < MinTime], collapse = ", "))
+    if (!is.null(TargetTime)) {
+        if (any(!is.vector(TargetTime), !is.numeric(TargetTime), is.list(TargetTime), try(TargetTime <= 0)))
+            stop("TargetTime must be a positive numeric vector.")
+        if (max(TargetTime) > MaxTime)
+            stop("TargetTime must not target times after which all individuals are Censored, ", MaxTime)
+        if (any(min(TargetTime) < MinTime))
+            message("TargetTime includes a time at which some events have not yet occurred - ", 
+                    paste0(paste0("Event=", MinTimeEvents, ": ", MinTime), collapse = ", "))
+    } else{
+        TargetTime <- MaxTime
+        message("No TargetTime provided; targeting the last observed event time by default, which may ", 
+                "result in estimates with high variance if most subjects have been censored by that time")
+    }
+    return(TargetTime)
 }
 
-getCVFolds <- function(CVArg, CVSeed = sample(0:1e8, 1)) {
+getCVFolds <- function(CVArg, DataTable, CVSeed = sample(0:1e8, 1)) {
+    if (is.null(CVArg))
+        CVArg <- list(n = nrow(DataTable), fold_fun = folds_vfold, cluster_ids = NULL, strata_ids = NULL)
     ## cross validation setup ----
     # stratifying cv so that folds are balanced for treatment assignment & outcomes
     # theory? but regressions may fail in practice with rare events otherwise ### make efficient CV representation ----
@@ -505,6 +517,8 @@ getCVFolds <- function(CVArg, CVSeed = sample(0:1e8, 1)) {
 getModel <- function(Model, UniqueEvents, Censored, PropScoreBackend, HazEstBackend, 
                      EventTime, EventType, Treatment, CovDT) {
     CovName <- NULL
+    CovNames <- attr(CovDT, "CovNames")
+    
     if (is.null(Model)) {
         message("Model input missing. An example template will be returned but should be amended to",  
                 " suit your application. See examples in the concrete::formatArguments() documentation.")
@@ -544,43 +558,43 @@ getModel <- function(Model, UniqueEvents, Censored, PropScoreBackend, HazEstBack
     } else 
         stop("PropScoreBackend must be either `sl3` or `SuperLearner`.")
     
-    CovNames <- attr(CovDT, "CovNames")
-    if (!is.null(CovNames)) {
-        message("Cox model specifications have been renamed where necessary to reflect", 
-                " changed covariate names. Model specifications in .[['Model']] can be ", 
-                "checked against the covariate names in attr(.[['Data']], 'CovNames')")
-    }
-    
-    for (i in 1:length(Model)) {
-        if (grepl("\\d+", names(Model)[i])) {
-            if (is.list(Model[[i]])) {
-                if (is.null(names(Model[[i]]))) {
-                    names(Model[[i]]) <- paste0("model", 1:length(Model[[i]]))
-                } else if (any(names(Model[[i]]) == "")) {
-                    j <- which(names(Model[[i]]) == "")
-                    names(Model[[i]])[j] <- paste0("model", j)
-                }
-            } else 
-                Model[[i]] <- list("model1" = Model[[i]])
-            
+    CovNamesChanged <- FALSE
+    for (FitVar in names(Model)) {
+        if (grepl("\\d+", FitVar)) {
             if (HazEstBackend == "coxph") {
-                CoxLeft <- paste0("Surv(", EventTime, ", ", EventType, 
-                                  " == ", names(Model)[i], ") ~ ")
+                if (is.null(Model[[FitVar]])) {
+                    Model[[FitVar]] <- list("model1" = ~ .)
+                    message("No model was provided for event ", FitVar, ", so by default ", 
+                            "a main terms cox model with treatment and all covariates will be used.")
+                }
+                if (is.list(Model[[FitVar]])) {
+                    if (is.null(names(Model[[FitVar]]))) {
+                        names(Model[[FitVar]]) <- paste0("model", seq_along(Model[[FitVar]]))
+                    } else if (any(names(Model[[FitVar]]) == "")) {
+                        j <- which(names(Model[[FitVar]]) == "")
+                        names(Model[[FitVar]])[j] <- paste0("model", j)
+                    }
+                } else {
+                    Model[[FitVar]] <- list("model1" = Model[[FitVar]])
+                }
+                
+                CoxLeft <- paste0("Surv(", EventTime, ", ", EventType, " == ", FitVar, ") ~ ")
                 CoxLeftRegex <- paste0("^Surv\\(\\s*", EventTime, "\\s*,\\s*", EventType, 
-                                       "\\s*==\\s*", names(Model)[i], "\\s*\\)\\s*~\\s*")
-                for (j in seq_along(Model[[i]])) {
-                    Formula <- as.character(Model[[i]][j])
+                                       "\\s*==\\s*", FitVar, "\\s*\\)\\s*~\\s*")
+                for (j in seq_along(Model[[FitVar]])) {
+                    Formula <- as.character(Model[[FitVar]][j])
                     if (!grepl(CoxLeftRegex, Formula)) {
-                        message("The left hand side of the cox formula for Model[[", names(Model)[i], 
-                                "]][[", j, "]] has been corrected to ", "Surv(", EventTime, ", ", 
-                                EventType, " == ", names(Model)[i], ") ~ ")
+                        message("The left hand side of the cox formula for Model[[\"", FitVar, 
+                                "\"]][[", j, "]] has been corrected to ", "Surv(", EventTime, ", ", 
+                                EventType, " == ", FitVar, ") ~ ")
                     }
                     
                     CoxRight <- regmatches(Formula, regexpr("^.*~", Formula), invert = TRUE)
                     CoxRight <- tail(unlist(CoxRight), 1)  
                     
                     # rename covariates ----
-                    if (!is.null(CovNames)) {
+                    
+                    if (!isTRUE(attr(Model[[FitVar]][[j]], "NameChecked"))) {
                         for (covar in unique(CovNames[["CovName"]])) {
                             NewCol <- CovNames[CovName == covar, ][["ColName"]]
                             if (length(NewCol) > 1)
@@ -588,14 +602,23 @@ getModel <- function(Model, UniqueEvents, Censored, PropScoreBackend, HazEstBack
                             NewCol <- paste0("(", NewCol, ")")
                             OldCol <- regexpr(covar, CoxRight)
                             regmatches(CoxRight, OldCol, invert = FALSE) <- NewCol
+                            CovNamesChanged <- TRUE
                         }
                     }
-                    Model[[i]][[j]] <- as.formula(paste0(CoxLeft, CoxRight))
+                    Model[[FitVar]][[j]] <- as.formula(paste0(CoxLeft, CoxRight))
+                    attr(Model[[FitVar]][[j]], "NameChecked") <- TRUE
                 }
             } else 
                 stop("Models must be named for the treatment variable, or the numeric value ", 
                      "representing the failure or censoring event type")
         }
+        
+        
+    }
+    if (CovNamesChanged) {
+        message("Cox model specifications have been renamed where necessary to reflect", 
+                " changed covariate names. Model specifications in .[['Model']] can be ", 
+                "checked against the covariate names in attr(.[['Data']], 'CovNames')")
     }
     # warning("model checks not yet complete")
     return(Model)
@@ -607,6 +630,7 @@ getModelTemplate <- function(Treatment, UniqueEvents, Censored, EventType, Event
     EventModels <- lapply(sort(Events), function(j) {
         EventModel <- list("model1" = as.formula(paste0("Surv(", EventTime, ", ", 
                                                         EventType, " == ", j, ") ~ .")))
+        attr(EventModel[["model1"]], "NameChecked") <- TRUE
         return(EventModel)
     })
     
@@ -677,10 +701,24 @@ checkReturnModels <- function(ReturnModels) {
     }
 }
 
-
-ITT <- list("A==1" = list("intervention" = function(Trt, CovDT) {rep_len(1, length(Trt))},
-                          "g.star" = function(Trt, CovDT) {as.numeric(Trt == 1)}),
-            "A==0" = list("intervention" = function(Trt, CovDT) {rep_len(0, length(Trt))},
-                          "g.star" = function(Trt, CovDT) {as.numeric(Trt == 0)}))
-
+#' @describeIn formatArguments 
+makeITT <- function() {
+    ITT <- list("A=1" = list("intervention" = function(ObservedTreatment, Covariates) {
+        IntervenedAssignment <- rep_len(1, length(ObservedTreatment))
+        return(IntervenedAssignment)
+    },
+    "g.star" = function(Treatment, Covariates) {
+        IntervenedProbability <- as.numeric(Treatment == 1)
+        return(IntervenedProbability)
+    }),
+    "A=0" = list("intervention" = function(ObservedTreatment, Covariates) {
+        IntervenedAssignment <- rep_len(0, length(ObservedTreatment))
+        return(IntervenedAssignment)
+    },
+    "g.star" = function(Treatment, Covariates) {
+        IntervenedProbability <- as.numeric(Treatment == 0)
+        return(IntervenedProbability)
+    }))
+    return(ITT)
+}
 
