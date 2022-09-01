@@ -37,7 +37,7 @@
 #'           "age", "albumin", "sex", "bili")
 #' data <- data[, .SD, .SDcols = cols]
 #' 
-#' intervention <- concrete:::ITT
+#' intervention <- makeITT()
 #' target.time <- 2500
 #' target.event <- 1:2
 #' model <- list("trt" = c("SL.glm", "SL.glmnet"),
@@ -118,7 +118,9 @@ doConCRTmle <- function(Data, TargetTime, TargetEvent, Regime, CVFolds, Model, P
     # g-comp (sl estimate)
     # unadjusted cox model
     # tmle & ic
-    
+    attr(Estimates, "TargetTime") <- TargetTime
+    attr(Estimates, "TargetEvent") <- TargetEvent
+    attr(Estimates, "GComp") <- GComp
     return(Estimates)
 }
 

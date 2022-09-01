@@ -25,7 +25,7 @@ cols <- c("id", "time", "status", "trt",
           "age", "albumin", "sex", "bili")
 data <- data[, .SD, .SDcols = cols]
 
-intervention <- concrete:::ITT
+intervention <- makeITT()
 target.time <- 2500
 target.event <- 1:2
 model <- list("trt" = c("SL.glm", "SL.glmnet"),

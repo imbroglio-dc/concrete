@@ -1,7 +1,7 @@
 #' getOutput
 #'
 #' @param Estimate : list concrete Estimate object
-#' @param Estimand : character or list of function(s)
+#' @param Estimand : character or list of function(s) (default: c("RD", "RR", "Risk"))
 #' @param TargetTime : numeric
 #' @param TargetEvent : numeric
 #' @param GComp : boolean
@@ -17,11 +17,19 @@
 #' # concrete.out$RR
 #' # concrete.out$Risk
 
-getOutput <- function(Estimate, Estimand = c("RD", "RR", "Risk"), TargetTime, TargetEvent, GComp) {
+getOutput <- function(Estimate, Estimand = c("RD", "RR", "Risk"), 
+                      TargetTime = NULL, 
+                      TargetEvent = NULL, 
+                      GComp = NULL) {
     if (!all(sapply(Estimand, function(e) any(is.function(e), grepl("(rd)|(rr)|(risk)", tolower(e)))))) {
         stop("Estimand must be in c('RD', 'RR', 'Risk'), or be a list of user-specified function(s) of",
              "`Estimate`, `Estimand`, `TargetEvent`, `TargetTime`, and `GComp`.")
     }
+    
+    if (is.null(TargetTime)) TargetTime <- attr(Estimate, "TargetTime")
+    if (is.null(TargetEvent)) TargetEvent <- attr(Estimate, "TargetEvent")
+    if (is.null(GComp)) GComp <- attr(Estimate, "GComp")
+    
     output <- list()
     if (any(sapply(Estimand, is.function))) {
         output <- lapply(Estimand[which(sapply(Estimand, is.function))], function(estimand) {

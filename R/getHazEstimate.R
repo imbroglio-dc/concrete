@@ -108,14 +108,16 @@ getHazSurvPred <- function(Data, HazFits, MinNuisance, TargetEvent,
         names(PredHaz) <- names(HazFits)
         
         CensInd <- which(sapply(PredHaz, function(haz) attr(haz, "j") == 0))
-        TotalSurv <- apply(Reduce(`+`, PredHaz[-CensInd]), 2, function(haz) exp(-cumsum(haz)))
+        HazInd <- setdiff(seq_along(PredHaz), CensInd)
+        
+        TotalSurv <- apply(Reduce(`+`, PredHaz[HazInd]), 2, function(haz) exp(-cumsum(haz)))
         
         if (Censored) {
             LaggedCensSurv <- apply(PredHaz[[CensInd]], 2, function(haz) c(1, utils::head(exp(-cumsum(haz)), -1)))
-            PredHaz <- PredHaz[-CensInd]
         } else {
             LaggedCensSurv <- 1
         }
+        PredHaz <- PredHaz[HazInd]
         
         Survival <- list("TotalSurv" = TotalSurv, "LaggedCensSurv" = LaggedCensSurv)
         return(list("Hazards" = PredHaz, "Survival" = Survival))

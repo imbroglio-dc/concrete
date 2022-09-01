@@ -6,3 +6,4 @@
 ^concrete$
 ^obsolete-concrete$
 ^codemeta\.json$
+^.github$

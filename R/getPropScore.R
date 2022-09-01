@@ -45,7 +45,7 @@ getSl3PropScore <- function(TrtVal, CovDT, TrtModel, Regime, CVFolds, ReturnMode
     PropScores <- lapply(Regime, function(a) {
         if (is.numeric(a) & length(a) == length(TrtVal)) {
             if (all(a %in% c(0, 1))) {
-                ga1 <- TrtFit$predict()
+                ga1 <- unlist(TrtFit$predict())
                 PropScore <- ga1
                 PropScore[a == 0] <- 1 - PropScore[a == 0]
             } else {
@@ -103,11 +103,10 @@ truncNuisanceDenom <- function(NuisanceDenom, MinNuisance) {
         warning("Functionality for applying a MinNuisance function is not yet implemented")
     if (is.numeric(MinNuisance) & length(MinNuisance) == 1) {
         if (MinNuisance < 1 & MinNuisance > 0) {
-            if (min(NuisanceDenom) < MinNuisance | max(NuisanceDenom) > 1 - MinNuisance) {
-                warning("practical near positivity violation, truncating NuisanceDenom +-", MinNuisance, "\n")
+            if (min(NuisanceDenom) < MinNuisance) {
+                cat("practical near positivity violation, truncating NuisanceDenom to ", MinNuisance, "\n")
                 attr(NuisanceDenom, "original") <- NuisanceDenom
                 NuisanceDenom[NuisanceDenom < MinNuisance] <- MinNuisance
-                NuisanceDenom[NuisanceDenom > (1 - MinNuisance)] <- 1 - MinNuisance
             }
         }
     }

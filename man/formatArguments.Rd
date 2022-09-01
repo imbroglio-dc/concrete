@@ -2,23 +2,18 @@
 % Please edit documentation in R/formatArguments.R
 \name{formatArguments}
 \alias{formatArguments}
-\title{Title}
+\alias{makeITT}
+\title{formatArguments}
 \usage{
 formatArguments(
-  ConcreteArgs = NULL,
   DataTable,
-  DataStructure = NULL,
   EventTime,
   EventType,
   Treatment,
-  ID = NULL,
-  LongTime = NULL,
   Intervention,
-  TargetTime,
+  TargetTime = NULL,
   TargetEvent = NULL,
-  Target = NULL,
-  CVArg = list(n = nrow(DataTable), fold_fun = folds_vfold, cluster_ids = NULL,
-    strata_ids = NULL),
+  CVArg = NULL,
   Model = NULL,
   PropScoreBackend = "SuperLearner",
   HazEstBackend = "coxph",
@@ -28,13 +23,15 @@ formatArguments(
   Verbose = TRUE,
   GComp = TRUE,
   ReturnModels = TRUE,
+  ConcreteArgs = NULL,
+  ID = NULL,
+  RenameCovs = TRUE,
   ...
 )
+
+makeITT()
 }
 \arguments{
-\item{ConcreteArgs}{list (default: NULL, not yet ready) : Use to recheck amended output from previous formatArguments()
-calls. A non-NULL input will cause all other arguments to be ignored.}
-
 \item{DataTable}{data.table (n x (d + (3:5)); data.table of the observed data, with rows n =
 the number of observations and d = the number of baseline covariates. DataTable must include
 the following columns:
@@ -48,11 +45,8 @@ May include
 \itemize{
 \item{"ID"}{: factor, character, or numeric; unique subject id. If ID column is missing, row
 numbers will be used as ID. For longitudinal data, ID must be provided}
-\item{"LongTime"}{: numeric; Specifies monitoring times for longitudinal data structures}
 \item{"Baseline Covariates"}{: factor, character, or numeric; }
 }}
-
-\item{DataStructure}{formula (not ready): e.g. Surv(time, type) ~ Intervention(trt) + ...}
 
 \item{EventTime}{character: the column name of the observed event or censoring time}
 
@@ -60,26 +54,20 @@ numbers will be used as ID. For longitudinal data, ID must be provided}
 
 \item{Treatment}{character: the column name of the observed treatment assignment}
 
-\item{ID}{character (default: NULL): the column name of the observed subject id}
-
-\item{LongTime}{character (not used): the column name of the monitoring times for
-longitudinal data structures}
-
 \item{Intervention}{list: a list of desired interventions on the treatment variable.
 Each intervention must be a list containing two named functions:
 'intervention' = function(treatment vector, covariate data) and
 'gstar' = function(treatment vector, covariate data)
-concrete:::ITT can be used to specify an intent-to-treat analysis for a
+concrete::makeITT() can be used to specify an intent-to-treat analysis for a
 binary intervention variable}
 
-\item{TargetTime}{numeric: vector of target times}
+\item{TargetTime}{numeric: vector of target times. If NULL, the last observed non-censoring event
+time will be targeted.}
 
-\item{TargetEvent}{numeric: vector of target events - some subset of unique EventTypes.}
+\item{TargetEvent}{numeric: vector of target events - some subset of unique EventTypes. If NULL,
+all non-censoring observed event types will be targeted.}
 
-\item{Target}{(not yet implemented) data.table / data.frame (?? x 2); a table containing all
-combinations of target events (column 1) and target times (column 2).}
-
-\item{CVArg}{list: arguments to be passed into do.call(origami::make_folds). The default is
+\item{CVArg}{list: arguments to be passed into do.call(origami::make_folds). If NULL, the default is
 list(n = nrow(DataTable), fold_fun = folds_vfold, cluster_ids = NULL, strata_ids = NULL)}
 
 \item{Model}{list (default: NULL): named list of models, one for each failure or censoring event
@@ -90,54 +78,68 @@ a template will be generated for the user to amend.}
 
 \item{HazEstBackend}{character (default: "coxph"): currently must be "coxph"}
 
-\item{MaxUpdateIter}{numeric: the number of one-step update steps}
+\item{MaxUpdateIter}{numeric (default: 100): the number of one-step update steps}
 
-\item{OneStepEps}{numeric: the one-step tmle step size}
+\item{OneStepEps}{numeric (default: 1): the one-step tmle step size}
 
-\item{MinNuisance}{numeric: the minimum value of the nuisance parameter denominator in the
+\item{MinNuisance}{numeric (default: 0.05): the minimum value of the nuisance parameter denominator in the
 clever covariate}
 
 \item{Verbose}{boolean}
 
-\item{GComp}{boolean}
+\item{GComp}{boolean (default: TRUE): return g-computation formula plug-in estimates}
 
-\item{ReturnModels}{boolean}
+\item{ReturnModels}{boolean (default: TRUE): return fitted models from the initial estimation stage}
+
+\item{ConcreteArgs}{list (default: NULL, not yet ready) : Use to recheck amended output from previous formatArguments()
+calls. A non-NULL input will cause all other arguments to be ignored.}
+
+\item{ID}{character (default: NULL): the column name of the observed subject id
+longitudinal data structures}
+
+\item{RenameCovs}{boolean (default: TRUE): whether or not to rename covariates}
 
 \item{...}{...}
 }
 \value{
 a list of class "ConcreteArgs"
 \itemize{
-\item{"Data"}{: data.table containing EventTime, EventType, Treatment, and baseline covariates}
-\item{"Events"}{: numeric vector encoding unique failure event types}
-\item{"TargetTime"}{: numeric vector of target times to evaluate risk/survival}
-\item{"TargetEvent"}{: numeric vector of target events}
-\item{"Regime"}{: named list of interventions, comprised of two functions}
+\item{Data}{: data.table containing EventTime, EventType, Treatment, and potentially ID and baseline covariates. Has the following attributes}
 \itemize{
-\item{"intervention"}{: function of Treatment and Covariates, outputting a vector of desired treatment assignments}
-\item{"g.star"}{: function of Treatment and Covariates, outputting a vector of desired treatment assignment probabilities}
+\item{EventTime}{: the column name of the observed event or censoring time}
+\item{EventType}{: the column name of the observed event type. (0 indicating censoring)}
+\item{Treatment}{: the column name of the observed treatment assignment}
+\item{ID}{: the column name of the observed subject id}
+\item{RenameCovs}{: boolean whether or not covariates are renamed}
 }
-\item{"CVFolds"}{: list of cross-validation fold assignments in the structure as output by origami::make_folds()}
-\item{"Model"}{: list of cross-validation fold assignments in the structure as output by origami::make_folds()}
-\item{"PropScoreBackend"}{: list of cross-validation fold assignments in the structure as output by origami::make_folds()}
-\item{"HazEstBackend"}{: list of cross-validation fold assignments in the structure as output by origami::make_folds()}
-\item{"MaxUpdateIter"}{: list of cross-validation fold assignments in the structure as output by origami::make_folds()}
-\item{"OneStepEps"}{: list of cross-validation fold assignments in the structure as output by origami::make_folds()}
-\item{"MinNuisance"}{: numeric cutoff}
-\item{"Verbose"}{: boolean}
-\item{"GComp"}{: boolean, to return g-computation formula plug-in estimates or not}
-}
-May include
+\item{TargetTime}{: numeric vector of target times to evaluate risk/survival}
+\item{TargetEvent}{: numeric vector of target events}
+\item{Regime}{: named list of desired regimes, each tagged with a 'g.star' attribute function}
 \itemize{
-\item{"ID"}{: factor, character, or numeric; unique subject id. If ID column is missing, row
-numbers will be used as ID. For longitudinal data, ID must be provided}
-\item{"LongTime"}{: numeric; Specifies monitoring times for longitudinal data structures}
-\item{"Baseline Covariates"}{: factor, character, or numeric; }
+\item{Regime[[i]]}{: a vector of desired treatment assignments}
+\item{attr(Regime[[i]], "g.star")}{: function of Treatment and Covariates, outputting a vector of desired treatment assignment probabilities}
+}
+\item{CVFolds}{: list of cross-validation fold assignments in the structure as output by origami::make_folds()}
+\item{Model}{: named list of model specifications, one for each unique 'EventType' and one for the 'Treatment' variable.}
+\item{PropScoreBackend}{: either "sl3" or "Superlearner"}
+\item{HazEstBackend}{: "coxph"}
+\item{MaxUpdateIter}{: the number of one-step update steps}
+\item{OneStepEps}{: list of cross-validation fold assignments in the structure as output by origami::make_folds()}
+\item{MinNuisance}{: numeric lower bound for the propensity score denominator in the efficient influence function}
+\item{Verbose}{: boolean to print additional information}
+\item{GComp}{: boolean to return g-computation formula plug-in estimates}
+\item{ReturnModels}{: boolean to return fitted models from the initial estimation stage}
 }
 }
 \description{
-Title
+formatArguments() checks and reformats inputs into a form that can be interpreted by doConcrete().
+makeITT() returns an Intervention list for a single, binary, point-treatment variable
 }
+\section{Functions}{
+\itemize{
+\item \code{makeITT()}: 
+
+}}
 \examples{
 library(data.table)
 library(concrete)
@@ -147,7 +149,10 @@ data[, trt := sample(0:1, nrow(data), TRUE)]
 cols <- c("id", "time", "status", "trt",
           "age", "albumin", "sex", "bili")
 data <- data[, .SD, .SDcols = cols]
-intervention <- concrete:::ITT
+
+# makeITT() creates a list of functions to specify intent-to-treat 
+#   regimes for a binary, single, point treatment variable
+intervention <- makeITT()
 target.time <- 2500
 target.event <- 1:2
 model <- list("trt" = c("SL.glm", "SL.glmnet"),
@@ -166,19 +171,21 @@ concrete.args <- formatArguments(DataTable = data,
                                  TargetEvent = target.event,
                                  Model = model)
 
-# if formatArguments(Model = NULL), a model template will be returned for the user to amend.
-# examples of editing models for censoring and failure events
-concrete.args[["Model"]][["0"]] <- list("model1" = Surv(time, status == 0) ~ trt:sex + age + bili)
-concrete.args[["Model"]][["1"]] <- list(Surv(time, status == 1) ~ trt, 
-                                       Surv(time, status == 1) ~ .)
+# if formatArguments(Model = NULL), a template will be returned for the user to modify
+# examples of modifying/adding models for censoring and failure events
+concrete.args[["Model"]][["0"]] <-
+    list(Surv(time, status == 0) ~ trt:sex + age + bili)
+concrete.args[["Model"]][["1"]] <- 
+    list("mod1" = Surv(time, status == 1) ~ trt,
+         "mod2" = Surv(time, status == 1) ~ .)
 
-# examples of editing models for binary treatment, using PropScoreBackend = "Superlearner"
+# 
+# examples of modifying "Superlearner" treatment models
 concrete.args[["Model"]][["trt"]] <- c("SL.glm", "SL.glmnet", "SL.bayesglm")
 
-# examples of editing models for binary treatment, using PropScoreBackend = "sl3"
+# examples of modifying "sl3" treatment models
 library(sl3)
-concrete.args[["Model"]][["trt"]] <- make_learner(Stack, Lrnr_hal9001$new(), 
-                                                 Lrnr_glmnet$new(), Lrnr_glm$new())
-
+concrete.args[["Model"]][["trt"]] <-
+    make_learner(Stack, Lrnr_hal9001$new(), Lrnr_glmnet$new(), Lrnr_glm$new())
 
 }

@@ -42,4 +42,4 @@ test_that("ID is a vector with non-\'null\'-type values", {
     }
 })
 
-
+expect_known_output(concrete.args, "tests/testthat/formatArguments-concrete.args-knownvalue")
