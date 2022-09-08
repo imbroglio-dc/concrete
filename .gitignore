@@ -41,3 +41,6 @@ vignettes/*.pdf
 *.RDS
 
 *.Rproj
+
+*.github
+output/
