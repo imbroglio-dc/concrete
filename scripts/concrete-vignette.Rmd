@@ -1,13 +1,35 @@
 ---
 title: "concrete-vignette"
 author: "David Chen"
-date: "2022-08-23"
+date: "2022-09-08"
 output: pdf_document
 ---
+What concrete does: 
+- Data Structure
+ - continuous time-to-event outcomes + right-censored + competing risks
+ - baseline covariate adjustment
+ - binary point treatment (multinomial and continuous to come)
+
+- Estimands
+ - static intervention (dynamic needs testing, stochastic to come)
+ - absolute risk-derived parameters, e.g. relative risk, risk difference, event-free survival
+ - can target multiple cause-specific risks at multiple times
+ - 
+- TMLE
+ - one-step TMLE using local PnEIC-clever covariate approximation
+
+What concrete does not do: 
+- longitudinal treatment, mediation, time-dependent confounding 
+- delayed entry, left-censoring
+- 
+
+concrete workflow
+ - cycle inputs through formatArguments() until it returns no errors
+ - run doConcrete() and wait
+ - get output from getOutput() (pretty print and plot not yet implemented)
 
 ```{r setup, include=TRUE}
 library(concrete)
-library(data.table)
 ```
 
 ## formatArguments()

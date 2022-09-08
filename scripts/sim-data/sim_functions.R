@@ -138,16 +138,17 @@ simConCR <- function(interval = 1:2e3,
     return(simulate_data(n = n, assign_A = assign_A, base_data = base_data, random_seed = random_seed))
 }
 
-getTrueRisks <- function(time_range = 1:2000, n = 1e6, 
+getTrueRisks <- function(time_range = 1:2000, 
+                         n = 1e6, 
                          assign_A = function(W, n) return(rep_len(1, n)), 
                          ltfu_coefs = c(0, 1, 1, 1),
-                         eos_coefs = c(1e10, 1e10)) {
+                         eos_coefs = c(max(time_range) + 1, max(time_range) + 1)) {
     outcomes <- simConCR(assign_A = assign_A, 
                          ltfu_coefs = ltfu_coefs,
                          eos_coefs = eos_coefs, 
                          n = n)
     if (sum(outcomes$EVENT != 0)) {
-        Js <- sort(unique(outcomes$EVENT))
+        Js <- setdiff(sort(unique(outcomes$EVENT)), 0)
         risks <- data.table(sapply(Js, 
                                    function(j) colSums(outer(outcomes[EVENT == j, TIME], time_range, `<=`)))) / n
         setnames(risks, as.character(Js))
