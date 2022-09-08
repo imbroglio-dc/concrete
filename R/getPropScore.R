@@ -97,18 +97,3 @@ getSuperLearnerPropScore <- function(TrtVal, CovDT, TrtModel, Regime, CVFolds, R
     if (ReturnModels) attr(PropScores, "TrtFit") <- TrtFit
     return(PropScores)
 }
-
-truncNuisanceDenom <- function(NuisanceDenom, MinNuisance) {
-    if (is.function(MinNuisance))
-        warning("Functionality for applying a MinNuisance function is not yet implemented")
-    if (is.numeric(MinNuisance) & length(MinNuisance) == 1) {
-        if (MinNuisance < 1 & MinNuisance > 0) {
-            if (min(NuisanceDenom) < MinNuisance) {
-                cat("practical near positivity violation, truncating NuisanceDenom to ", MinNuisance, "\n")
-                attr(NuisanceDenom, "original") <- NuisanceDenom
-                NuisanceDenom[NuisanceDenom < MinNuisance] <- MinNuisance
-            }
-        }
-    }
-    return(NuisanceDenom)
-}

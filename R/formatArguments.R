@@ -284,7 +284,10 @@ formatDataTable <- function(DT, EventTime, EventType, Treatment, ID, LongTime, V
     ID <- ID[["IDName"]]
     LongTime <- NULL # LongTime <- getLongTime(LongTime = LongTime, DataTable = DT)
     
-    CovNames <- setdiff(colnames(DT), c(EventTime, EventType, Treatment, ID, LongTime))
+    
+    SpecialCols <- c(ID, EventTime, EventType, Treatment, LongTime)
+    CovNames <- setdiff(colnames(DT), SpecialCols)
+    
     if (identical(paste0(gsub("L\\d+", "", CovNames), collapse = ""), character(0)) | !RenameCovs) { 
         if (is.null(attr(DT, "CovNames")))
             attr(DT, "CovNames") <- data.table(ColName = colnames(DT),
@@ -298,7 +301,7 @@ formatDataTable <- function(DT, EventTime, EventType, Treatment, ID, LongTime, V
                                  ID = ID, 
                                  LongTime = LongTime, 
                                  Verbose = Verbose)
-        DT <- cbind(subset(DT, select = c(EventTime, EventType, Treatment, ID, LongTime)), CovDT)
+        DT <- cbind(DT[, .SD, .SDcols = SpecialCols], CovDT)
         attr(DT, "CovNames") <- attr(CovDT, "CovNames")
     }
     attr(DT, "EventTime") <- EventTime
@@ -307,6 +310,7 @@ formatDataTable <- function(DT, EventTime, EventType, Treatment, ID, LongTime, V
     attr(DT, "LongTime") <- LongTime
     attr(DT, "ID") <- ID
     attr(DT, "RenameCovs") <- RenameCovs
+    setcolorder(DT, SpecialCols)
     return(DT)
 }
 
@@ -350,7 +354,8 @@ checkTreatment <- function(Treatment, DataTable = NULL) {
         attr(tmp, "var.name") <- Treatment
         Treatment <- tmp
         if (any(!is.numeric(Treatment), is.nan(Treatment), is.infinite(Treatment), is.list(Treatment)))
-            stop("Treatment must be a numeric vector with finite values")
+            stop("Treatment must be a numeric vector with finite values. Encode binary variables ", 
+                 "as 0 or 1 and encode multinomial (factor) variables as positive integers.")
     } else 
         stop("`Treatment` must be the name of the column containing the intervention variable.")
     return(Treatment)
@@ -362,8 +367,7 @@ getID <- function(ID, DataTable = NULL) {
         IDVal <- 1:nrow(DataTable)
         message("No ID column specified. DataTable row numbers will be used as subject IDs, ",
                 "which will not be appropriate for longitudinal data structures.")
-    }
-    if (is.character(ID)) {
+    } else if (is.character(ID)) {
         IDVal <- try(DataTable[[ID]])
         if (inherits(IDVal, "try-error"))
             stop("No column named '", ID, "' was found in the supplied data. Check spelling ", 
@@ -491,17 +495,21 @@ getRegime <- function(Intervention, TrtVal, CovDT) {
                          "]] and try again")
             }
             return(RegimeVal)
-        }) 
+        })
+        if (is.null(names(Intervention))) {
+            names(Regimes) <- paste0("Regime", seq_along(Intervention))
+        } else
+            names(Regimes) <- names(Intervention)
     }
     else if (all(try(as.character(Intervention)) %in% c("0", "1"))) {
         Regimes <- list()
         if ("1" %in% try(as.character(Intervention))) {
-            Regimes[["Treated"]] <- rep_len(1, length(TrtVal))
-            attr(Regimes[["Treated"]], "g.star") <- function(a, L) {as.numeric(a == 1)}
+            Regimes[["A=1"]] <- rep_len(1, length(TrtVal))
+            attr(Regimes[["A=1"]], "g.star") <- function(a, L) {as.numeric(a == 1)}
         }
         if ("0" %in% try(as.character(Intervention))) {
-            Regimes[["Control"]] <- rep_len(0, length(TrtVal))
-            attr(Regimes[["Control"]], "g.star") <- function(a, L) {as.numeric(a == 0)}
+            Regimes[["A=0"]] <- rep_len(0, length(TrtVal))
+            attr(Regimes[["A=0"]], "g.star") <- function(a, L) {as.numeric(a == 0)}
         }
     } else
         stop("Intervention must be \"0\", \"1\", c(\"0\", \"1\"), or a list of named regimes, ",
@@ -511,7 +519,6 @@ getRegime <- function(Intervention, TrtVal, CovDT) {
              " as the observed treatment. The g.star function f(A, L) must be a function ",
              "of treatment and covariates that returns numeric probabilities bounded in",
              "[0, 1].")
-    names(Regimes) <- names(Intervention)
     return(Regimes)
 }
 

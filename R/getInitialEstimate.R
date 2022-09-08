@@ -46,11 +46,14 @@ getInitialEstimate <- function(Data, Model, CVFolds, MinNuisance, TargetEvent, T
                 PropScores[[a]][i] * HazSurvPreds[[a]][["Survival"]][["LaggedCensSurv"]][, i]
             })   
         } else {
-            NuisanceWeight <- sapply(seq_along(PropScores[[a]]), function(i) {
-                PropScores[[a]][i] * 1
-            })   
+            NuisanceWeight <- matrix(PropScores[[a]], 
+                                     nrow = nrow(HazSurvPreds[[a]][["Survival"]][["TotalSurv"]]), 
+                                     ncol = ncol(HazSurvPreds[[a]][["Survival"]][["TotalSurv"]]), 
+                                     byrow = TRUE) 
         }
-        NuisanceWeight <- 1 / truncNuisanceDenom(NuisanceWeight, MinNuisance)
+        NuisanceWeight <- 1 / truncNuisanceDenom(NuisanceDenom = NuisanceWeight, 
+                                                 MinNuisance = MinNuisance, 
+                                                 RegimeName = names(PropScores)[a])
         return(list("PropScore" = PropScores[[a]],
                     "Hazards" = HazSurvPreds[[a]][["Hazards"]],
                     "EvntFreeSurv" = HazSurvPreds[[a]][["Survival"]][["TotalSurv"]],
@@ -66,5 +69,21 @@ getInitialEstimate <- function(Data, Model, CVFolds, MinNuisance, TargetEvent, T
         attr(InitialEstimates, "ModelFits") <- ModelFits
     }
     return(InitialEstimates)
+}
+
+truncNuisanceDenom <- function(NuisanceDenom, MinNuisance, RegimeName) {
+    if (is.function(MinNuisance))
+        warning("Functionality for applying a MinNuisance function is not yet implemented")
+    if (is.numeric(MinNuisance) & length(MinNuisance) == 1) {
+        if (MinNuisance < 1 & MinNuisance > 0) {
+            if (min(NuisanceDenom) < MinNuisance) {
+                cat("practical near positivity violation, truncating NuisanceDenom to ", MinNuisance,
+                    " for regime: ", RegimeName,"\n")
+                attr(NuisanceDenom, "original") <- NuisanceDenom
+                NuisanceDenom[NuisanceDenom < MinNuisance] <- MinNuisance
+            }
+        }
+    }
+    return(NuisanceDenom)
 }
 
