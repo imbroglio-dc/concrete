@@ -4,44 +4,65 @@ author: "David Chen"
 date: "2022-09-08"
 output: pdf_document
 ---
-What concrete does: 
+# concrete
+## What concrete does:
 - Data Structure
- - continuous time-to-event outcomes + right-censored + competing risks
- - baseline covariate adjustment
- - binary point treatment (multinomial and continuous to come)
-
+    - survival time-to-event in continuous time
+    - right-censoring & competing risks
+    - baseline covariate adjustment
+    - binary point treatment (multinomial and continuous to come)
+ 
 - Estimands
- - static intervention (dynamic needs testing, stochastic to come)
- - absolute risk-derived parameters, e.g. relative risk, risk difference, event-free survival
- - can target multiple cause-specific risks at multiple times
- - 
-- TMLE
- - one-step TMLE using local PnEIC-clever covariate approximation
+    - static intervention (dynamic needs testing, stochastic to come)
+    - absolute risk-derived parameters, e.g. relative risk, risk difference, event-free survival
+    - can target multiple cause-specific risks at multiple times
 
-What concrete does not do: 
-- longitudinal treatment, mediation, time-dependent confounding 
-- delayed entry, left-censoring
-- 
+- Estimation
+    - propensity scores: `SuperLearner` or `sl3`-based SuperLearner
+    - hazards: "hacky" (see Anders!) Cox model based discrete SuperLearner
+    - plug-in g-computation estimator of risks using discrete Superlearner hazard
+    - one-step TMLE based on the local PnEIC-clever covariate approximation
 
-concrete workflow
- - cycle inputs through formatArguments() until it returns no errors
- - run doConcrete() and wait
- - get output from getOutput() (pretty print and plot not yet implemented)
+## What concrete does not do... yet?: 
+ - `formal` survival SuperLearner backend, e.g. `riskRegression` or `survSuperLearner`
+ - longitudinal treatment, mediation, time-dependent confounding 
+ - imputation?
+ - requests?
+
+## What concrete will not do:
+ - left-censoring (delayed entry)
+ - interval censoring
+ 
+# concrete Workflow
+1. Cycle inputs through formatArguments() until it returns no errors
+2. run doConcrete() and wait
+3. get output from getOutput() (pretty printing and plotting not yet implemented)
 
 ```{r setup, include=TRUE}
+devtools::install_github("imbroglio-dc/concrete")
 library(concrete)
+library(data.table)
 ```
 
-## formatArguments()
+# formatArguments()
 
+3 major "types" of arguments: 
+ - specifying data
+ - specifying estimand
+ - specifying estimation
+
+(Also a growing collection of miscellaneous arguments)
+
+## Data Arguments
 ### DataTable
-DataTable should be a data.frame or data.table, each row containing one subject's information (longitudinal data not supported). DataTable must include the following columns: 
-\begin{itemize}
-\item EventTime: the time to observed failure (or censoring) event.
-\item EventType: the type of event, encoded as integers with 0 being reserved for right-censoring.
-\item Treatment: the intervention variable - binary is fully supported while numeric and multinomial interventions may be supported in the future.
-\end{itemize}
-DataTable may include an 'ID' column (potentially for stratified cross-validation, etc) and any number of column containing baseline covariates.
+ - data type: data.table or something that can be coerced into data.table (e.g. data.frame, matrix)
+ - necessary columns: 
+    - EventTime: the time to observed failure (or censoring) event.
+    - EventType: the type of event, encoded as integers with 0 being reserved for right-censoring.
+    - Treatment: the intervention variable - binary is fully supported while numeric and multinomial interventions may be supported in the future.
+ - optional columns:
+    - ID (potentially for stratified cross-validation, etc) 
+    - any number of column containing baseline covariates.
 
 ```{r DataTable structure}
 set.seed(0)
@@ -56,45 +77,57 @@ The EventTime column must be positive numeric (e.g. obs\$time), the EventType co
 
 This data is passed into concrete as:
 
-```{r formatArguments: data structure, eval=FALSE}
-ConcreteArgs <- formatArguments(DataTable = obs, EventTime = "time", EventType = "status", 
-                                Treatment = "trt", ID = "id")
+```{r formatArguments: data structure}
+ConcreteArgs <- formatArguments(DataTable = obs, 
+                                EventTime = "time", 
+                                EventType = "status", 
+                                Treatment = "trt", 
+                                ID = "id", 
+                                Intervention = 0:1)
 ```
 
-### Intervention
+### Covariate encoding & renaming
 
-The desired intervention is specified by a pair of functions: an 'intervention' function which outputs desired treatment *assignments* and a 'g.star' function which outputs desired treatment *probabilities*. In the simple case of a 2-armed trial where the desired treatment assignments are either to assign everyone the treatment (i.e. trt = 1) or to assign everyone to a control (i.e. trt = 0), the functions are available as `concrete::ITT`. ITT is a list of two desired counterfactual interventions: "A==1" details an the intervention where everyone is assigned treatment, and "A==0" details an intervention where everyone is assigned control. 
+```{r covs}
+head(ConcreteArgs$Data)
+```
+```{r}
+attr(ConcreteArgs$Data, "CovNames")
+```
+
+## Target Estimand
+Intervention, TargetTime, TargetEvent
+
+### Intervention
+For simple ITT, desired interventions can be passed as 0, 1, 0:1. (multinomial support soon) 
+
+The desired intervention is specified by a pair of functions: an 'intervention' function which outputs desired treatment *assignments* and a 'g.star' function which outputs desired treatment *probabilities*. In the simple case of a 2-armed trial where the desired treatment assignments are either to assign everyone the treatment (i.e. trt = 1) or to assign everyone to a control (i.e. trt = 0), the functions are available as `concrete::makeITT()`. ITT is a list of two desired counterfactual interventions: "A=1" details an the intervention where everyone is assigned treatment, and "A=0" details an intervention where everyone is assigned control. 
 
 ```{r ITT}
 ITT <- makeITT()
 str(ITT, give.attr = FALSE)
 ```
 
-The intervention function takes as inputs the vector of observed treatment assignments and data.table of covariates, and outputs a vector of desired treatment assignments. For "A==1" the intervention function returns a vector of 1s.
+The intervention function takes as inputs the vector of observed treatment assignments and data.table of covariates, and outputs a vector of desired treatment assignments. For "A=1" the intervention function returns a vector of 1s.
 
 ```{r ITT intervention }
-ITT[["A==1"]]$intervention
+ITT[["A=1"]]$intervention
 ```
 
 The 'g.star' function takes as inputs the vector of treatment assignments and data.table of covariates, and outputs a vector of desired treatment probabilities for the provided vector of treatment assignments. In "A==1", the desired intervention is to assign everyone to treatment (i.e. trt = 1) with 100\% probability and to control with 0% probability and the corresponding g.star function reflects this, returning 1 if the treatment assignment is 1 and 0 if the treatment assignment is 0. 
 
 ```{r ITT g.star}
-ITT[["A==1"]]$g.star
+ITT[["A=1"]]$g.star
 ```
 
 For "A==0" the intervention function returns a vector of 0s and the treatment assignment probabilities are flipped so that a treatment assignment of 0 is given 100\% probability while treatment assignments of 1 are given 0\% probability. 
 
 ```{r ITT control}
-ITT[["A==0"]]
+ITT[["A=0"]]
 ```
 
 This method of specifying treatment assignments allows for more flexible dynamic and stochastic treatment rules.
 
-```{r formatArguments(Intervention = ), eval=FALSE}
-ConcreteArgs <- formatArguments(DataTable = obs, EventTime = "time", EventType = "status", 
-                                Treatment = "trt", ID = "id", 
-                                Intervention = makeITT())
-```
 
 ### Targets
 The continuous-time TMLE for survival outcomes implemented in concrete estimates treatment specific risk for targeted events at targeted times.
@@ -105,7 +138,7 @@ For instance, in the `pbc` dataset, there are 3 possible values of "status": 0 f
 ```{r Target Events,eval=FALSE}
 ConcreteArgs <- formatArguments(DataTable = obs, EventTime = "time", EventType = "status", 
                                 Treatment = "trt", ID = "id", 
-                                Intervention = ITT, TargetEvent = 1:2)
+                                Intervention = 0:1, TargetEvent = 1:2)
 ```
 
 If no input is provided for TargetEvent, the formatArguments will use target all observed failure events by default.
@@ -117,7 +150,7 @@ Target times should be restricted to the time range in which failure events are 
 ExtrapolationTime <- unique(obs[status > 0, max(time)]) + 1
 ConcreteArgs <- formatArguments(DataTable = obs, EventTime = "time", EventType = "status", 
                                 Treatment = "trt", ID = "id", 
-                                Intervention = ITT, TargetEvent = 1:2, TargetTime = ExtrapolationTime)
+                                Intervention = 0:1, TargetEvent = 1:2, TargetTime = ExtrapolationTime)
 ```
 
 ```{r, Target Times behind the scenes, echo=FALSE}
@@ -129,7 +162,7 @@ tmp <- as.character(attr(try(concrete:::getTargetTime(
 ```{r formatArgumentsTargetTimes}
 ConcreteArgs <- formatArguments(DataTable = obs, EventTime = "time", EventType = "status", 
                                 Treatment = "trt", ID = "id", 
-                                Intervention = ITT, TargetEvent = 1:2, TargetTime = (3:7)*500)
+                                Intervention = 0:1, TargetEvent = 1:2, TargetTime = (3:7)*500)
 ```
 
 
@@ -143,19 +176,19 @@ CVArgs <- list(n = ncol(obs), fold_fun = folds_vfold, cluster_ids = NULL, strata
 
 ConcreteArgs <- formatArguments(DataTable = obs, EventTime = "time", EventType = "status", 
                                 Treatment = "trt", ID = "id", 
-                                Intervention = ITT, TargetEvent = 1:2, TargetTime = (3:7)*500,
+                                Intervention = 0:1, TargetEvent = 1:2, TargetTime = (3:7)*500,
                                 CVArg = NULL)
 
 ConcreteArgs <- formatArguments(DataTable = obs, EventTime = "time", EventType = "status", 
                                 Treatment = "trt", ID = "id", 
-                                Intervention = ITT, TargetEvent = 1:2, TargetTime = (3:7)*500, 
+                                Intervention = 0:1, TargetEvent = 1:2, TargetTime = (3:7)*500, 
                                 CVArg = CVArgs)
 
 # For different number of folds, simply add the `V = ` argument, e.g. 
 CV5Fold <- list(n = ncol(obs), V = 5L, fold_fun = folds_vfold, cluster_ids = NULL, strata_ids = NULL)
 ConcreteArgs <- formatArguments(DataTable = obs, EventTime = "time", EventType = "status", 
                                 Treatment = "trt", ID = "id", 
-                                Intervention = ITT, TargetEvent = 1:2, TargetTime = (3:7)*500, 
+                                Intervention = 0:1, TargetEvent = 1:2, TargetTime = (3:7)*500, 
                                 CVArg = CV5Fold)
 ```
 
@@ -166,13 +199,13 @@ TMLE requires initial estimation of some parts of the observed data distribution
 ```{r Model structure hidden, include=FALSE}
 ConcreteArgs <- formatArguments(DataTable = obs, EventTime = "time", EventType = "status", 
                                 Treatment = "trt", ID = "id", 
-                                Intervention = ITT, TargetEvent = 1:2, TargetTime = (3:7)*500, 
+                                Intervention = 0:1, TargetEvent = 1:2, TargetTime = (3:7)*500, 
                                 CVArg = NULL, Model = NULL)
 ```
 ```{r Model structure input, eval=FALSE}
 ConcreteArgs <- formatArguments(DataTable = obs, EventTime = "time", EventType = "status", 
                                 Treatment = "trt", ID = "id", 
-                                Intervention = ITT, TargetEvent = 1:2, TargetTime = (3:7)*500, 
+                                Intervention = 0:1, TargetEvent = 1:2, TargetTime = (3:7)*500, 
                                 CVArg = NULL, Model = NULL)
 str(ConcreteArgs[["Model"]], give.attr = FALSE)
 ```
@@ -198,7 +231,7 @@ SLModel <- list(c("SL.ranger", "screen.corRank"), c("SL.glmnet", "All", "screen.
 ConcreteArgs[["Model"]][["trt"]] <- SLModel
 ConcreteArgs <- formatArguments(DataTable = obs, EventTime = "time", EventType = "status", 
                                 Treatment = "trt", ID = "id", 
-                                Intervention = ITT, TargetEvent = 1:2, TargetTime = (3:7)*500, 
+                                Intervention = 0:1, TargetEvent = 1:2, TargetTime = (3:7)*500, 
                                 CVArg = NULL, Model = ConcreteArgs[["Model"]], 
                                 PropScoreBackend = "SuperLearner")
 ```
@@ -217,7 +250,7 @@ ConcreteArgs[["Model"]][["trt"]] <- sl3Model
 
 ConcreteArgs <- formatArguments(DataTable = obs, EventTime = "time", EventType = "status", 
                                 Treatment = "trt", ID = "id", 
-                                Intervention = ITT, TargetEvent = 1:2, TargetTime = (3:7)*500, 
+                                Intervention = 0:1, TargetEvent = 1:2, TargetTime = (3:7)*500, 
                                 CVArg = NULL, Model = ConcreteArgs[["Model"]], 
                                 PropScoreBackend = "sl3")
 ```
@@ -237,7 +270,7 @@ ConcreteArgs[["Model"]][["2"]] <- "."
 ```{r formatArguments(Model = )}
 ConcreteArgs <- formatArguments(DataTable = obs, EventTime = "time", EventType = "status", 
                                 Treatment = "trt", ID = "id", 
-                                Intervention = ITT, TargetEvent = 1:2, TargetTime = (3:7)*500, 
+                                Intervention = 0:1, TargetEvent = 1:2, TargetTime = (3:7)*500, 
                                 CVArg = NULL, Model = ConcreteArgs[["Model"]], 
                                 PropScoreBackend = "SuperLearner", HazEstBackend = "coxph")
 ```
@@ -249,13 +282,17 @@ MaxUpdateIter is an integer that controls the maximum number of small steps alon
 ```{r formatArguments tmle parameters}
 ConcreteArgs <- formatArguments(DataTable = obs, EventTime = "time", EventType = "status", 
                                 Treatment = "trt", ID = "id", 
-                                Intervention = ITT, TargetEvent = 1:2, TargetTime = (3:7)*500, 
+                                Intervention = 0:1, TargetEvent = 1:2, TargetTime = (3:7)*500, 
                                 CVArg = NULL, Model = ConcreteArgs[["Model"]], 
                                 PropScoreBackend = "SuperLearner", HazEstBackend = "coxph", 
                                 MaxUpdateIter = 100, OneStepEps = 1, MinNuisance = 0.05)
 ```
 
 ### doConcrete
+```{r}
+
+```
+
 
 ### getOutput
 
