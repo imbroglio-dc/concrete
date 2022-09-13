@@ -7,15 +7,15 @@
 getOutput(
   Estimate,
   Estimand = c("RD", "RR", "Risk"),
-  TargetTime,
-  TargetEvent,
-  GComp
+  TargetTime = NULL,
+  TargetEvent = NULL,
+  GComp = NULL
 )
 }
 \arguments{
 \item{Estimate}{: list concrete Estimate object}
 
-\item{Estimand}{: character or list of function(s)}
+\item{Estimand}{: character or list of function(s) (default: c("RD", "RR", "Risk"))}
 
 \item{TargetTime}{: numeric}
 

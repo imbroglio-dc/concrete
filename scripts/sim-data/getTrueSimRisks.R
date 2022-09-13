@@ -69,7 +69,7 @@ result.obsgstar <- out[, list("Truth" = unique(TrueRisk),
 # half leader ---------------------------------------------------------------------------------
 set.seed(0)
 data <- simConCR(n = 5e2, random_seed = sample(1:1e8, 1))
-source("../novo_nordisk/")
+
 concreteArgs <- formatArguments(DataTable = data, 
                                 EventTime = "TIME", 
                                 EventType = "EVENT", 
@@ -77,5 +77,8 @@ concreteArgs <- formatArguments(DataTable = data,
                                 ID = "id",
                                 Intervention = 0:1, 
                                 TargetTime = 1e3)
-system.time({concreteEst <- doConcrete(concreteArgs)})
+
+concreteEst <- doConcrete(concreteArgs)
+
 concreteOut <- getOutput(concreteEst, "RD")$RD
+

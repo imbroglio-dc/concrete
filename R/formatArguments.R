@@ -238,7 +238,8 @@ formatArguments <- function(DataTable,
                       EventTime = EventTime, 
                       EventType = EventType, 
                       Treatment = Treatment, 
-                      CovDT = CovDT)
+                      CovDT = CovDT, 
+                      Verbose = Verbose)
     
     ## TMLE Update Parameters ----
     MaxUpdateIter <- getMaxUpdateIter(MaxUpdateIter)
@@ -288,7 +289,7 @@ formatDataTable <- function(DT, EventTime, EventType, Treatment, ID, LongTime, V
     SpecialCols <- c(ID, EventTime, EventType, Treatment, LongTime)
     CovNames <- setdiff(colnames(DT), SpecialCols)
     
-    if (identical(paste0(gsub("L\\d+", "", CovNames), collapse = ""), character(0)) | !RenameCovs) { 
+    if (identical(paste0(gsub("L\\d+", "", CovNames), collapse = ""), "") | !RenameCovs) { 
         if (is.null(attr(DT, "CovNames")))
             attr(DT, "CovNames") <- data.table(ColName = colnames(DT),
                                                CovName = colnames(DT),
@@ -365,8 +366,8 @@ getID <- function(ID, DataTable = NULL) {
     if (is.null(ID)) {
         ID <- "ID"
         IDVal <- 1:nrow(DataTable)
-        message("No ID column specified. DataTable row numbers will be used as subject IDs, ",
-                "which will not be appropriate for longitudinal data structures.")
+        cat("No ID column specified. DataTable row numbers will be used as subject IDs, ",
+            "which will not be appropriate for longitudinal data structures.\n", sep = "")
     } else if (is.character(ID)) {
         IDVal <- try(DataTable[[ID]])
         if (inherits(IDVal, "try-error"))
@@ -405,8 +406,8 @@ getCovDataTable <- function(DataTable, EventTime, EventType, Treatment, ID, Long
             attr(CovDT1Hot, "CovNames") <- CovNames1Hot
             return(CovDT1Hot)
         } else 
-            message("Categorical covariates detected: DataTable will be 1-hot encoded. New columns can ", 
-                    "be linked with original columns through attr(.[['Data']], 'CovNames')")
+            cat("Categorical covariates detected: DataTable will be 1-hot encoded. New columns can ", 
+                "be linked with original columns through attr(.[['Data']], 'CovNames')\n", sep = "")
     }
     
     for (CovName in CovNames[NonNumInd]) {
@@ -463,9 +464,10 @@ getRegime <- function(Intervention, TrtVal, CovDT) {
             
             if (mean(unlist(RegimeVal) == unlist(TrtVal)) < 0.05)
                 warning("The intervention function f(A, L) specified in Intervention[[", RegName,
-                        "]] is likely to cause near-positivity issues, resulting in inflated ",
-                        "variance and perhaps instability. Recommend specifying an intervention",
-                        "better supported in the observed data.")
+                        "]] specifies a regime that matches less than 5% of the observed treatments", 
+                        ", likely resulting in practical near-positivity violations that may inflate",
+                        "variance and perhaps cause estimator instability. Recommend specifying ", 
+                        "an intervention better supported in the observed data.")
             
             # g.star ----
             if (!is.null(attr(Regime, "g.star"))) {
@@ -475,8 +477,8 @@ getRegime <- function(Intervention, TrtVal, CovDT) {
             } 
             if (is.null(attr(RegimeVal, "g.star"))) {
                 attr(RegimeVal, "g.star") <- function(a) as.numeric(a == RegimeVal)
-                message("No g.star function specified, defaulting to the indicator that observed",
-                        "treatment equals the desired treatment assignment, 1(A = a*).")
+                cat("No g.star function specified, defaulting to the indicator that observed",
+                    "treatment equals the desired treatment assignment, 1(A = a*).\n", sep = "")
             } 
             
             GStarOK <- try(do.call(attr(RegimeVal, "g.star"), list(TrtVal, CovDT)))
@@ -524,7 +526,7 @@ getRegime <- function(Intervention, TrtVal, CovDT) {
 
 getTargetEvent <- function(TargetEvent, UniqueEvents) {
     if (is.null(TargetEvent))
-        message("No TargetEvent specified; targeting all observed event types except for censoring")
+        cat("No TargetEvent specified; targeting all observed event types except for censoring")
     TargetEvent <- UniqueEvents
     if (any(!is.vector(TargetEvent), !is.numeric(TargetEvent), is.list(TargetEvent),
             length(setdiff(TargetEvent, UniqueEvents)) > 0))
@@ -547,12 +549,12 @@ getTargetTime <- function(TargetTime, TimeVal, TargetEvent, TypeVal) {
         if (max(TargetTime) > MaxTime)
             stop("TargetTime must not target times after which all individuals are Censored, ", MaxTime)
         if (any(min(TargetTime) < MinTime))
-            message("TargetTime includes a time at which some events have not yet occurred - ", 
-                    paste0(paste0("Event=", MinTimeEvents, ": ", MinTime), collapse = ", "))
+            cat("TargetTime includes a time at which some events have not yet occurred - ", 
+                paste0(paste0("Event=", MinTimeEvents, ": ", MinTime), collapse = ", "), "\n", sep = "")
     } else{
         TargetTime <- MaxTime
-        message("No TargetTime provided; targeting the last observed event time by default, which may ", 
-                "result in estimates with high variance if most subjects have been censored by that time")
+        cat("No TargetTime provided; targeting the last observed event time by default, which may ", 
+            "result in estimates with high variance if most subjects have been censored by that time\n", sep = "")
     }
     return(TargetTime)
 }
@@ -573,14 +575,15 @@ getCVFolds <- function(CVArg, DataTable, CVSeed = sample(0:1e8, 1)) {
 }
 
 getModel <- function(Model, UniqueEvents, Censored, PropScoreBackend, HazEstBackend, 
-                     EventTime, EventType, Treatment, CovDT) {
+                     EventTime, EventType, Treatment, CovDT, Verbose) {
     CovName <- NULL
     CovNames <- attr(CovDT, "CovNames")
     RenameCovs <- attr(CovDT, "RenameCovs")
     
     if (is.null(Model)) {
-        message("Model input missing. An example template will be returned but should be amended to",  
-                " suit your application. See examples in the concrete::formatArguments() documentation.")
+        cat("Model input missing. An example template will be returned but should be amended to",  
+            " suit your application. See examples in the concrete::formatArguments() documentation.\n", 
+            sep = "")
         return(getModelTemplate(Treatment = Treatment, UniqueEvents = UniqueEvents, Censored = Censored, 
                                 EventTime = EventTime, EventType = EventType))
     }
@@ -611,9 +614,9 @@ getModel <- function(Model, UniqueEvents, Censored, PropScoreBackend, HazEstBack
                  "produced by sl3::make_learner() or related functions. See examples in the ", 
                  "formatArguments() documentation or the sl3 chapter of the tlverse handbook (", 
                  "https://tlverse.org/tlverse-handbook/sl3.html)")
-    } else if (PropScoreBackend == "SuperLearner") {
-        message("Superlearner model specifications are not checked here. The input must be a valid", 
-                " argument into the `sl.lib = ` argument of Superlearner::Superlearner()")
+    } else if (PropScoreBackend == "SuperLearner" & Verbose) {
+        cat("Superlearner model specifications are not checked now, but the input must be a valid", 
+            " argument into the `sl.lib = ` argument of Superlearner::Superlearner()\n")
     } else 
         stop("PropScoreBackend must be either `sl3` or `SuperLearner`.")
     
@@ -623,8 +626,8 @@ getModel <- function(Model, UniqueEvents, Censored, PropScoreBackend, HazEstBack
             if (HazEstBackend == "coxph") {
                 if (is.null(Model[[FitVar]])) {
                     Model[[FitVar]] <- list("model1" = ~ .)
-                    message("No model was provided for event ", FitVar, ", so by default ", 
-                            "a main terms cox model with treatment and all covariates will be used.")
+                    cat("No model was provided for event ", FitVar, ", so by default a main terms ", 
+                        "cox model with treatment and all covariates will be used.\n", sep = "")
                 }
                 if (is.list(Model[[FitVar]])) {
                     if (is.null(names(Model[[FitVar]]))) {
@@ -643,8 +646,9 @@ getModel <- function(Model, UniqueEvents, Censored, PropScoreBackend, HazEstBack
                 for (j in seq_along(Model[[FitVar]])) {
                     Formula <- as.character(Model[[FitVar]][j])
                     if (!grepl(CoxLeftRegex, Formula)) {
-                        message("The left hand side of the Cox model formula for Model[[\"", 
-                                FitVar, "\"]][[", j, "]] has been corrected to ", CoxLeft)
+                        cat("The left hand side of the Cox model formula for Model[[\"", 
+                            FitVar, "\"]][[", j, "]] has been corrected to ", CoxLeft, "\n", 
+                            sep = "")
                     }
                     
                     CoxRight <- sub("^.*~", "", Formula)  
@@ -653,10 +657,11 @@ getModel <- function(Model, UniqueEvents, Censored, PropScoreBackend, HazEstBack
                     
                     if (!isTRUE(attr(Model[[FitVar]][[j]], "NameChecked")) & RenameCovs) {
                         for (covar in unique(CovNames[["CovName"]])) {
+                            OldColRegex <- paste0("([^\\d\\s]+)", covar, "[^\\d\\s]+)", collapse = "")
                             NewCol <- CovNames[CovName == covar, ][["ColName"]]
                             if (length(NewCol) > 1)
                                 NewCol <- paste0(NewCol, collapse = "+")
-                            CoxRight <- gsub(covar, paste0("(", NewCol, ")"), CoxRight)
+                            CoxRight <- gsub(OldColRegex, paste0("(\\1", NewCol, ")"), CoxRight)
                             CovNamesChanged <- TRUE
                         }
                     }
@@ -671,9 +676,10 @@ getModel <- function(Model, UniqueEvents, Censored, PropScoreBackend, HazEstBack
         
     }
     if (CovNamesChanged) {
-        message("Cox model specifications have been renamed where necessary to reflect", 
-                " changed covariate names. Model specifications in .[['Model']] can be ", 
-                "checked against the covariate names in attr(.[['Data']], 'CovNames')")
+        cat("Cox model specifications have been renamed where necessary to reflect", 
+            " changed covariate names. Model specifications in .[['Model']] can be ", 
+            "checked against the covariate names in attr(.[['Data']], 'CovNames')", 
+            "\n", sep = "")
     }
     # warning("model checks not yet complete")
     return(Model)
