@@ -211,8 +211,9 @@ formatArguments <- function(DataTable,
     TrtVal <- DataTable[[Treatment]]
     CovNames <- setdiff(colnames(DataTable), c(EventTime, EventType, Treatment, ID, LongTime))
     CovDT <- subset(DataTable, select = CovNames)
-    attr(CovDT, "CovNames") <- attr(DataTable, "CovNames")
-    attr(CovDT, "RenameCovs") <- attr(DataTable, "RenameCovs")
+    CovDT <- structure(CovDT, 
+                       CovNames = attr(DataTable, "CovNames"), 
+                       RenameCovs = attr(DataTable, "RenameCovs"))
     Censored <- 0 %in% TypeVal
     UniqueEvents <- setdiff(sort(unique(TypeVal)), 0)
     
@@ -285,7 +286,6 @@ formatDataTable <- function(DT, EventTime, EventType, Treatment, ID, LongTime, V
     ID <- ID[["IDName"]]
     LongTime <- NULL # LongTime <- getLongTime(LongTime = LongTime, DataTable = DT)
     
-    
     SpecialCols <- c(ID, EventTime, EventType, Treatment, LongTime)
     CovNames <- setdiff(colnames(DT), SpecialCols)
     
@@ -305,12 +305,13 @@ formatDataTable <- function(DT, EventTime, EventType, Treatment, ID, LongTime, V
         DT <- cbind(DT[, .SD, .SDcols = SpecialCols], CovDT)
         attr(DT, "CovNames") <- attr(CovDT, "CovNames")
     }
-    attr(DT, "EventTime") <- EventTime
-    attr(DT, "EventType") <- EventType
-    attr(DT, "Treatment") <- Treatment
-    attr(DT, "LongTime") <- LongTime
-    attr(DT, "ID") <- ID
-    attr(DT, "RenameCovs") <- RenameCovs
+    DT <- structure(DT, 
+                    EventTime = EventTime, 
+                    EventType = EventType, 
+                    Treatment = Treatment, 
+                    LongTime = LongTime, 
+                    ID = ID, 
+                    RenameCovs = RenameCovs)
     setcolorder(DT, SpecialCols)
     return(DT)
 }
@@ -608,15 +609,16 @@ getModel <- function(Model, UniqueEvents, Censored, PropScoreBackend, HazEstBack
              "Run formatArguments(..., Models=NULL) to get an example of the required formatting.")
     
     ## check trt model fits with backend
-    if (PropScoreBackend == "sl3") {
+    if (tolower(PropScoreBackend) == "sl3") {
         if (!inherits(Model[[Treatment]], "R6") | !inherits(Model[[Treatment]], "Lrnr_base"))
             stop("For PropScoreBackend = `sl3`, the model(s) for Treatment must be R6 objects ", 
                  "produced by sl3::make_learner() or related functions. See examples in the ", 
                  "formatArguments() documentation or the sl3 chapter of the tlverse handbook (", 
                  "https://tlverse.org/tlverse-handbook/sl3.html)")
-    } else if (PropScoreBackend == "SuperLearner" & Verbose) {
-        cat("Superlearner model specifications are not checked now, but the input must be a valid", 
-            " argument into the `sl.lib = ` argument of Superlearner::Superlearner()\n")
+    } else if (tolower(PropScoreBackend) == "superlearner") {
+        if (Verbose)
+            cat("Superlearner model specifications are not checked now, but the input must be a valid", 
+                " argument into the `sl.lib = ` argument of Superlearner::Superlearner()\n")
     } else 
         stop("PropScoreBackend must be either `sl3` or `SuperLearner`.")
     

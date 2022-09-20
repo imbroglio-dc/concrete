@@ -1,6 +1,6 @@
 #' doConcrete
 #'
-#' @param ConcreteArgs : output from concrete::formatArguments
+#' @param ConcreteArgs list : a "ConcreteArgs" object returned by concrete::formatArguments()
 #'
 # #' @param Data : data.table (N x ?)
 # #' @param CovDataTable : data.table (N x ?)
@@ -30,7 +30,6 @@
 #' @examples
 #' library(data.table)
 #' library(survival)
-#' library(concrete)
 #' data <- as.data.table(survival::pbc)
 #' data[, trt := sample(0:1, nrow(data), TRUE)]
 #' cols <- c("id", "time", "status", "trt",
@@ -54,14 +53,14 @@
 #'                                  Intervention = intervention,
 #'                                  TargetTime = target.time,
 #'                                  TargetEvent = target.event,
-#'                                  Model = model, Verbose = FALSE)
+#'                                  Model = model,
+#'                                  Verbose = FALSE)
 #' 
 #' # doConcrete() returns tmle (and g-comp plug-in) estimates of targeted risks
 #' concrete.est <- doConcrete(concrete.args)
 #' 
 #' # getOutput returns risk difference, relative risk, and treatment-specific risks
-#' concrete.out <- getOutput(Estimate = concrete.est, Estimand = c("rd", "rr", "risk"), 
-#'                           TargetTime = target.time, TargetEvent = target.event, GComp = TRUE)
+#' concrete.out <- getOutput(Estimate = concrete.est, Estimand = c("rd", "rr", "risk"))
 #' concrete.out$RD
 #' concrete.out$RR
 #' concrete.out$Risk
@@ -103,7 +102,7 @@ doConCRTmle <- function(Data, TargetTime, TargetEvent, Regime, CVFolds, Model, P
                                   "ratio" = abs(PnEIC) / `seEIC/(sqrt(n)log(n))`),
                            by = c("Trt", "Time", "Event")]
     if (Verbose)
-        print(OneStepStop[["ratio"]])
+        cat(OneStepStop[["ratio"]])
     
     ## one-step tmle loop (one-step) ----
     if (!all(sapply(OneStepStop[["check"]], isTRUE))) {

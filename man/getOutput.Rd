@@ -4,24 +4,12 @@
 \alias{getOutput}
 \title{getOutput}
 \usage{
-getOutput(
-  Estimate,
-  Estimand = c("RD", "RR", "Risk"),
-  TargetTime = NULL,
-  TargetEvent = NULL,
-  GComp = NULL
-)
+getOutput(Estimate, Estimand = c("RD", "RR", "Risk"))
 }
 \arguments{
-\item{Estimate}{: list concrete Estimate object}
+\item{Estimate}{list : a "ConcreteEst" object}
 
-\item{Estimand}{: character or list of function(s) (default: c("RD", "RR", "Risk"))}
-
-\item{TargetTime}{: numeric}
-
-\item{TargetEvent}{: numeric}
-
-\item{GComp}{: boolean}
+\item{Estimand}{character (default: c("RD", "RR", "Risk")) or a function or a list of functions}
 }
 \value{
 tbd

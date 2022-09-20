@@ -7,7 +7,7 @@
 doConcrete(ConcreteArgs)
 }
 \arguments{
-\item{ConcreteArgs}{: output from concrete::formatArguments}
+\item{ConcreteArgs}{list : a "ConcreteArgs" object returned by concrete::formatArguments()}
 }
 \value{
 tbd
@@ -18,7 +18,6 @@ doConcrete
 \examples{
 library(data.table)
 library(survival)
-library(concrete)
 data <- as.data.table(survival::pbc)
 data[, trt := sample(0:1, nrow(data), TRUE)]
 cols <- c("id", "time", "status", "trt",
@@ -42,14 +41,14 @@ concrete.args <- formatArguments(DataTable = data,
                                  Intervention = intervention,
                                  TargetTime = target.time,
                                  TargetEvent = target.event,
-                                 Model = model, Verbose = FALSE)
+                                 Model = model,
+                                 Verbose = FALSE)
 
 # doConcrete() returns tmle (and g-comp plug-in) estimates of targeted risks
 concrete.est <- doConcrete(concrete.args)
 
 # getOutput returns risk difference, relative risk, and treatment-specific risks
-concrete.out <- getOutput(Estimate = concrete.est, Estimand = c("rd", "rr", "risk"), 
-                          TargetTime = target.time, TargetEvent = target.event, GComp = TRUE)
+concrete.out <- getOutput(Estimate = concrete.est, Estimand = c("rd", "rr", "risk"))
 concrete.out$RD
 concrete.out$RR
 concrete.out$Risk
