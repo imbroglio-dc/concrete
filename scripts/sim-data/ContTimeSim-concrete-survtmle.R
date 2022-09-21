@@ -28,7 +28,7 @@ registerDoParallel(cl = makeCluster(10))
 
 Start <- Sys.time()
 output <- foreach(i = seeds) %dopar% {
-    out <- list
+    out <- list()
     out$concrete.notconverge <- 
         out$survtmle.6mo.notconverge <- 
         out$survtmle.6mo.error <- 
@@ -39,7 +39,7 @@ output <- foreach(i = seeds) %dopar% {
     # concrete ------------------------------------------------------------------------------------
     library(concrete)
     
-    data <- simConCR(n = 5e2, random_seed = i)
+    data <- simConCR(n = 1e2, random_seed = i)
     TargetTime <- seq(730, 1460, length.out = 5)
     target.event <- sort(setdiff(unique(data$EVENT), 0))
     
@@ -122,24 +122,22 @@ output <- foreach(i = seeds) %dopar% {
         out$survtmle.6mo.notconverge <- out$survtmle.6mo.notconverge + 1
     }
     
-    
     survtmle.est <- rbind(cbind("Estimator" = "gcomp6mo",
-                                "A" = rep(0:1, times = length(target.event)),
+                                "Intervention" = rep(c("A=0", "A=1"), times = length(target.event)),
                                 "Event" = rep(target.event, each = 2),
                                 as.data.frame(tmle_sl$init_est)),
                           cbind(Estimator = "survtmle6mo",
-                                A = rep(0:1, times = length(target.event)),
+                                "Intervention" = rep(c("A=0", "A=1"), times = length(target.event)),
                                 Event = rep(target.event, each = 2),
                                 as.data.frame(tmle_sl$est))) %>% as.data.table() %>%
-        melt(., id.vars = c("Estimator", "A", "Event"), value.name = "Risk", variable.name = "Time")
+        melt(., id.vars = c("Estimator", "Intervention", "Event"), value.name = "Risk", variable.name = "Time")
     survtmle.est[, Time := as.numeric(gsub("\\D+", "", Time)) / 2 * 365]
     survtmle.est <- full_join(survtmle.est,
                               cbind(Estimator = "survtmle6mo",
-                                    A = rep(0:1, each = length(target.event) * length(target.time)),
+                                    "Intervention" = rep(c("A=0", "A=1"), each = length(target.event) * length(target.time)),
                                     Event = rep(target.event, each = length(target.time), times = 2),
                                     Time = rep(TargetTime, times = 2 * length(target.event)),
                                     data.table(se = sqrt(diag(tmle_sl$var)))))
-    survtmle.est <- dcast(survtmle.est, ... ~ A, value.var = c("Risk", "se"))
     
     # survtmle 3mo ----------------------------------------------------------------
     
@@ -176,26 +174,25 @@ output <- foreach(i = seeds) %dopar% {
     }
     
     survtmle.est.3mo <- rbind(cbind("Estimator" = "gcomp3mo",
-                                    "A" = rep(0:1, times = length(target.event)),
+                                    "Intervention" = rep(c("A=0", "A=1"), times = length(target.event)),
                                     "Event" = rep(target.event, each = 2),
                                     as.data.frame(tmle_sl$init_est)),
                               cbind(Estimator = "survtmle3mo",
-                                    A = rep(0:1, times = length(target.event)),
+                                    "Intervention" = rep(c("A=0", "A=1"), times = length(target.event)),
                                     Event = rep(target.event, each = 2),
                                     as.data.frame(tmle_sl$est))) %>% as.data.table() %>%
-        melt(., id.vars = c("Estimator", "A", "Event"), value.name = "Risk", variable.name = "Time")
+        melt(., id.vars = c("Estimator", "Intervention", "Event"), value.name = "Risk", variable.name = "Time")
     survtmle.est.3mo[, Time := as.numeric(gsub("\\D+", "", Time)) / 4 * 365]
     survtmle.est.3mo <- full_join(survtmle.est.3mo,
                                   cbind(Estimator = "survtmle3mo",
-                                        A = rep(0:1, each = length(target.event) * length(target.time)),
+                                        "Intervention" = rep(c("A=0", "A=1"), each = length(target.event) * length(target.time)),
                                         Event = rep(target.event, each = length(target.time), times = 2),
                                         Time = rep(TargetTime, times = 2 * length(target.event)),
                                         data.table(se = sqrt(diag(tmle_sl$var)))))
-    survtmle.est.3mo <- dcast(survtmle.est.3mo, ... ~ A, value.var = c("Risk", "se"))
     
-    out$estimates <- rbind(concreteOut,
-                           survtmle.est, 
-                           survtmle.est.3mo)
+    out$estimates <- rbind(cbind("Package" = "concrete", concreteOut),
+                           cbind("Package" = "survtmle", survtmle.est), 
+                           cbind("Package" = "survtmle", survtmle.est.3mo))
     out$contmle <- formatContmle(run)
     return(out)
 }
