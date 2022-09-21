@@ -52,7 +52,7 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, TargetEvent, TargetTime,
     ## one-step tmle loop starts here ----
     StepNum <- 1
     IterNum <- 1
-    while (StepNum <= MaxUpdateIter & IterNum <= MaxUpdateIter * 3) {
+    while (StepNum <= MaxUpdateIter & IterNum <= MaxUpdateIter * 2) {
         IterNum <- IterNum + 1
         if (Verbose)
             cat("starting step", StepNum, "with update epsilon =", WorkingEps, "\n")

@@ -153,7 +153,39 @@ getTrueRisks <- function(time_range = 1:2000,
                                    function(j) colSums(outer(outcomes[EVENT == j, TIME], time_range, `<=`)))) / n
         setnames(risks, as.character(Js))
     } else {
-        stop("Error!")
+        stop("Error! There's censoring that shouldn't be here")
     }
     return(risks)
+}
+
+formatContmle <- function(contmleOutput) {
+    tmleOutput <-
+        data.table(
+            "J" = rep(names(contmleOutput$tmle), each = 2),
+            "val" = c("ATE", "se"),
+            do.call(rbind, contmleOutput$tmle)
+        )
+    tmleOutput <- melt(tmleOutput, id.vars = c("J", "val"))
+    setnames(tmleOutput, "variable", "time")
+    tmleOutput[, J := gsub("F", "", J)]
+    tmleOutput[, time := as.numeric(gsub("tau=", "", time))]
+    tmleOutput <- dcast(tmleOutput, J + time ~ val, value.var = "value")
+    setnames(tmleOutput, c("J", "time", 'ATE'), c("Event", "Time", "RD"))
+    tmleOutput <- cbind("Package" = "contmle", "Estimator" = "tmle", tmleOutput)
+    
+    gcompOutput <-
+        data.table(
+            "J" = rep(names(contmleOutput$init), each = 2),
+            "val" = c("ATE", "se"),
+            do.call(rbind, contmleOutput$init)
+        )
+    gcompOutput <- melt(gcompOutput, id.vars = c("J", "val"))
+    setnames(gcompOutput, "variable", "time")
+    gcompOutput[, J := gsub("F", "", J)]
+    gcompOutput[, time := as.numeric(gsub("tau=", "", time))]
+    gcompOutput <- dcast(gcompOutput, J + time ~ val, value.var = "value")
+    setnames(gcompOutput, c("J", "time", 'ATE'), c("Event", "Time", "RD"))
+    gcompOutput <- cbind("Package" = "contmle", "Estimator" = "gcomp", gcompOutput)
+    
+    return(as.data.frame(rbind(tmleOutput, gcompOutput)))
 }

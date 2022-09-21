@@ -78,7 +78,7 @@ doConCRTmle <- function(Data, TargetTime, TargetEvent, Regime, CVFolds, Model, P
                         HazEstBackend, MaxUpdateIter, OneStepEps, MinNuisance, Verbose, GComp, 
                         ReturnModels)
 {
-    Time <- Event <- PnEIC <- `seEIC/(sqrt(n)log(n))` <- NULL # for data.table compatibility w/ global var binding check
+    ratio <- Time <- Event <- PnEIC <- `seEIC/(sqrt(n)log(n))` <- NULL # for data.table compatibility w/ global var binding check
     
     # initial estimation ------------------------------------------------------------------------
     Estimates <- getInitialEstimate(Data = Data, Model = Model, CVFolds = CVFolds, MinNuisance = MinNuisance,
@@ -101,8 +101,9 @@ doConCRTmle <- function(Data, TargetTime, TargetEvent, Regime, CVFolds, Model, P
     OneStepStop <- SummEIC[, list("check" = abs(PnEIC) <= `seEIC/(sqrt(n)log(n))`,
                                   "ratio" = abs(PnEIC) / `seEIC/(sqrt(n)log(n))`),
                            by = c("Trt", "Time", "Event")]
-    if (Verbose)
-        cat(OneStepStop[["ratio"]])
+    if (Verbose) {
+        print(OneStepStop[, !"check"][, ratio := round(ratio, 2)][order(ratio, decreasing = TRUE)][1:6, ])
+    }
     
     ## one-step tmle loop (one-step) ----
     if (!all(sapply(OneStepStop[["check"]], isTRUE))) {

@@ -77,12 +77,14 @@ truncNuisanceDenom <- function(NuisanceDenom, MinNuisance, RegimeName) {
     if (is.numeric(MinNuisance) & length(MinNuisance) == 1) {
         if (MinNuisance < 1 & MinNuisance > 0) {
             if (min(NuisanceDenom) < MinNuisance) {
-                cat("practical near positivity violations in ", 
+                PositivityWarning <- paste("Practical near positivity violations in ", 
                     round(mean(NuisanceDenom < MinNuisance), 3) * 100, "% of the clever covariates", 
                     " for regime: ", RegimeName, ". Truncating the NuisanceDenom values for ", 
                     sum(apply(NuisanceDenom, 2, function(subj) any(subj < MinNuisance))), 
-                    "/", ncol(NuisanceDenom), "subjects to ", MinNuisance, "\n", sep = "")
+                    "/", ncol(NuisanceDenom), " subjects to ", MinNuisance, "\n", sep = "")
                 attr(NuisanceDenom, "original") <- NuisanceDenom
+                attr(NuisanceDenom, "message") <- PositivityWarning
+                cat(PositivityWarning)
                 NuisanceDenom[NuisanceDenom < MinNuisance] <- MinNuisance
             }
         }

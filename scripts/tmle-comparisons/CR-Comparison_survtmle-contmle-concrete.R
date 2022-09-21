@@ -102,6 +102,8 @@ formatContmle <- function(contmleOutput) {
     tmleOutput[, time := as.numeric(gsub("tau=", "", time))]
     tmleOutput <- dcast(tmleOutput, J + time ~ val, value.var = "value")
     setnames(tmleOutput, c("J", "time", 'ATE'), c("Event", "Time", "RD"))
+    tmleOutput <- cbind("Estimator" = "contmle", tmleOutput)
+    return(tmleOutput)
 }
 
 B <- 1000
@@ -175,31 +177,31 @@ for (i in 1:B) {
 
     result.i <- rbind(result.i, concrete.out)
 
-    # # contmle -----------------------------------------------------------------
-    #
-    # run <- contmle(
-    #   dt, #-- dataset
-    #   target = target.event, #-- go after cause 1 and cause 2 specific risks
-    #   iterative = FALSE, #-- use one-step tmle to target F1 and F2 simultaneously
-    #   treat.effect = "ate", #-- target the ate directly
-    #   tau = target.time, #-- time-point of interest
-    #   estimation = list(
-    #     "cens" = list(fit = "cox",
-    #                   model = Surv(time, delta == 0) ~ A + L1 + L2 + L3 + L4 + L5),
-    #     "cause1" = list(fit = "cox",
-    #                     model = Surv(time, delta == 1) ~ A + L1 + L2 + L3 + L4 + L5),
-    #     "cause2" = list(fit = "cox",
-    #                     model = Surv(time, delta == 2) ~ A + L1 + L2 + L3 + L4 + L5),
-    #     "cause3" = list(fit = "cox",
-    #                     model = Surv(time, delta == 3) ~ A + L1 + L2 + L3 + L4 + L5)),
-    #   treat.model = A ~ L1 + L2 + L3 + L4 + L5,
-    #   verbose = FALSE,
-    #   sl.models = list(model = Surv(time, delta == 0) ~ A + L1 + L2 + L3 + L4 + L5))
-    #
-    # result.i <- rbind(result.i,
-    #                   cbind(fn = "contmle", 'Estimator' = 'tmle',
-    #                         formatContmle(run)))
-    #
+    # contmle -----------------------------------------------------------------
+
+    run <- contmle(
+      dt, #-- dataset
+      target = target.event, #-- go after cause 1 and cause 2 specific risks
+      iterative = FALSE, #-- use one-step tmle to target F1 and F2 simultaneously
+      treat.effect = "ate", #-- target the ate directly
+      tau = target.time, #-- time-point of interest
+      estimation = list(
+        "cens" = list(fit = "cox",
+                      model = Surv(time, delta == 0) ~ A + L1 + L2 + L3 + L4 + L5),
+        "cause1" = list(fit = "cox",
+                        model = Surv(time, delta == 1) ~ A + L1 + L2 + L3 + L4 + L5),
+        "cause2" = list(fit = "cox",
+                        model = Surv(time, delta == 2) ~ A + L1 + L2 + L3 + L4 + L5),
+        "cause3" = list(fit = "cox",
+                        model = Surv(time, delta == 3) ~ A + L1 + L2 + L3 + L4 + L5)),
+      treat.model = A ~ L1 + L2 + L3 + L4 + L5,
+      verbose = FALSE,
+      sl.models = list(model = Surv(time, delta == 0) ~ A + L1 + L2 + L3 + L4 + L5))
+
+    result.i <- rbind(result.i,
+                      cbind(fn = "contmle", 'Estimator' = 'tmle',
+                            formatContmle(run)))
+
 
     # survtmle ----------------------------------------------------------------
 

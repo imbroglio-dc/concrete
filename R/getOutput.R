@@ -45,7 +45,16 @@ getOutput <- function(Estimate, Estimand = c("RD", "RR", "Risk")) {
     }
     
     if (any("risk" %in% tolower(Estimand))) {
-        output[["Risk"]] <- getRisk(Estimate = Estimate, TargetTime = TargetTime, TargetEvent = TargetEvent, GComp = GComp)
+        risks <- getRisk(Estimate = Estimate, TargetTime = TargetTime, TargetEvent = TargetEvent, GComp = GComp)
+        risks <- do.call(rbind, lapply(seq_along(risks), function(a) {
+            risk.a <- risks[[a]]
+            a.name <- names(risks)[a]
+            return(cbind("Intervention" = a.name, risk.a))
+        }))
+        risks <- structure(risks,
+                           Estimand = "Absolute Risks", 
+                           class = union("ConcreteOut", class(risks)))
+        output[["Risk"]] <- risks
     }
     return(output)
 }
@@ -57,10 +66,10 @@ getRD <- function(Estimate, TargetTime, TargetEvent, GComp) {
     rd.out <- rd.out[, list("Estimator" = Estimator, "Event" = Event, "Time" = Time, "RD" = Risk.x - Risk.y,
                             se = sqrt(se.x^2 + se.y^2))]
     rd.out <- structure(rd.out, 
-                        Regimes = paste0(names(Estimate), collapse = " - "), 
+                        Interventions = paste0(names(Estimate), collapse = " - "), 
                         Estimand = "Risk Difference", 
                         class = union("ConcreteOut", class(rd.out)))
-    return(rd.out)
+    return(rd.out[, order(Estimator, decreasing = TRUE)])
 }
 
 getRR <- function(Estimate, TargetTime, TargetEvent, GComp) {
@@ -70,10 +79,10 @@ getRR <- function(Estimate, TargetTime, TargetEvent, GComp) {
     rr.out <- rr.out[, list("Estimator" = Estimator, "Event" = Event, "Time" = Time, "RR" = Risk.x / Risk.y,
                             se = sqrt((se.x / Risk.y)^2 + (se.y * Risk.x / Risk.y^2)^2))]
     rr.out <- structure(rr.out, 
-                        Regimes = paste0(names(Estimate), collapse = " / "), 
+                        Interventions = paste0(names(Estimate), collapse = " / "), 
                         Estimand = "Relative Risk", 
                         class = union("ConcreteOut", class(rr.out)))
-    return(rr.out)
+    return(rr.out[, order(Estimator, decreasing = TRUE)])
 }
 
 getRisk <- function(Estimate, TargetTime, TargetEvent, GComp) {
@@ -94,9 +103,5 @@ getRisk <- function(Estimate, TargetTime, TargetEvent, GComp) {
                                   "se" = NA))
         return(risk.a)
     })
-    risk <- structure(risk, 
-                      Regimes = names(Estimate), 
-                      Estimand = "Absolute Risks", 
-                      class = union("ConcreteOut", class(risk)))
     return(risk)
 }
