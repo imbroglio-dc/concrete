@@ -1,201 +1,217 @@
+library(survtmle); library(MOSS); library(SuperLearner)
+surv_tmle.dir <- c("/Shared/Projects/Roadmap_CVOT/R/functions/")
+x <- lapply(surv_tmle.dir, function(dir) lapply(list.files(dir, full.names = TRUE),
+                                                function(x) try(source(x), silent = TRUE)))
+library(survival); library(zoo)
+contmle.dir <- c("/Shared/Projects/continuousTMLE/R", "~/research/SoftWare/continuousTMLE/R")
+x <- lapply(contmle.dir, function(dir) lapply(list.files(dir, full.names = TRUE), source))
+
 library(tidyverse); library(data.table); library(concrete)
 source("./scripts/sim-data/sim_functions.R")
+options(warn = -1)
 
+# true risks --------------------------------------------------------------
 # true risks for 3 competing risks
-# 5e6 takes me ~60Gb memory 
+# 5e6 takes me ~60Gb memory
 risks1 <- getTrueRisks(n = 5e6, assign_A = function(W, n) return(rep_len(1, n)))
 gc()
 risks0 <- getTrueRisks(n = 5e6, assign_A = function(W, n) return(rep_len(0, n)))
 gc()
 
-risks <- rbind(cbind("trt" = "A=1", 
-                     rbind(data.table("Event" = 1, "Time" = 1:nrow(risks1), True = risks1[[1]]), 
+risks <- rbind(cbind("trt" = "A=1",
+                     rbind(data.table("Event" = 1, "Time" = 1:nrow(risks1), True = risks1[[1]]),
                            data.table("Event" = 2, "Time" = 1:nrow(risks1), True = risks1[[2]]),
-                           data.table("Event" = 3, "Time" = 1:nrow(risks1), True = risks1[[3]]))), 
-               cbind("trt" = "A=0", 
-                     rbind(data.table("Event" = 1, "Time" = 1:nrow(risks1), True = risks0[[1]]), 
+                           data.table("Event" = 3, "Time" = 1:nrow(risks1), True = risks1[[3]]))),
+               cbind("trt" = "A=0",
+                     rbind(data.table("Event" = 1, "Time" = 1:nrow(risks1), True = risks0[[1]]),
                            data.table("Event" = 2, "Time" = 1:nrow(risks1), True = risks0[[2]]),
                            data.table("Event" = 3, "Time" = 1:nrow(risks1), True = risks0[[3]]))))
-risks %>% mutate(Event = factor(Event)) %>% 
-    ggplot(aes(x = Time, y = True, colour = Event, linetype = trt)) + geom_line(size = .8) + 
+risks %>% mutate(Event = factor(Event)) %>%
+    ggplot(aes(x = Time, y = True, colour = Event, linetype = trt)) + geom_line(size = .8) +
     theme_minimal() + labs(title = "True Competing Risks")
+rm(list = c("risks0", "risks1"))
 
+
+# simulation --------------------------------------------------------------
 set.seed(0)
 seeds <- sample(0:12345678, size = 10)
 library(foreach)
 library(doParallel)
-registerDoParallel(cl = makeCluster(10))
+cl <- makeForkCluster(nnodes = 10)
+registerDoParallel(cl)
 
 Start <- Sys.time()
-output <- foreach(i = seeds) %dopar% {
+output <- foreach(i = seeds,
+                  .errorhandling = "remove") %dopar% {
     out <- list()
-    out$concrete.notconverge <- 
-        out$survtmle.6mo.notconverge <- 
-        out$survtmle.6mo.error <- 
-        out$survtmle.3mo.notconverge <- 
+    out$concrete.notconverge <-
+        out$survtmle.6mo.notconverge <-
+        out$survtmle.6mo.error <-
+        out$survtmle.3mo.notconverge <-
         out$survtmle.3mo.error <- 0
-    
-    
-    # concrete ------------------------------------------------------------------------------------
-    library(concrete)
-    
-    data <- simConCR(n = 1e2, random_seed = i)
+
+    data <- simConCR(n = 5e2, random_seed = i)
     TargetTime <- seq(730, 1460, length.out = 5)
     target.event <- sort(setdiff(unique(data$EVENT), 0))
-    
-    concreteArgs <- formatArguments(DataTable = data, 
-                                    EventTime = "TIME", 
-                                    EventType = "EVENT", 
+
+    # concrete ------------------------------------------------------------------------------------
+    Start <- Sys.time()
+    concreteArgs <- formatArguments(DataTable = data,
+                                    EventTime = "TIME",
+                                    EventType = "EVENT",
                                     Treatment = "ARM",
                                     ID = "id",
-                                    Intervention = 0:1, 
-                                    TargetTime = TargetTime, 
+                                    Intervention = 0:1,
+                                    TargetTime = TargetTime,
                                     MaxUpdateIter = 50)
     concreteArgs <- formatArguments(concreteArgs)
     concreteEst <- doConcrete(concreteArgs)
     concreteOut <- getOutput(concreteEst)$Risk
-    
+    Stop <- system.time()
     if (all(attr(concreteEst, "TmleConverged") == FALSE)) {
         out$concrete.notconverge <- out$concrete.notconverge + 1
     }
-    
-    
-    # contmle -------------------------------------------------------------------------------------
-    library(survival); library(zoo)
-    contmle.dir <- c("/Shared/Projects/continuousTMLE/R", "~/research/SoftWare/continuousTMLE/R")
-    x <- lapply(contmle.dir, function(dir) lapply(list.files(dir, full.names = TRUE), source))  
-    
-    run <- contmle(
-        data, #-- dataset
-        target = target.event, #-- go after cause 1 and cause 2 specific risks
-        iterative = FALSE, #-- use one-step tmle to target F1 and F2 simultaneously
-        treat.effect = "ate", #-- target the ate directly
-        tau = TargetTime, #-- time-point of interest
-        estimation = list(
-            "cens" = list(fit = "cox",
-                          model = Surv(TIME, EVENT == 0) ~ ARM+GEOGR1+SEX+AGE+EGFMDRBC+CREATBL+BMIBL+HBA1CBL+ETHNIC+MIFL+SMOKER+STROKSFL),
-            "cause1" = list(fit = "cox",
-                            model = Surv(TIME, EVENT == 1) ~ ARM+GEOGR1+SEX+AGE+EGFMDRBC+CREATBL+BMIBL+HBA1CBL+ETHNIC+MIFL+SMOKER+STROKSFL),
-            "cause2" = list(fit = "cox",
-                            model = Surv(TIME, EVENT == 2) ~ ARM+GEOGR1+SEX+AGE+EGFMDRBC+CREATBL+BMIBL+HBA1CBL+ETHNIC+MIFL+SMOKER+STROKSFL),
-            "cause3" = list(fit = "cox",
-                            model = Surv(TIME, EVENT == 3) ~ ARM+GEOGR1+SEX+AGE+EGFMDRBC+CREATBL+BMIBL+HBA1CBL+ETHNIC+MIFL+SMOKER+STROKSFL)),
-        treat.model = ARM ~ GEOGR1+SEX+AGE+EGFMDRBC+CREATBL+BMIBL+HBA1CBL+ETHNIC+MIFL+SMOKER+STROKSFL,
-        verbose = TRUE,
-        sl.models = NULL)
-    
-    # survtmle 6mo ----------------------------------------------------------------
-    library(survtmle); library(MOSS); library(SuperLearner)
-    surv_tmle.dir <- c("/Shared/Projects/Roadmap_CVOT/R/functions/")
-    x <- lapply(surv_tmle.dir, function(dir) lapply(list.files(dir, full.names = TRUE),
-                                                    function(x) try(source(x), silent = TRUE)))
-    
-    sl_lib_failure <- sl_lib_censor <- sl_lib_g <- c("SL.glmnet", "SL.xgboost")
-    target.time <- ceiling(TargetTime / 365 * 2)
-    
-    tmle_sl <- list()
-    class(tmle_sl) <- "try-error"
-    while (inherits(tmle_sl, "try-error")) {
-        tmle_sl <- try(surv_tmle(
-            ftime = ceiling(data$TIME / 365 * 2),
-            ftype = data$EVENT,
-            targets = target.time,
-            trt = data$ARM,
-            t0 = max(target.time),
-            adjustVars = as.data.frame(data[, !c("id", "TIME", "EVENT", "ARM")]),
-            SL.ftime = sl_lib_failure,
-            SL.ctime = sl_lib_censor,
-            SL.trt = sl_lib_g,
-            # glm.trt = glm_trt,
-            returnIC = TRUE,
-            returnModels = TRUE,
-            ftypeOfInterest = target.event,
-            trtOfInterest = c(1, 0),
-            maxIter = 50,
-            method = "hazard",
-        ))
-        if (inherits(tmle_sl, "try-error")) {
-            out$survtmle.6mo.error <- out$survtmle.6mo.error + 1
-        }
-    }
-    if (!tmle_sl$converged) {
-        out$survtmle.6mo.notconverge <- out$survtmle.6mo.notconverge + 1
-    }
-    
-    survtmle.est <- rbind(cbind("Estimator" = "gcomp6mo",
-                                "Intervention" = rep(c("A=0", "A=1"), times = length(target.event)),
-                                "Event" = rep(target.event, each = 2),
-                                as.data.frame(tmle_sl$init_est)),
-                          cbind(Estimator = "survtmle6mo",
-                                "Intervention" = rep(c("A=0", "A=1"), times = length(target.event)),
-                                Event = rep(target.event, each = 2),
-                                as.data.frame(tmle_sl$est))) %>% as.data.table() %>%
-        melt(., id.vars = c("Estimator", "Intervention", "Event"), value.name = "Risk", variable.name = "Time")
-    survtmle.est[, Time := as.numeric(gsub("\\D+", "", Time)) / 2 * 365]
-    survtmle.est <- full_join(survtmle.est,
-                              cbind(Estimator = "survtmle6mo",
-                                    "Intervention" = rep(c("A=0", "A=1"), each = length(target.event) * length(target.time)),
-                                    Event = rep(target.event, each = length(target.time), times = 2),
-                                    Time = rep(TargetTime, times = 2 * length(target.event)),
-                                    data.table(se = sqrt(diag(tmle_sl$var)))))
-    
-    # survtmle 3mo ----------------------------------------------------------------
-    
-    target.time <- ceiling(TargetTime / 365 * 4)
-    target.event <- order(setdiff(unique(data$EVENT), 0))
-    
-    tmle_sl <- list()
-    class(tmle_sl) <- "try-error"
-    while (inherits(tmle_sl, "try-error")) {
-        tmle_sl <- try(surv_tmle(
-            ftime = ceiling(data$TIME / 365 * 4),
-            ftype = data$EVENT,
-            targets = target.time,
-            trt = data$ARM,
-            t0 = max(target.time),
-            adjustVars = as.data.frame(data[, !c("id", "TIME", "EVENT", "ARM")]),
-            SL.ftime = sl_lib_failure,
-            SL.ctime = sl_lib_censor,
-            SL.trt = sl_lib_g,
-            # glm.trt = glm_trt,
-            returnIC = TRUE,
-            returnModels = TRUE,
-            ftypeOfInterest = target.event,
-            trtOfInterest = c(1, 0),
-            maxIter = 50,
-            method = "hazard",
-        ))
-        if (inherits(tmle_sl, "try-error")) {
-            out$survtmle.3mo.error <- out$survtmle.3mo.error + 1
-        }
-    }
-    if (!tmle_sl$converged) {
-        out$survtmle.3mo.notconverge <- out$survtmle.3mo.notconverge + 1
-    }
-    
-    survtmle.est.3mo <- rbind(cbind("Estimator" = "gcomp3mo",
-                                    "Intervention" = rep(c("A=0", "A=1"), times = length(target.event)),
-                                    "Event" = rep(target.event, each = 2),
-                                    as.data.frame(tmle_sl$init_est)),
-                              cbind(Estimator = "survtmle3mo",
-                                    "Intervention" = rep(c("A=0", "A=1"), times = length(target.event)),
-                                    Event = rep(target.event, each = 2),
-                                    as.data.frame(tmle_sl$est))) %>% as.data.table() %>%
-        melt(., id.vars = c("Estimator", "Intervention", "Event"), value.name = "Risk", variable.name = "Time")
-    survtmle.est.3mo[, Time := as.numeric(gsub("\\D+", "", Time)) / 4 * 365]
-    survtmle.est.3mo <- full_join(survtmle.est.3mo,
-                                  cbind(Estimator = "survtmle3mo",
-                                        "Intervention" = rep(c("A=0", "A=1"), each = length(target.event) * length(target.time)),
-                                        Event = rep(target.event, each = length(target.time), times = 2),
-                                        Time = rep(TargetTime, times = 2 * length(target.event)),
-                                        data.table(se = sqrt(diag(tmle_sl$var)))))
-    
-    out$estimates <- rbind(cbind("Package" = "concrete", concreteOut),
-                           cbind("Package" = "survtmle", survtmle.est), 
-                           cbind("Package" = "survtmle", survtmle.est.3mo))
-    out$contmle <- formatContmle(run)
+    attr(out, "concrete.time") <- Stop - Start
+
+    # # contmle -------------------------------------------------------------------------------------
+    # Start <- Sys.time()
+    # run <- contmle(
+    #     data, #-- dataset
+    #     target = target.event, #-- go after cause 1 and cause 2 specific risks
+    #     iterative = FALSE, #-- use one-step tmle to target F1 and F2 simultaneously
+    #     treat.effect = "ate", #-- target the ate directly
+    #     tau = TargetTime, #-- time-point of interest
+    #     estimation = list(
+    #         "cens" = list(fit = "cox",
+    #                       model = Surv(TIME, EVENT == 0) ~ ARM+GEOGR1+SEX+AGE+EGFMDRBC+CREATBL+BMIBL+HBA1CBL+ETHNIC+MIFL+SMOKER+STROKSFL),
+    #         "cause1" = list(fit = "cox",
+    #                         model = Surv(TIME, EVENT == 1) ~ ARM+GEOGR1+SEX+AGE+EGFMDRBC+CREATBL+BMIBL+HBA1CBL+ETHNIC+MIFL+SMOKER+STROKSFL),
+    #         "cause2" = list(fit = "cox",
+    #                         model = Surv(TIME, EVENT == 2) ~ ARM+GEOGR1+SEX+AGE+EGFMDRBC+CREATBL+BMIBL+HBA1CBL+ETHNIC+MIFL+SMOKER+STROKSFL),
+    #         "cause3" = list(fit = "cox",
+    #                         model = Surv(TIME, EVENT == 3) ~ ARM+GEOGR1+SEX+AGE+EGFMDRBC+CREATBL+BMIBL+HBA1CBL+ETHNIC+MIFL+SMOKER+STROKSFL)),
+    #     treat.model = ARM ~ GEOGR1+SEX+AGE+EGFMDRBC+CREATBL+BMIBL+HBA1CBL+ETHNIC+MIFL+SMOKER+STROKSFL,
+    #     verbose = TRUE,
+    #     sl.models = NULL)
+    # Stop <- Sys.time()
+    # attr(out, "contmle.time") <- Stop - Start
+
+    # # survtmle 6mo ----------------------------------------------------------------
+    # sl_lib_failure <- sl_lib_censor <- sl_lib_g <- c("SL.glmnet", "SL.xgboost")
+    # target.time <- ceiling(TargetTime / 365 * 2)
+    #
+    # tmle_sl <- list()
+    # class(tmle_sl) <- "try-error"
+    # while (inherits(tmle_sl, "try-error")) {
+    #     Start <- Sys.time()
+    #     tmle_sl <- try(surv_tmle(
+    #         ftime = ceiling(data$TIME / 365 * 2),
+    #         ftype = data$EVENT,
+    #         targets = target.time,
+    #         trt = data$ARM,
+    #         t0 = max(target.time),
+    #         adjustVars = as.data.frame(data[, !c("id", "TIME", "EVENT", "ARM")]),
+    #         SL.ftime = sl_lib_failure,
+    #         SL.ctime = sl_lib_censor,
+    #         SL.trt = sl_lib_g,
+    #         # glm.trt = glm_trt,
+    #         returnIC = TRUE,
+    #         returnModels = TRUE,
+    #         ftypeOfInterest = target.event,
+    #         trtOfInterest = c(1, 0),
+    #         maxIter = 50,
+    #         method = "hazard",
+    #     ))
+    #     if (inherits(tmle_sl, "try-error")) {
+    #         out$survtmle.6mo.error <- out$survtmle.6mo.error + 1
+    #     }
+    # }
+    # if (!tmle_sl$converged) {
+    #     out$survtmle.6mo.notconverge <- out$survtmle.6mo.notconverge + 1
+    # }
+    # Stop <- Sys.time()
+    # attr(out, "survtmle6.time") <- Stop - Start
+    #
+    # survtmle.est <- rbind(cbind("Estimator" = "gcomp6mo",
+    #                             "Intervention" = rep(c("A=0", "A=1"), times = length(target.event)),
+    #                             "Event" = rep(target.event, each = 2),
+    #                             as.data.frame(tmle_sl$init_est)),
+    #                       cbind(Estimator = "survtmle6mo",
+    #                             "Intervention" = rep(c("A=0", "A=1"), times = length(target.event)),
+    #                             Event = rep(target.event, each = 2),
+    #                             as.data.frame(tmle_sl$est))) %>% as.data.table() %>%
+    #     melt(., id.vars = c("Estimator", "Intervention", "Event"), value.name = "Risk", variable.name = "Time")
+    # survtmle.est[, Time := as.numeric(gsub("\\D+", "", Time)) / 2 * 365]
+    # survtmle.est <- full_join(survtmle.est,
+    #                           cbind(Estimator = "survtmle6mo",
+    #                                 "Intervention" = rep(c("A=0", "A=1"), each = length(target.event) * length(target.time)),
+    #                                 Event = rep(target.event, each = length(target.time), times = 2),
+    #                                 Time = rep(TargetTime, times = 2 * length(target.event)),
+    #                                 data.table(se = sqrt(diag(tmle_sl$var)))))
+
+    # # survtmle 3mo ----------------------------------------------------------------
+    # target.time <- ceiling(TargetTime / 365 * 4)
+    # target.event <- order(setdiff(unique(data$EVENT), 0))
+    #
+    # tmle_sl <- list()
+    # class(tmle_sl) <- "try-error"
+    # while (inherits(tmle_sl, "try-error")) {
+    #     Start <- Sys.time()
+    #     tmle_sl <- try(surv_tmle(
+    #         ftime = ceiling(data$TIME / 365 * 4),
+    #         ftype = data$EVENT,
+    #         targets = target.time,
+    #         trt = data$ARM,
+    #         t0 = max(target.time),
+    #         adjustVars = as.data.frame(data[, !c("id", "TIME", "EVENT", "ARM")]),
+    #         SL.ftime = sl_lib_failure,
+    #         SL.ctime = sl_lib_censor,
+    #         SL.trt = sl_lib_g,
+    #         # glm.trt = glm_trt,
+    #         returnIC = TRUE,
+    #         returnModels = TRUE,
+    #         ftypeOfInterest = target.event,
+    #         trtOfInterest = c(1, 0),
+    #         maxIter = 50,
+    #         method = "hazard",
+    #     ))
+    #     if (inherits(tmle_sl, "try-error")) {
+    #         out$survtmle.3mo.error <- out$survtmle.3mo.error + 1
+    #     }
+    # }
+    # if (!tmle_sl$converged) {
+    #     out$survtmle.3mo.notconverge <- out$survtmle.3mo.notconverge + 1
+    # }
+    # Stop <- Sys.time()
+    # attr(out, "survtmle3.time") <- Stop - Start
+    #
+    # survtmle.est.3mo <- rbind(cbind("Estimator" = "gcomp3mo",
+    #                                 "Intervention" = rep(c("A=0", "A=1"), times = length(target.event)),
+    #                                 "Event" = rep(target.event, each = 2),
+    #                                 as.data.frame(tmle_sl$init_est)),
+    #                           cbind(Estimator = "survtmle3mo",
+    #                                 "Intervention" = rep(c("A=0", "A=1"), times = length(target.event)),
+    #                                 Event = rep(target.event, each = 2),
+    #                                 as.data.frame(tmle_sl$est))) %>% as.data.table() %>%
+    #     melt(., id.vars = c("Estimator", "Intervention", "Event"), value.name = "Risk", variable.name = "Time")
+    # survtmle.est.3mo[, Time := as.numeric(gsub("\\D+", "", Time)) / 4 * 365]
+    # survtmle.est.3mo <- full_join(survtmle.est.3mo,
+    #                               cbind(Estimator = "survtmle3mo",
+    #                                     "Intervention" = rep(c("A=0", "A=1"), each = length(target.event) * length(target.time)),
+    #                                     Event = rep(target.event, each = length(target.time), times = 2),
+    #                                     Time = rep(TargetTime, times = 2 * length(target.event)),
+    #                                     data.table(se = sqrt(diag(tmle_sl$var)))))
+
+    # return ------------------------------------------------------------------
+    out$estimates <- cbind("Package", "concrete", concreteOut)
+    # out$estimates <- rbind(cbind("Package" = "concrete", concreteOut)),
+    #                        cbind("Package" = "survtmle", survtmle.est),
+    #                        cbind("Package" = "survtmle", survtmle.est.3mo))
+    # out$contmle <- formatContmle(run)
     return(out)
 }
+registerDoSEQ()
+stopCluster(cl)
 Stop <- Sys.time()
 Stop - Start
 
