@@ -1,0 +1,16 @@
+Run 1 ; concrete ; 10.4469971259435
+Run 4 ; concrete ; 11.2412230094274
+Run 11 ; concrete ; 12.6993956327438
+Run 10 ; concrete ; 14.0538509726524
+Run 6 ; concrete ; 14.925174442927
+Run 14 ; concrete ; 15.0157962361972
+Run 13 ; concrete ; 15.7222504218419
+Run 7 ; concrete ; 17.8803665439288
+Run 16 ; concrete ; 18.6929406364759
+Run 15 ; concrete ; 18.8058892448743
+Run 5 ; concrete ; 18.925204996268
+Run 12 ; concrete ; 19.5618095795314
+Run 9 ; concrete ; 19.5885744214058
+Run 2 ; concrete ; 19.873927350839
+Run 8 ; concrete ; 20.109093840917
+Run 3 ; concrete ; 20.1993908206622
