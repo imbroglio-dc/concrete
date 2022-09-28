@@ -69,7 +69,7 @@ getRD <- function(Estimate, TargetTime, TargetEvent, GComp) {
                         Interventions = paste0(names(Estimate), collapse = " - "), 
                         Estimand = "Risk Difference", 
                         class = union("ConcreteOut", class(rd.out)))
-    return(rd.out[, order(Estimator, decreasing = TRUE)])
+    return(rd.out[order(Estimator, decreasing = TRUE)])
 }
 
 getRR <- function(Estimate, TargetTime, TargetEvent, GComp) {
@@ -82,7 +82,7 @@ getRR <- function(Estimate, TargetTime, TargetEvent, GComp) {
                         Interventions = paste0(names(Estimate), collapse = " / "), 
                         Estimand = "Relative Risk", 
                         class = union("ConcreteOut", class(rr.out)))
-    return(rr.out[, order(Estimator, decreasing = TRUE)])
+    return(rr.out[order(Estimator, decreasing = TRUE)])
 }
 
 getRisk <- function(Estimate, TargetTime, TargetEvent, GComp) {
