@@ -268,3 +268,46 @@ stopCluster(cl)
 Stop <- Sys.time()
 Stop - Start
 
+
+# Processing --------------------------------------------------------------
+
+estimates <- do.call(rbind, lapply(seq_along(output), function(iter) {
+    if (inherits(output[[iter]]$estimates, "data.frame"))
+        return(cbind("iter" = iter, output[[iter]]$estimates))
+    NULL
+}))
+estimates <- rbind(estimates,
+                   estimates[, list("Intervention" = "RD",
+                                    "Risk" = Risk[Intervention == "A=1"] - Risk[Intervention == "A=0"],
+                                    "se" = sqrt(se[Intervention == "A=1"]^2 + se[Intervention == "A=0"]^2)),
+                             by = c("iter", "Package", "Estimator", "Event", "Time")],
+                   estimates[, list("Intervention" = "RR",
+                                    "Risk" = Risk[Intervention == "A=1"] / Risk[Intervention == "A=0"],
+                                    "se" = sqrt((se[Intervention == "A=1"] / Risk[Intervention == "A=0"])^2 +
+                                                    (se[Intervention == "A=0"] * Risk[Intervention == "A=1"] /
+                                                         Risk[Intervention == "A=0"]^2)^2)),
+                             by = c("iter", "Package", "Estimator", "Event", "Time")]
+)
+estimates <- rbind(estimates,
+                   do.call(rbind, lapply(seq_along(output), function(iter) {
+                       if (inherits(output[[iter]]$contmle, "data.frame")) {
+                           out <- setDT(output[[iter]]$contmle)
+                           out[, Intervention := "RD"]
+                           setnames(out, "RD", "Risk")
+                           return(cbind("iter" = iter, out))
+                       }
+                       NULL
+                   })))
+
+
+
+
+perf <- estimates[, list(Risk = mean(Risk), se = mean(se),
+                         l = quantile(Risk, 0.025), u = quantile(Risk, 0.975)),
+          by = c("Package", "Intervention", "Estimator", "Event", "Time")]
+
+perf[, Time := as.factor(Time)] %>%
+    ggplot(aes(x = Time, y = Risk, colour = Estimator, shape = Package)) +
+    facet_wrap(Intervention ~ Event, scales = "free") +
+    geom_errorbar(aes(ymin = l, ymax = u), width = 0.8, position = position_dodge2(width = 0.8)) +
+    geom_point(size = 2, position = position_dodge2(width = 0.8)) + theme_minimal()
