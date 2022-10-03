@@ -105,7 +105,8 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, TargetEvent, TargetTime,
                                          "ratio" = abs(PnEIC) / `seEIC/(sqrt(n)log(n))`),
                                   by = c("Trt", "Time", "Event")]
         
-        if (Verbose) cat("maxPnEIC = ", max(OneStepStop[["ratio"]]), "\n")
+        if (Verbose)  printOneStepDiagnostics(OneStepStop)
+        
         if (all(sapply(OneStepStop[["check"]], isTRUE))) {
             attr(Estimates, "TmleConverged") <- c("converged" = TRUE, "step" = StepNum)
             return(Estimates)
@@ -113,7 +114,7 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, TargetEvent, TargetTime,
     }
     warning("TMLE has not converged by step ", MaxUpdateIter, " - Estimates may not have ", 
             "the desired asymptotic properties")
-    attr(Estimates, "TmleConverged") <- FALSE
+    attr(Estimates, "TmleConverged") <- c("converged" = FALSE, "step" = StepNum)
     return(Estimates)
 }
 
@@ -244,4 +245,10 @@ getFluctPnEIC <- function(GStar, Hazards, TotalSurv, NuisanceWeight, TargetEvent
     ## the second EIC component ( ... + F_j(tau | a, L) - Psi )
     IC.a <- as.data.table(IC.a)[, list(mean(IC))]
     return(IC.a)
+}
+
+printOneStepDiagnostics <- function(OneStepStop) {
+    ratio <- NULL
+    Verb <- OneStepStop[, !"check"][, ratio := round(ratio, 2)][order(ratio, decreasing = TRUE)]
+    print(Verb[1:min(nrow(Verb), 3), ])
 }

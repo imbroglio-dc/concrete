@@ -81,7 +81,7 @@ getIC <- function(GStar, Hazards, TotalSurv, NuisanceWeight, TargetEvent, Target
     ## the second EIC component ( ... + F_j(tau | a, L) - Psi )
     IC.a <- as.data.table(IC.a)
     IC.a[, IC := IC + F.j.tau - mean(F.j.tau), by = c("Time", "Event")]
-    return(IC.a[,.SD, .SDcols = !"F.j.tau"])
+    return(IC.a[, .SD, .SDcols = !"F.j.tau"])
 }
 
 getGComp <- function(EvalTimes, Hazards, TotalSurv, TargetTime) {
@@ -104,7 +104,9 @@ summarizeIC <- function(IC.a) {
     IC <- NULL
     IC.a <- rbind(IC.a,
                   IC.a[, list("Event" = -1, "IC" = -sum(IC)), by = c("ID", "Time")])
-    return(IC.a[, list("PnEIC" = mean(IC), "seEIC" = sqrt(stats::var(IC)),
-                       "seEIC/(sqrt(n)log(n))" = sqrt(stats::var(IC)/.N)/log(.N)),
-                by = c("Time", "Event")])
+    summIC <- IC.a[, list("PnEIC" = mean(IC), 
+                          "seEIC" = sqrt(stats::var(IC)),
+                          "seEIC/(sqrt(n)log(n))" = sqrt(stats::var(IC)/.N)/log(.N)),
+                   by = c("Time", "Event")]
+    return(summIC)
 }

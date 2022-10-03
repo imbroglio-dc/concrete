@@ -31,7 +31,7 @@ concrete_args <- formatArguments(concrete_args)
 concrete_est <- doConcrete(ConcreteArgs = concrete_args)
 
 # getOutput needs more work, i.e. pretty print, summary, and plot methods
-concrete_out <- getOutput(Estimate = concrete_est, GComp = TRUE)
+concrete_out <- getOutput(Estimate = concrete_est)
 concrete_rd <- concrete_out$RD
 concrete_rr <- concrete_out$RR
 concrete_risks <- concrete_out$Risk

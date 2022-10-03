@@ -101,9 +101,8 @@ doConCRTmle <- function(Data, TargetTime, TargetEvent, Regime, CVFolds, Model, P
     OneStepStop <- SummEIC[, list("check" = abs(PnEIC) <= `seEIC/(sqrt(n)log(n))`,
                                   "ratio" = abs(PnEIC) / `seEIC/(sqrt(n)log(n))`),
                            by = c("Trt", "Time", "Event")]
-    if (Verbose) {
-        print(OneStepStop[, !"check"][, ratio := round(ratio, 2)][order(ratio, decreasing = TRUE)][1:6, ])
-    }
+    
+    if (Verbose) printOneStepDiagnostics(OneStepStop)
     
     ## one-step tmle loop (one-step) ----
     if (!all(sapply(OneStepStop[["check"]], isTRUE))) {

@@ -4,7 +4,7 @@
 #' @param Estimand character (default: c("RD", "RR", "Risk")) or a function or a list of functions 
 # #' @param plot boolean (default = TRUE) : whether or not to plot the 
 #'
-#' @return tbd
+#' @return data.table of point estimates and standard deviations
 #' @export getOutput
 #'
 #' @examples
@@ -14,6 +14,8 @@
 #' # concrete.out$RD
 #' # concrete.out$RR
 #' # concrete.out$Risk
+#' 
+#' @importFrom MASS mvrnorm
 
 getOutput <- function(Estimate, Estimand = c("RD", "RR", "Risk")) {
     if (!all(sapply(Estimand, function(e) any(is.function(e), grepl("(rd)|(rr)|(risk)", tolower(e)))))) {
@@ -104,4 +106,36 @@ getRisk <- function(Estimate, TargetTime, TargetEvent, GComp) {
         return(risk.a)
     })
     return(risk)
+}
+
+getSimultaneous <- function(Estimate, Risks = NULL, SignifLevel = 0.05) {
+    ICs <- lapply(seq_along(Estimates), function(a) {
+        est.a <- Estimates[[a]]
+        IC.a <- getIC(GStar =  attr(est.a[["PropScore"]], "g.star.obs"),
+                      Hazards = est.a[["Hazards"]], TotalSurv = est.a[["EvntFreeSurv"]],
+                      NuisanceWeight = est.a[["NuisanceWeight"]],
+                      TargetEvent = TargetEvent, TargetTime = TargetTime,
+                      T.tilde = T.tilde, Delta = Delta,
+                      EvalTimes = EvalTimes, GComp = FALSE)
+        return(cbind("Intervention" = names(Estimates)[a], IC.a))
+    })
+    ICs <- do.call(rbind, ICs)
+    ICs <- rbind(ICs, 
+                 ICs[, list("Intervention" = "RD", ID = 1:418, 
+                            "IC" = IC[Intervention == "A=1"] - IC[Intervention == "A=0"]), 
+                     by = c("Time", "Event")], 
+                 ICs[, list("Intervention" = "RR", ID = 1:418, 
+                            "IC" = IC[Intervention == "A=1"] - IC[Intervention == "A=0"]), 
+                     by = c("Time", "Event")])
+    wideIC <- dcast(ICs, ID ~ Intervention + Time + Event, value.var = "IC")[, !c("ID")]
+    
+    
+    
+    CovEIC <- attr(Estimate, "CovEIC")
+    CorrEIC <- attr(Estimate, "CorrEIC")
+    n <- attr(Estimate, "n")
+    CovEIC[is.na(CovEIC)] <- 1e-9
+    q <- apply(abs(MASS::mvrnorm(n = 1e3, mu = rep(0, nrow(CorrEIC)), Sigma = CorrEIC)), 1, max)
+    q <- as.numeric(stats::quantile(q, 1 - SignifLevel))
+    return(sqrt(diag(CovEIC)) / sqrt(n) * q)
 }
