@@ -1,14 +1,23 @@
-library(survtmle); library(MOSS); library(SuperLearner)
-surv_tmle.dir <- c("/Shared/Projects/Roadmap_CVOT/R/functions/")
-x <- lapply(surv_tmle.dir, function(dir) lapply(list.files(dir, full.names = TRUE),
-                                                function(x) try(source(x), silent = TRUE)))
-library(survival); library(zoo)
-contmle.dir <- c("/Shared/Projects/continuousTMLE/R", "~/research/SoftWare/continuousTMLE/R")
-x <- lapply(contmle.dir, function(dir) lapply(list.files(dir, full.names = TRUE), source))
+loadPackages <- function() {
+    library(survtmle); library(MOSS); library(SuperLearner)
+    surv_tmle.dir <- c("/Shared/Projects/Roadmap_CVOT/R/functions/")
+    x <- lapply(surv_tmle.dir, function(dir) lapply(list.files(dir, full.names = TRUE),
+                                                    function(x) try(source(x), silent = TRUE)))
+    library(survival); library(zoo)
+    contmle.dir <- c("/Shared/Projects/continuousTMLE/R", "~/research/SoftWare/continuousTMLE/R")
+    x <- lapply(contmle.dir, function(dir) lapply(list.files(dir, full.names = TRUE), source))
 
-library(tidyverse); library(data.table); library(concrete)
-source("./scripts/sim-data/sim_functions.R")
+    library(tidyverse); library(data.table)
+    data.table::setDTthreads(threads = 1)
+    source("./scripts/sim-data/sim_functions.R")
+    library(concrete)
+    unloadNamespace("mice")
+    invisible(NULL)
+}
+
+loadPackages()
 options(warn = -1)
+data.table::setDTthreads(threads = parallel::detectCores(), restore_after_fork = TRUE)
 
 # true risks --------------------------------------------------------------
 # true risks for 3 competing risks
@@ -31,18 +40,19 @@ risks %>% mutate(Event = factor(Event)) %>%
     theme_minimal() + labs(title = "True Competing Risks")
 rm(list = c("risks0", "risks1"))
 
-
 # simulation --------------------------------------------------------------
 set.seed(0)
 seeds <- sample(0:12345678, size = 400)
 library(foreach)
 library(doParallel)
-cl <- makeForkCluster(nnodes = 16, outfile = "")
+cl <- makeForkCluster(max(as.integer(parallel::detectCores() / 2) - 1, 1))
 registerDoParallel(cl)
 
 Start <- Sys.time()
 output <- foreach(i = seq_along(seeds),
-                  .errorhandling = "remove") %dopar% {
+                  .errorhandling = "remove",
+                  .packages = "readr") %dopar% {
+                      loadPackages()
                       out <- list()
                       out$estimates <- data.table()
                       out$concrete.notconverge <-
@@ -67,9 +77,8 @@ output <- foreach(i = seq_along(seeds),
                                                       TargetTime = TargetTime,
                                                       MaxUpdateIter = 50,
                                                       Verbose = FALSE)
-                      concreteArgs <- formatArguments(concreteArgs)
 
-                      concreteEst <- list();
+                      concreteEst <- list()
                       iter <- 1
                       class(concreteEst) <- "try-error"
                       while (inherits(concreteEst, "try-error") & iter <= 3) {
@@ -90,45 +99,49 @@ output <- foreach(i = seq_along(seeds),
                       }
 
                       attr(out, "concrete.time") <- Stop - Start
-                      write_lines(paste0("Run ", i, " ; concrete ; ", Stop - Start),
-                                  file = "scripts/sim-data/sim-diagnostics.txt", append = TRUE)
-                      # contmle -------------------------------------------------------------------------------------
-                      run <- list()
-                      class(run) <- "try-error"
+                      readr::write_lines(paste0("Run ", i, " ; concrete ; ",
+                                                format(unclass(Stop - Start), digits = 3),
+                                                " ", attr(Stop - Start, "units")),
+                                         file = "scripts/sim-data/sim-diag/diagnostic.txt", append = TRUE)
 
-                      while (inherits(run, "try-error") & iter <= 3) {
-                          Start <- Sys.time()
-                          run <- try(contmle(
-                              data, #-- dataset
-                              target = target.event, #-- go after cause 1 and cause 2 specific risks
-                              iterative = FALSE, #-- use one-step tmle to target F1 and F2 simultaneously
-                              treat.effect = "ate", #-- target the ate directly
-                              tau = TargetTime, #-- time-point of interest
-                              estimation = list(
-                                  "cens" = list(fit = "cox",
-                                                model = Surv(TIME, EVENT == 0) ~ ARM+GEOGR1+SEX+AGE+EGFMDRBC+CREATBL+BMIBL+HBA1CBL+ETHNIC+MIFL+SMOKER+STROKSFL),
-                                  "cause1" = list(fit = "cox",
-                                                  model = Surv(TIME, EVENT == 1) ~ ARM+GEOGR1+SEX+AGE+EGFMDRBC+CREATBL+BMIBL+HBA1CBL+ETHNIC+MIFL+SMOKER+STROKSFL),
-                                  "cause2" = list(fit = "cox",
-                                                  model = Surv(TIME, EVENT == 2) ~ ARM+GEOGR1+SEX+AGE+EGFMDRBC+CREATBL+BMIBL+HBA1CBL+ETHNIC+MIFL+SMOKER+STROKSFL),
-                                  "cause3" = list(fit = "cox",
-                                                  model = Surv(TIME, EVENT == 3) ~ ARM+GEOGR1+SEX+AGE+EGFMDRBC+CREATBL+BMIBL+HBA1CBL+ETHNIC+MIFL+SMOKER+STROKSFL)),
-                              treat.model = ARM ~ GEOGR1+SEX+AGE+EGFMDRBC+CREATBL+BMIBL+HBA1CBL+ETHNIC+MIFL+SMOKER+STROKSFL,
-                              verbose = FALSE,
-                              sl.models = NULL,
-                              no.small.steps = 50))
-                          if (inherits(run, "try-error")) {
-                              out$contmle <- "contmle error"
-                              out$contmle.error <- out$contmle.error + 1
-                              iter <- iter + 1
-                          } else {
-                              out$contmle <- try(formatContmle(run))
-                          }
-                      }
-                      Stop <- Sys.time()
-                      attr(out, "contmle.time") <- Stop - Start
-                      write_lines(paste0("Run ", i, " ; contmle ; ", Stop - Start),
-                                  file = "scripts/sim-data/sim-diagnostics.txt", append = TRUE)
+                      # # contmle -------------------------------------------------------------------------------------
+                      # contmle.out <- list()
+                      # class(contmle.out) <- "try-error"
+                      #
+                      # while (inherits(contmle.out, "try-error") & iter <= 3) {
+                      #     Start <- Sys.time()
+                      #     contmle.out <- try(contmle(
+                      #         data, #-- dataset
+                      #         target = target.event, #-- go after cause 1 and cause 2 specific risks
+                      #         iterative = FALSE, #-- use one-step tmle to target F1 and F2 simultaneously
+                      #         treat.effect = "ate", #-- target the ate directly
+                      #         tau = TargetTime, #-- time-point of interest
+                      #         estimation = list(
+                      #             "cens" = list(fit = "cox",
+                      #                           model = Surv(TIME, EVENT == 0) ~ ARM+GEOGR1+SEX+AGE+EGFMDRBC+CREATBL+BMIBL+HBA1CBL+ETHNIC+MIFL+SMOKER+STROKSFL),
+                      #             "cause1" = list(fit = "cox",
+                      #                             model = Surv(TIME, EVENT == 1) ~ ARM+GEOGR1+SEX+AGE+EGFMDRBC+CREATBL+BMIBL+HBA1CBL+ETHNIC+MIFL+SMOKER+STROKSFL),
+                      #             "cause2" = list(fit = "cox",
+                      #                             model = Surv(TIME, EVENT == 2) ~ ARM+GEOGR1+SEX+AGE+EGFMDRBC+CREATBL+BMIBL+HBA1CBL+ETHNIC+MIFL+SMOKER+STROKSFL),
+                      #             "cause3" = list(fit = "cox",
+                      #                             model = Surv(TIME, EVENT == 3) ~ ARM+GEOGR1+SEX+AGE+EGFMDRBC+CREATBL+BMIBL+HBA1CBL+ETHNIC+MIFL+SMOKER+STROKSFL)),
+                      #         treat.model = ARM ~ GEOGR1+SEX+AGE+EGFMDRBC+CREATBL+BMIBL+HBA1CBL+ETHNIC+MIFL+SMOKER+STROKSFL,
+                      #         verbose = FALSE,
+                      #         sl.models = NULL,
+                      #         no.small.steps = 50))
+                      #     if (inherits(contmle.out, "try-error")) {
+                      #         out$contmle <- "contmle error"
+                      #         out$contmle.error <- out$contmle.error + 1
+                      #         iter <- iter + 1
+                      #     } else {
+                      #         out$contmle <- try(formatContmle(contmle.out))
+                      #     }
+                      # }
+                      # Stop <- Sys.time()
+                      # attr(out, "contmle.time") <- Stop - Start
+                      # readr::write_lines(paste0("Run ", i, " ; contmle ; ", format(unclass(Stop - Start), digits = 3), " ", attr(Stop - Start, "units")),
+                      #             file = "scripts/sim-data/sim-diag/diagnostic.txt", append = TRUE)
+
                       # survtmle 6mo ----------------------------------------------------------------
                       sl_lib_failure <-
                           sl_lib_censor <-
@@ -193,8 +206,8 @@ output <- foreach(i = seq_along(seeds),
                       }
                       Stop <- Sys.time()
                       attr(out, "survtmle6.time") <- Stop - Start
-                      write_lines(paste0("Run ", i, " ; survtmle6 ; ", Stop - Start),
-                                  file = "scripts/sim-data/sim-diagnostics.txt", append = TRUE)
+                      readr::write_lines(paste0("Run ", i, " ; survtmle6 ; ", format(unclass(Stop - Start), digits = 3), " ", attr(Stop - Start, "units")),
+                                  file = "scripts/sim-data/sim-diag/diagnostic.txt", append = TRUE)
 
                       # survtmle 3mo ----------------------------------------------------------------
                       intervals.per.year <- 4
@@ -257,14 +270,15 @@ output <- foreach(i = seq_along(seeds),
 
                       Stop <- Sys.time()
                       attr(out, "survtmle3.time") <- Stop - Start
-                      write_lines(paste0("Run ", i, " ; survtmle3 ; ", Stop - Start),
-                                  file = "scripts/sim-data/sim-diagnostics.txt", append = TRUE)
+                      readr::write_lines(paste0("Run ", i, " ; survtmle3 ; ", format(unclass(Stop - Start), digits = 3), " ", attr(Stop - Start, "units")),
+                                  file = "scripts/sim-data/sim-diag/diagnostic.txt", append = TRUE)
 
                       # return ------------------------------------------------------------------
                       out
                   }
 registerDoSEQ()
 stopCluster(cl)
+rm(cl)
 Stop <- Sys.time()
 Stop - Start
 
@@ -304,7 +318,7 @@ estimates <- rbind(estimates,
 
 perf <- estimates[, list(Risk = mean(Risk), se = mean(se),
                          l = quantile(Risk, 0.025), u = quantile(Risk, 0.975)),
-          by = c("Package", "Intervention", "Estimator", "Event", "Time")]
+                  by = c("Package", "Intervention", "Estimator", "Event", "Time")]
 
 perf[, Time := as.factor(Time)] %>%
     ggplot(aes(x = Time, y = Risk, colour = Estimator, shape = Package)) +
