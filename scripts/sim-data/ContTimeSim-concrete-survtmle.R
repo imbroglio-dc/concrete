@@ -44,20 +44,20 @@ rm(list = c("risks0", "risks1"))
 # simulation --------------------------------------------------------------
 set.seed(0)
 B <- 400
-seeds <- sample(0:12345678, size = B)
+seeds <- sample(0:12345678, size = B + 100)
 output <- list()
 library(foreach)
 library(doParallel)
-n_cores <- min(parallel::detectCores(), 12)
-j <- k <- 1
-while(j <= length(seeds) & k <= 1.2*B) {
-    seeds_j <- seeds[j:min(B, j + n_cores - 1)]
+n_cores <- min(parallel::detectCores(), 16)
+# j <- k <- 1
+# while(j <= length(seeds) & k <= B) {
+#     seeds_j <- seeds[j:min(length(seeds), j + 2*n_cores - 1)]
     cl <- makeCluster(n_cores, type = "FORK")
     registerDoParallel(cl)
     Start <- Sys.time()
     sim.result <- try({
-        foreach(i = seq_along(seeds_j),
-        # foreach(i = seq_along(seeds),
+        # foreach(i = seq_along(seeds_j),
+        foreach(i = seq_along(seeds),
                 .errorhandling = "remove",
                 .packages = "readr") %dopar% {
                     loadPackages()
@@ -69,13 +69,12 @@ while(j <= length(seeds) & k <= 1.2*B) {
                                      "error" = list(), "notconverge" = list())
 
                     MaxIter <- 100
-                    Data <- simConCR(n = 8e2, random_seed = seeds_j[i])
-                    # Data <- simConCR(n = 8e2, random_seed = seeds[i])
+                    # Data <- simConCR(n = 8e2, random_seed = seeds_j[i])
+                    Data <- simConCR(n = 8e2, random_seed = seeds[i])
                     TargetTime <- seq(730, 1460, length.out = 5)
-                    TargetEvent <- sort(setdiff(unique(Data$EVENT), 0))
 
                     # helper functions --------------------------------------------------------
-                    simConcrete <- function(TargetTime, Data, MaxIter, DiagPath) {
+                    simConcrete <- function(TargetTime, Data, MaxIter, DiagPath, j = 1) {
                         require(concrete); require(data.table)
                         readr::write_lines(paste0("Run ", j + i - 1, " ; concrete ; start"),
                                            file = DiagPath, append = TRUE)
@@ -102,7 +101,7 @@ while(j <= length(seeds) & k <= 1.2*B) {
                         return(estimates)
                     }
 
-                    simContmle <- function(TargetTime, Data, MaxIter, DiagPath) {
+                    simContmle <- function(TargetTime, Data, MaxIter, DiagPath, j = 1) {
                         required <- c("data.table", "zoo", "glmnet", "survival", "stringr",
                                       "nleqslv","prodlim", "Matrix", "coefplot", "hdnom")
                         z <- sapply(required, function(p) try(library(p, character.only = TRUE),
@@ -177,8 +176,8 @@ while(j <= length(seeds) & k <= 1.2*B) {
                         return(as.data.frame(rbind(tmleOutput, gcompOutput)))
                     }
 
-                    simSurvtmle <- function(TargetTime, Bins, Data, MaxIter, DiagPath) {
-                        require(SuperLearner)
+                    simSurvtmle <- function(TargetTime, Bins, Data, MaxIter, DiagPath, j = 1) {
+                        require(SuperLearner); require(survtmle)
                         survMonths <- paste0("survtmle", as.integer(12 / Bins), "mo")
                         readr::write_lines(paste0("Run ", j + i - 1, " ; ", survMonths," ; start"),
                                            file = DiagPath, append = TRUE)
@@ -186,6 +185,7 @@ while(j <= length(seeds) & k <= 1.2*B) {
                         sl_lib_censor <- c("SL.glmnet", "SL.xgboost")
                         sl_lib_g <- c("SL.glmnet", "SL.xgboost")
                         TargetTime <- ceiling(TargetTime / 365 * Bins)
+                        TargetEvent <- sort(setdiff(unique(Data$EVENT), 0))
                         W <- as.data.frame(Data[, !c("id", "TIME", "EVENT", "ARM")])
 
                         Start <- Sys.time()
@@ -199,15 +199,14 @@ while(j <= length(seeds) & k <= 1.2*B) {
                                             SL.trt = sl_lib_g,
                                             returnIC = TRUE,
                                             returnModels = TRUE,
-                                            ftypeOfInterest = TargetEvent,
+                                            ftypeOfInterest = 1:3,
                                             trtOfInterest = c(1, 0),
                                             method = "hazard",
                                             verbose = FALSE,
-                                            tol = 1 / nrow(Data),
-                                            maxIter = MaxIter,
+                                            maxIter = 100,
                                             Gcomp = FALSE)
-                        survtmleOut <- print(timepoints(tmleFit, times = TargetTime))
-                        survtmleOut <- getSurvtmleTbl(survtmleOut, TargetEvent, Bins)
+                        survtmleOut <- print(timepoints(object = tmleFit, times = TargetTime))
+                        survtmleOut <- getSurvtmleTbl(survtmleOut, TargetEvent, TargetTime, Bins)
 
                         Stop <- Sys.time()
                         attr(survtmleOut, "time") <- difftime(Stop, Start, units = "mins")
@@ -218,7 +217,7 @@ while(j <= length(seeds) & k <= 1.2*B) {
                         return(survtmleOut)
                     }
 
-                    getSurvtmleTbl <- function(survtmleOut, TargetEvent, Bins) {
+                    getSurvtmleTbl <- function(survtmleOut, TargetEvent, TargetTime, Bins) {
                         require(dplyr)
                         x <- c("Risk", "se")
                         survtmle.list <- lapply(seq_along(x), function(i) {
@@ -247,7 +246,7 @@ while(j <= length(seeds) & k <= 1.2*B) {
                             if (!attr(concreteOut, "converge"))
                                 out$meta$notconverge <- c(out$meta$notconverge, "concrete")
                         }
-                        rm(concreteOut)
+                        rm(concreteOut); gc()
                     }
 
                     # contmle ------------------------------------------------------------------------------
@@ -264,6 +263,7 @@ while(j <= length(seeds) & k <= 1.2*B) {
                             if (contmleOut$convergenced.at.step >= MaxIter)
                                 out$meta$notconverge <- c(out$meta$notconverge, "contmle")
                         }
+                        rm(contmleOut); gc()
                     }
 
                     # survtmle 6mo ----------------------------------------------------------------
@@ -281,6 +281,7 @@ while(j <= length(seeds) & k <= 1.2*B) {
                             out$meta$time[Estimator == paste0("survtmle-", as.integer(12 / Bins), "mo"),
                                           Time := attr(survtmle6mo, "time")]
                         }
+                        rm(survtmle6mo); gc()
                     }
 
                     # survtmle 3mo ----------------------------------------------------------------
@@ -298,26 +299,24 @@ while(j <= length(seeds) & k <= 1.2*B) {
                             out$meta$time[Estimator == paste0("survtmle-", as.integer(12 / Bins), "mo"),
                                           Time := attr(survtmle3mo, "time")]
                         }
+                        rm(survtmle3mo); gc()
                     }
 
                     # return ------------------------------------------------------------------
                     return(out)
                 }
     }, silent = TRUE)
-    if (any(sapply(sim.result, function(run) inherits(run, "try-error")))) {
-        seeds <- c(seeds[1:(j-1)],
-                   seeds_j[which(sapply(sim.result, function(run) inherits(run, "try-error")))],
-                   seeds[j:length(seeds)])
-        sim.result <- lapply(sim.result, function(run) {
-            ifelse(inherits(run, "try-error"), NULL, run)})
-    }
-    output <- c(output, sim.result)
+    # j <- max(seeds_j) + 1
+    # sim.result <- lapply(sim.result, function(run) {ifelse(inherits(run, "try-error"), NULL, run)})
+    # k <- k + length(sim.result)
+    # output <- c(output, sim.result)
     registerDoSEQ()
     stopCluster(cl)
-    rm(cl)
+    rm(cl); gc()
+    # rm(sim.result)
     Stop <- Sys.time()
-    print(difftime(Stop, Start, units = "mins"))
-}
+    print(difftime(Stop, Start, units = "hours"))
+# }
 
 # Processing --------------------------------------------------------------
 
