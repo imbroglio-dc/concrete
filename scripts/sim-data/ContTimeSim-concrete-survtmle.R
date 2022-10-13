@@ -48,16 +48,16 @@ seeds <- sample(0:12345678, size = B)
 output <- list()
 library(foreach)
 library(doParallel)
-j <- 1
 n_cores <- min(parallel::detectCores(), 12)
-while(j <= B) {
+j <- k <- 1
+while(j <= length(seeds) & k <= 1.2*B) {
     seeds_j <- seeds[j:min(B, j + n_cores - 1)]
-    j <- j + n_cores
     cl <- makeCluster(n_cores, type = "FORK")
     registerDoParallel(cl)
     Start <- Sys.time()
     sim.result <- try({
         foreach(i = seq_along(seeds_j),
+        # foreach(i = seq_along(seeds),
                 .errorhandling = "remove",
                 .packages = "readr") %dopar% {
                     loadPackages()
@@ -70,13 +70,14 @@ while(j <= B) {
 
                     MaxIter <- 100
                     Data <- simConCR(n = 8e2, random_seed = seeds_j[i])
+                    # Data <- simConCR(n = 8e2, random_seed = seeds[i])
                     TargetTime <- seq(730, 1460, length.out = 5)
                     TargetEvent <- sort(setdiff(unique(Data$EVENT), 0))
 
                     # helper functions --------------------------------------------------------
                     simConcrete <- function(TargetTime, Data, MaxIter, DiagPath) {
                         require(concrete); require(data.table)
-                        readr::write_lines(paste0("Run ", i, " ; concrete ; start"),
+                        readr::write_lines(paste0("Run ", j + i - 1, " ; concrete ; start"),
                                            file = DiagPath, append = TRUE)
                         concreteArgs <- formatArguments(DataTable = Data,
                                                         EventTime = "TIME",
@@ -94,7 +95,7 @@ while(j <= B) {
                         estimates <- cbind(Package = "concrete", concreteOut)
                         attr(estimates, "converged") <- attr(concreteEst, "TmleConverged")$converged
                         attr(estimates, "time") <- difftime(Stop, Start, units = "mins")
-                        readr::write_lines(paste0("Run ", i, " ; concrete ; ",
+                        readr::write_lines(paste0("Run ", j + i - 1, " ; concrete ; ",
                                                   format(unclass(attr(estimates, "time")), digits = 3),
                                                   " ", attr(attr(estimates, "time"), "units")),
                                            file = DiagPath, append = TRUE)
@@ -106,7 +107,7 @@ while(j <= B) {
                                       "nleqslv","prodlim", "Matrix", "coefplot", "hdnom")
                         z <- sapply(required, function(p) try(library(p, character.only = TRUE),
                                                               silent = TRUE))
-                        readr::write_lines(paste0("Run ", i, " ; contmle ; start"),
+                        readr::write_lines(paste0("Run ", j + i - 1, " ; contmle ; start"),
                                            file = DiagPath, append = TRUE)
                         Start <- Sys.time()
                         contmleRun <- contmle(
@@ -137,7 +138,7 @@ while(j <= B) {
                         )
                         Stop <- Sys.time()
                         attr(contmleRun, "time") <- difftime(Stop, Start, units = "mins")
-                        readr::write_lines(paste0("Run ", i, " ; contmle ; ",
+                        readr::write_lines(paste0("Run ", j + i - 1, " ; contmle ; ",
                                                   format(unclass(attr(contmleRun, "time")), digits = 3),
                                                   " ", attr(attr(contmleRun, "time"), "units")),
                                            file = DiagPath, append = TRUE)
@@ -179,7 +180,7 @@ while(j <= B) {
                     simSurvtmle <- function(TargetTime, Bins, Data, MaxIter, DiagPath) {
                         require(SuperLearner)
                         survMonths <- paste0("survtmle", as.integer(12 / Bins), "mo")
-                        readr::write_lines(paste0("Run ", i, " ; ", survMonths," ; start"),
+                        readr::write_lines(paste0("Run ", j + i - 1, " ; ", survMonths," ; start"),
                                            file = DiagPath, append = TRUE)
                         sl_lib_failure <- c("SL.glmnet", "SL.xgboost")
                         sl_lib_censor <- c("SL.glmnet", "SL.xgboost")
@@ -210,7 +211,7 @@ while(j <= B) {
 
                         Stop <- Sys.time()
                         attr(survtmleOut, "time") <- difftime(Stop, Start, units = "mins")
-                        readr::write_lines(paste0("Run ", i, " ; ", survMonths," ; ",
+                        readr::write_lines(paste0("Run ", j + i - 1, " ; ", survMonths," ; ",
                                                   format(unclass(attr(survtmleOut, "time")), digits = 3), " ",
                                                   attr(attr(survtmleOut, "time"), "units")),
                                            file = DiagPath, append = TRUE)
@@ -303,22 +304,20 @@ while(j <= B) {
                     return(out)
                 }
     }, silent = TRUE)
-    if (inherits(sim.result, "try-error")) {
-        j <- j - n_cores
-    } else {
-        output <- c(output, sim.result)
+    if (any(sapply(sim.result, function(run) inherits(run, "try-error")))) {
+        seeds <- c(seeds[1:(j-1)],
+                   seeds_j[which(sapply(sim.result, function(run) inherits(run, "try-error")))],
+                   seeds[j:length(seeds)])
+        sim.result <- lapply(sim.result, function(run) {
+            ifelse(inherits(run, "try-error"), NULL, run)})
     }
+    output <- c(output, sim.result)
     registerDoSEQ()
     stopCluster(cl)
     rm(cl)
     Stop <- Sys.time()
-    difftime(Stop, Start, units = "mins")
+    print(difftime(Stop, Start, units = "mins"))
 }
-
-
-
-
-
 
 # Processing --------------------------------------------------------------
 

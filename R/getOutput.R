@@ -1,15 +1,15 @@
 #' getOutput
 #'
 #' @param Estimate list : a "ConcreteEst" object
-#' @param Estimand character (default: c("RD", "RR", "Risk")) or a function or a list of functions 
-# #' @param plot boolean (default = TRUE) : whether or not to plot the 
+#' @param Estimand character (default: c("RD", "RR", "Risk")) or a function or a list of functions
+# #' @param plot boolean (default = TRUE) : whether or not to plot the
 #'
 #' @return tbd
 #' @export getOutput
 #'
 #' @examples
 #' # getOutput returns risk difference, relative risk, and treatment-specific risks
-#' # concrete.out <- getOutput(Estimate = concrete.est, Estimand = c("rd", "rr", "risk"), 
+#' # concrete.out <- getOutput(Estimate = concrete.est, Estimand = c("rd", "rr", "risk"),
 #' #                           TargetTime = target.time, TargetEvent = target.event, GComp = TRUE)
 #' # concrete.out$RD
 #' # concrete.out$RR
@@ -21,13 +21,13 @@ getOutput <- function(Estimate, Estimand = c("RD", "RR", "Risk")) {
              "`Estimate`, `Estimand`, `TargetEvent`, `TargetTime`, and `GComp`.")
     }
     if (any(sapply(Estimand, function(e) is.function(e)))) {
-        cat("User-specified Estimand functions are not checked or tested. ", 
+        cat("User-specified Estimand functions are not checked or tested. ",
             "Please verify the correctness of your custom Estimand function(s).")
     }
     TargetTime <- attr(Estimate, "TargetTime")
     TargetEvent <- attr(Estimate, "TargetEvent")
     GComp <- attr(Estimate, "GComp")
-    
+
     output <- list()
     if (any(sapply(Estimand, is.function))) {
         output <- lapply(Estimand[which(sapply(Estimand, is.function))], function(estimand) {
@@ -39,20 +39,19 @@ getOutput <- function(Estimate, Estimand = c("RD", "RR", "Risk")) {
     if (any(tolower(Estimand) == "rd")) {
         output[["RD"]] <- getRD(Estimate = Estimate, TargetTime = TargetTime, TargetEvent = TargetEvent, GComp = GComp)
     }
-    
+
     if (any(tolower(Estimand) == "rr")) {
         output[["RR"]] <- getRR(Estimate = Estimate, TargetTime = TargetTime, TargetEvent = TargetEvent, GComp = GComp)
     }
-    
+
     if (any("risk" %in% tolower(Estimand))) {
         risks <- getRisk(Estimate = Estimate, TargetTime = TargetTime, TargetEvent = TargetEvent, GComp = GComp)
         risks <- do.call(rbind, lapply(seq_along(risks), function(a) {
-            risk.a <- risks[[a]]
-            a.name <- names(risks)[a]
-            return(cbind("Intervention" = a.name, risk.a))
+            risk.a <- setDT(cbind("Intervention" = names(risks)[a], risks[[a]]))
+            return(setcolorder(risk.a, c("Estimator", "Intervention")))
         }))
         risks <- structure(risks,
-                           Estimand = "Absolute Risks", 
+                           Estimand = "Absolute Risks",
                            class = union("ConcreteOut", class(risks)))
         output[["Risk"]] <- risks
     }
@@ -65,9 +64,9 @@ getRD <- function(Estimate, TargetTime, TargetEvent, GComp) {
     rd.out <- as.data.table(merge(risk[[1]], risk[[2]], by = c("Estimator", "Event", "Time")))[order(Time)]
     rd.out <- rd.out[, list("Estimator" = Estimator, "Event" = Event, "Time" = Time, "RD" = Risk.x - Risk.y,
                             se = sqrt(se.x^2 + se.y^2))]
-    rd.out <- structure(rd.out, 
-                        Interventions = paste0(names(Estimate), collapse = " - "), 
-                        Estimand = "Risk Difference", 
+    rd.out <- structure(rd.out,
+                        Interventions = paste0(names(Estimate), collapse = " - "),
+                        Estimand = "Risk Difference",
                         class = union("ConcreteOut", class(rd.out)))
     return(rd.out[order(Estimator, decreasing = TRUE)])
 }
@@ -78,9 +77,9 @@ getRR <- function(Estimate, TargetTime, TargetEvent, GComp) {
     rr.out <- as.data.table(merge(risk[[1]], risk[[2]], by = c("Estimator", "Event", "Time")))[order(Time)]
     rr.out <- rr.out[, list("Estimator" = Estimator, "Event" = Event, "Time" = Time, "RR" = Risk.x / Risk.y,
                             se = sqrt((se.x / Risk.y)^2 + (se.y * Risk.x / Risk.y^2)^2))]
-    rr.out <- structure(rr.out, 
-                        Interventions = paste0(names(Estimate), collapse = " / "), 
-                        Estimand = "Relative Risk", 
+    rr.out <- structure(rr.out,
+                        Interventions = paste0(names(Estimate), collapse = " / "),
+                        Estimand = "Relative Risk",
                         class = union("ConcreteOut", class(rr.out)))
     return(rr.out[order(Estimator, decreasing = TRUE)])
 }
