@@ -48,16 +48,16 @@ seeds <- sample(0:12345678, size = B + 100)
 output <- list()
 library(foreach)
 library(doParallel)
-n_cores <- min(parallel::detectCores(), 16)
-# j <- k <- 1
-# while(j <= length(seeds) & k <= B) {
-#     seeds_j <- seeds[j:min(length(seeds), j + 2*n_cores - 1)]
+n_cores <- min(parallel::detectCores(), 12)
+j <- k <- 1
+while(j <= length(seeds) & k <= B) {
+    seeds_j <- seeds[j:min(length(seeds), j + 2*n_cores - 1)]
     cl <- makeCluster(n_cores, type = "FORK")
     registerDoParallel(cl)
     Start <- Sys.time()
     sim.result <- try({
-        # foreach(i = seq_along(seeds_j),
-        foreach(i = seq_along(seeds),
+        foreach(i = seq_along(seeds_j),
+        # foreach(i = seq_along(seeds),
                 .errorhandling = "remove",
                 .packages = "readr") %dopar% {
                     loadPackages()
@@ -69,8 +69,8 @@ n_cores <- min(parallel::detectCores(), 16)
                                      "error" = list(), "notconverge" = list())
 
                     MaxIter <- 100
-                    # Data <- simConCR(n = 8e2, random_seed = seeds_j[i])
-                    Data <- simConCR(n = 8e2, random_seed = seeds[i])
+                    Data <- simConCR(n = 8e2, random_seed = seeds_j[i])
+                    # Data <- simConCR(n = 8e2, random_seed = seeds[i])
                     TargetTime <- seq(730, 1460, length.out = 5)
 
                     # helper functions --------------------------------------------------------
@@ -306,17 +306,17 @@ n_cores <- min(parallel::detectCores(), 16)
                     return(out)
                 }
     }, silent = TRUE)
-    # j <- max(seeds_j) + 1
-    # sim.result <- lapply(sim.result, function(run) {ifelse(inherits(run, "try-error"), NULL, run)})
-    # k <- k + length(sim.result)
-    # output <- c(output, sim.result)
+    j <- max(seeds_j) + 1
+    sim.result <- lapply(sim.result, function(run) {ifelse(inherits(run, "try-error"), NULL, run)})
+    k <- k + length(sim.result)
+    output <- c(output, sim.result)
     registerDoSEQ()
     stopCluster(cl)
     rm(cl); gc()
-    # rm(sim.result)
+    rm(sim.result)
     Stop <- Sys.time()
     print(difftime(Stop, Start, units = "hours"))
-# }
+}
 
 # Processing --------------------------------------------------------------
 

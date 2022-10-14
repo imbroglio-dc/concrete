@@ -44,3 +44,5 @@ vignettes/*.pdf
 
 *.github
 output/
+
+scripts/sim-data/sim-diag/diagnostic.txt
