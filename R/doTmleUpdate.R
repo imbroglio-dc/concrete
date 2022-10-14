@@ -41,14 +41,14 @@
 #'
 #' @importFrom nleqslv nleqslv
 
-doTmleUpdate <- function(Estimates, SummEIC, Data, TargetEvent, TargetTime, 
+doTmleUpdate <- function(Estimates, SummEIC, Data, TargetEvent, TargetTime,
                          MaxUpdateIter, OneStepEps, NormPnEIC, Verbose) {
     Time <- Event <- `seEIC/(sqrt(n)log(n))` <- PnEIC <- NULL
     EvalTimes <- attr(Estimates, "times")
     T.tilde <- Data[[attr(Data, "EventTime")]]
     Delta <- Data[[attr(Data, "EventType")]]
     WorkingEps <- OneStepEps
-    
+
     ## one-step tmle loop starts here ----
     StepNum <- 1
     IterNum <- 1
@@ -56,7 +56,7 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, TargetEvent, TargetTime,
         IterNum <- IterNum + 1
         if (Verbose)
             cat("starting step", StepNum, "with update epsilon =", WorkingEps, "\n")
-        
+
         ## Get updated hazards and EICs
         newEsts <- lapply(Estimates, function(est.a) {
             NewHazards <- updateHazard(GStar = attr(est.a[["PropScore"]], "g.star.intervention"),
@@ -78,12 +78,12 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, TargetEvent, TargetTime,
             )
             return(list("Hazards" = NewHazards, "EvntFreeSurv" = NewSurv, "SummEIC" = NewIC))
         })
-        
+
         ## Check for improvement
         NewSummEIC <- do.call(rbind, lapply(seq_along(newEsts), function(a) {
             cbind("Trt" = names(newEsts)[a], newEsts[[a]][["SummEIC"]])}))
         NewNormPnEIC <- getNormPnEIC(NewSummEIC[Time %in% TargetTime & Event %in% TargetEvent, PnEIC])
-        
+
         if (NormPnEIC < NewNormPnEIC) {
             if (Verbose) {
                 cat("Update increased ||PnEIC||, halving the OneStepEps\n")
@@ -92,13 +92,13 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, TargetEvent, TargetTime,
             next
         }
         StepNum <- StepNum + 1
-        
+
         for (a in seq_along(Estimates)) {
             Estimates[[a]][["Hazards"]] <- newEsts[[a]][["Hazards"]]
             Estimates[[a]][["EvntFreeSurv"]] <- newEsts[[a]][["EvntFreeSurv"]]
             Estimates[[a]][["SummEIC"]] <- newEsts[[a]][["SummEIC"]]
         }
-        
+
         SummEIC <- NewSummEIC
         NormPnEIC <- NewNormPnEIC
         OneStepStop <- NewSummEIC[, list("check" = abs(PnEIC) <= `seEIC/(sqrt(n)log(n))`,
@@ -108,13 +108,13 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, TargetEvent, TargetTime,
         if (Verbose)  printOneStepDiagnostics(OneStepStop)
         
         if (all(sapply(OneStepStop[["check"]], isTRUE))) {
-            attr(Estimates, "TmleConverged") <- c("converged" = TRUE, "step" = StepNum)
+            attr(Estimates, "TmleConverged") <- list("converged" = TRUE, "step" = StepNum)
             return(Estimates)
         }
     }
-    warning("TMLE has not converged by step ", MaxUpdateIter, " - Estimates may not have ", 
+    warning("TMLE has not converged by step ", MaxUpdateIter, " - Estimates may not have ",
             "the desired asymptotic properties")
-    attr(Estimates, "TmleConverged") <- c("converged" = FALSE, "step" = StepNum)
+    attr(Estimates, "TmleConverged") <- list("converged" = FALSE, "step" = StepNum)
     return(Estimates)
 }
 
@@ -141,7 +141,7 @@ updateHazard <- function(GStar, Hazards, TotalSurv, NuisanceWeight, EvalTimes, T
             return(NULL)
         })
         newhaz.al <- haz.al * exp(update.l * OneStepEps / NormPnEIC)
-        
+
         if (Iterative) {
             eps.l <- nleqslv(0.01, function(eps) getFluctPnEIC(GStar = GStar, Hazards = Hazards,
                                                                TotalSurv = TotalSurv,
@@ -180,10 +180,10 @@ updateHazard <- function(GStar, Hazards, TotalSurv, NuisanceWeight, EvalTimes, T
                 return(NULL)
             })
         }
-        
+
         attr(newhaz.al, "j") <- l
         return(newhaz.al)
-        
+
         # newhaz.al <- sapply(1:ncol(NuisanceWeight), function(i) {# loop over individuals
         #     if (GStar[i] == 0) {
         #         return(rep_len(0, nrow(NuisanceWeight)))
@@ -204,7 +204,7 @@ updateHazard <- function(GStar, Hazards, TotalSurv, NuisanceWeight, EvalTimes, T
     })
 }
 
-getFluctPnEIC <- function(GStar, Hazards, TotalSurv, NuisanceWeight, TargetEvent, TargetTime, 
+getFluctPnEIC <- function(GStar, Hazards, TotalSurv, NuisanceWeight, TargetEvent, TargetTime,
                           T.tilde, Delta, EvalTimes, GComp, l = NULL, fluct.eps = NULL) {
     IC <- F.j.tau <- eps <- NULL
     Target <- expand.grid("Time" = TargetTime, "Event" = TargetEvent)
@@ -213,7 +213,7 @@ getFluctPnEIC <- function(GStar, Hazards, TotalSurv, NuisanceWeight, TargetEvent
         Surv.i <- TotalSurv[, i]
         Hazards.i <- lapply(Hazards, function(haz) haz[, i])
         Risks.i <- lapply(Hazards.i, function(haz.i) cumsum(Surv.i * haz.i))
-        
+
         if (GStar[i] == 0) # 1(A != a*)
             return(cbind("ID" = i, Target,  "IC" = 0,
                          "F.j.tau" = apply(Target,  1, function(target) {
@@ -221,20 +221,20 @@ getFluctPnEIC <- function(GStar, Hazards, TotalSurv, NuisanceWeight, TargetEvent
                              j <- target[["Event"]]
                              return(Risks.i[[as.character(j)]][EvalTimes == tau])
                          })))
-        
+
         IC.jk <- t(apply(Target,  1, function(target) {
             j <- target[["Event"]]
             tau <- target[["Time"]]
             t.tilde <- T.tilde[i]
             TimeIndices.ik <- EvalTimes <= min(tau, t.tilde) ## 1(t \leq tau) * 1(t \leq t.tilde)
             F.j.tau <- Risks.i[[as.character(j)]][EvalTimes == tau]
-            
+
             s.ik <- EvalTimes[TimeIndices.ik]
             Nuisance.ik <- Nuisance.i[TimeIndices.ik]
             Surv.ik <- Surv.i[TimeIndices.ik]
             haz.J.ik <- lapply(Hazards.i, function(r) r[TimeIndices.ik])
             F.j.t <- Risks.i[[as.character(j)]][TimeIndices.ik]
-            
+
             h.jk <- GStar[i] * Nuisance.ik * ((l == j) - (F.j.tau - F.j.t) / Surv.ik)
             IC.ljk <- sum(h.jk * ((s.ik == t.tilde) * (Delta[i] == l) - eps * haz.J.ik[[as.character(l)]]))
             return(c("IC" = IC.ljk, "F.j.tau" = F.j.tau))
