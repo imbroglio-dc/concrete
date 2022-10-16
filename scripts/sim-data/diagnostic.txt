@@ -1,0 +1,840 @@
+Run 7 ; concrete ; start
+Run 8 ; concrete ; start
+Run 10 ; concrete ; start
+Run 9 ; concrete ; start
+Run 5 ; concrete ; start
+Run 4 ; concrete ; start
+Run 2 ; concrete ; start
+Run 12 ; concrete ; start
+Run 11 ; concrete ; start
+Run 6 ; concrete ; start
+Run 3 ; concrete ; start
+Run 1 ; concrete ; start
+Run 1 ; concrete ; 9.25 mins
+Run 1 ; contmle ; start
+Run 4 ; concrete ; 9.87 mins
+Run 4 ; contmle ; start
+Run 11 ; concrete ; 11.2 mins
+Run 11 ; contmle ; start
+Run 10 ; concrete ; 12.3 mins
+Run 10 ; contmle ; start
+Run 6 ; concrete ; 13.3 mins
+Run 6 ; contmle ; start
+Run 7 ; concrete ; 16.1 mins
+Run 7 ; contmle ; start
+Run 2 ; concrete ; 17.4 mins
+Run 2 ; contmle ; start
+Run 5 ; concrete ; 18.4 mins
+Run 5 ; contmle ; start
+Run 12 ; concrete ; 22.3 mins
+Run 12 ; contmle ; start
+Run 8 ; concrete ; 25.2 mins
+Run 8 ; contmle ; start
+Run 9 ; concrete ; 34.4 mins
+Run 9 ; contmle ; start
+Run 3 ; concrete ; 37 mins
+Run 3 ; contmle ; start
+Run 6 ; contmle ; 54.8 mins
+Run 6 ; survtmle6mo ; start
+Run 6 ; survtmle6mo ; 2.24 mins
+Run 6 ; survtmle3mo ; start
+Run 11 ; contmle ; 59.5 mins
+Run 11 ; survtmle6mo ; start
+Run 4 ; contmle ; 62.8 mins
+Run 4 ; survtmle6mo ; start
+Run 11 ; survtmle6mo ; 2.12 mins
+Run 11 ; survtmle3mo ; start
+Run 6 ; survtmle3mo ; 3.84 mins
+Run 13 ; concrete ; start
+Run 4 ; survtmle6mo ; 2.02 mins
+Run 4 ; survtmle3mo ; start
+Run 11 ; survtmle3mo ; 3.71 mins
+Run 14 ; concrete ; start
+Run 4 ; survtmle3mo ; 3.73 mins
+Run 15 ; concrete ; start
+Run 10 ; contmle ; 71.9 mins
+Run 10 ; survtmle6mo ; start
+Run 1 ; contmle ; 76.7 mins
+Run 1 ; survtmle6mo ; start
+Run 10 ; survtmle6mo ; 2.09 mins
+Run 10 ; survtmle3mo ; start
+Run 1 ; survtmle6mo ; 2.02 mins
+Run 1 ; survtmle3mo ; start
+Run 13 ; concrete ; 15.3 mins
+Run 13 ; contmle ; start
+Run 10 ; survtmle3mo ; 3.69 mins
+Run 16 ; concrete ; start
+Run 14 ; concrete ; 14.8 mins
+Run 14 ; contmle ; start
+Run 1 ; survtmle3mo ; 3.64 mins
+Run 17 ; concrete ; start
+Run 2 ; contmle ; 81.7 mins
+Run 2 ; survtmle6mo ; start
+Run 15 ; concrete ; 21.2 mins
+Run 15 ; contmle ; start
+Run 2 ; survtmle6mo ; 2.09 mins
+Run 2 ; survtmle3mo ; start
+Run 17 ; concrete ; 13.3 mins
+Run 17 ; contmle ; start
+Run 2 ; survtmle3mo ; 3.73 mins
+Run 18 ; concrete ; start
+Run 5 ; contmle ; 90.9 mins
+Run 5 ; survtmle6mo ; start
+Run 8 ; contmle ; 85 mins
+Run 8 ; survtmle6mo ; start
+Run 5 ; survtmle6mo ; 2.09 mins
+Run 5 ; survtmle3mo ; start
+Run 8 ; survtmle6mo ; 2.1 mins
+Run 8 ; survtmle3mo ; start
+Run 7 ; contmle ; 97.7 mins
+Run 7 ; survtmle6mo ; start
+Run 5 ; survtmle3mo ; 3.69 mins
+Run 19 ; concrete ; start
+Run 7 ; survtmle6mo ; 2.04 mins
+Run 7 ; survtmle3mo ; start
+Run 8 ; survtmle3mo ; 3.71 mins
+Run 20 ; concrete ; start
+Run 12 ; contmle ; 94.3 mins
+Run 12 ; survtmle6mo ; start
+Run 12 ; survtmle6mo ; 2.11 mins
+Run 12 ; survtmle3mo ; start
+Run 7 ; survtmle3mo ; 3.67 mins
+Run 21 ; concrete ; start
+Run 16 ; concrete ; 30.6 mins
+Run 16 ; contmle ; start
+Run 12 ; survtmle3mo ; 3.74 mins
+Run 22 ; concrete ; start
+Run 18 ; concrete ; 22.1 mins
+Run 18 ; contmle ; start
+Run 22 ; concrete ; 7.95 mins
+Run 22 ; contmle ; start
+Run 20 ; concrete ; 18.8 mins
+Run 20 ; contmle ; start
+Run 13 ; contmle ; 52.1 mins
+Run 13 ; survtmle6mo ; start
+Run 19 ; concrete ; 27.3 mins
+Run 19 ; contmle ; start
+Run 13 ; survtmle6mo ; 2.15 mins
+Run 13 ; survtmle3mo ; start
+Run 21 ; concrete ; 27.5 mins
+Run 21 ; contmle ; start
+Run 13 ; survtmle3mo ; 3.82 mins
+Run 23 ; concrete ; start
+Run 17 ; contmle ; 43.5 mins
+Run 17 ; survtmle6mo ; start
+Run 17 ; survtmle6mo ; 2.19 mins
+Run 17 ; survtmle3mo ; start
+Run 17 ; survtmle3mo ; 3.87 mins
+Run 24 ; concrete ; start
+Run 9 ; contmle ; 123 mins
+Run 9 ; survtmle6mo ; start
+Run 9 ; survtmle6mo ; 2.14 mins
+Run 9 ; survtmle3mo ; start
+Run 9 ; survtmle3mo ; 3.71 mins
+Run 25 ; concrete ; start
+Run 24 ; concrete ; 14.2 mins
+Run 24 ; contmle ; start
+Run 16 ; contmle ; 50.1 mins
+Run 16 ; survtmle6mo ; start
+Run 16 ; survtmle6mo ; 2.14 mins
+Run 16 ; survtmle3mo ; start
+Run 22 ; contmle ; 43.2 mins
+Run 22 ; survtmle6mo ; start
+Run 22 ; survtmle6mo ; 2.04 mins
+Run 22 ; survtmle3mo ; start
+Run 23 ; concrete ; 28.2 mins
+Run 23 ; contmle ; start
+Run 16 ; survtmle3mo ; 3.9 mins
+Run 26 ; concrete ; start
+Run 22 ; survtmle3mo ; 3.67 mins
+Run 27 ; concrete ; start
+Run 25 ; concrete ; 19.4 mins
+Run 25 ; contmle ; start
+Run 27 ; concrete ; 12.2 mins
+Run 27 ; contmle ; start
+Run 20 ; contmle ; 57.1 mins
+Run 20 ; survtmle6mo ; start
+Run 20 ; survtmle6mo ; 2.22 mins
+Run 20 ; survtmle3mo ; start
+Run 14 ; contmle ; 104 mins
+Run 14 ; survtmle6mo ; start
+Run 20 ; survtmle3mo ; 3.78 mins
+Run 28 ; concrete ; start
+Run 14 ; survtmle6mo ; 2.17 mins
+Run 14 ; survtmle3mo ; start
+Run 26 ; concrete ; 22.5 mins
+Run 26 ; contmle ; start
+Run 14 ; survtmle3mo ; 3.82 mins
+Run 29 ; concrete ; start
+Run 18 ; contmle ; 80.7 mins
+Run 18 ; survtmle6mo ; start
+Run 18 ; survtmle6mo ; 2.15 mins
+Run 18 ; survtmle3mo ; start
+Run 15 ; contmle ; 111 mins
+Run 15 ; survtmle6mo ; start
+Run 15 ; survtmle6mo ; 2.12 mins
+Run 15 ; survtmle3mo ; start
+Run 18 ; survtmle3mo ; 3.72 mins
+Run 30 ; concrete ; start
+Run 29 ; concrete ; 14 mins
+Run 29 ; contmle ; start
+Run 15 ; survtmle3mo ; 3.7 mins
+Run 31 ; concrete ; start
+Run 28 ; concrete ; 20.3 mins
+Run 28 ; contmle ; start
+Run 24 ; contmle ; 51.8 mins
+Run 24 ; survtmle6mo ; start
+Run 24 ; survtmle6mo ; 2.25 mins
+Run 24 ; survtmle3mo ; start
+Run 19 ; contmle ; 82.7 mins
+Run 19 ; survtmle6mo ; start
+Run 30 ; concrete ; 11.7 mins
+Run 30 ; contmle ; start
+Run 24 ; survtmle3mo ; 3.88 mins
+Run 32 ; concrete ; start
+Run 19 ; survtmle6mo ; 2.17 mins
+Run 19 ; survtmle3mo ; start
+Run 19 ; survtmle3mo ; 3.83 mins
+Run 33 ; concrete ; start
+Run 21 ; contmle ; 86.2 mins
+Run 21 ; survtmle6mo ; start
+Run 21 ; survtmle6mo ; 2.14 mins
+Run 21 ; survtmle3mo ; start
+Run 21 ; survtmle3mo ; 3.84 mins
+Run 34 ; concrete ; start
+Run 32 ; concrete ; 14 mins
+Run 32 ; contmle ; start
+Run 31 ; concrete ; 24.5 mins
+Run 31 ; contmle ; start
+Run 25 ; contmle ; 68.4 mins
+Run 25 ; survtmle6mo ; start
+Run 34 ; concrete ; 13.4 mins
+Run 34 ; contmle ; start
+Run 25 ; survtmle6mo ; 2.11 mins
+Run 25 ; survtmle3mo ; start
+Run 25 ; survtmle3mo ; 3.83 mins
+Run 35 ; concrete ; start
+Run 33 ; concrete ; 26.6 mins
+Run 33 ; contmle ; start
+Run 35 ; concrete ; 17.2 mins
+Run 35 ; contmle ; start
+Run 28 ; contmle ; 56.2 mins
+Run 28 ; survtmle6mo ; start
+Run 28 ; survtmle6mo ; 2.16 mins
+Run 28 ; survtmle3mo ; start
+Run 30 ; contmle ; 54.3 mins
+Run 30 ; survtmle6mo ; start
+Run 28 ; survtmle3mo ; 3.75 mins
+Run 36 ; concrete ; start
+Run 30 ; survtmle6mo ; 2.09 mins
+Run 30 ; survtmle3mo ; start
+Run 26 ; contmle ; 85 mins
+Run 26 ; survtmle6mo ; start
+Run 27 ; contmle ; 93.8 mins
+Run 27 ; survtmle6mo ; start
+Run 30 ; survtmle3mo ; 3.76 mins
+Run 37 ; concrete ; start
+Run 29 ; contmle ; 69.7 mins
+Run 29 ; survtmle6mo ; start
+Run 26 ; survtmle6mo ; 2.11 mins
+Run 26 ; survtmle3mo ; start
+Run 36 ; concrete ; 6.18 mins
+Run 36 ; contmle ; start
+Run 27 ; survtmle6mo ; 2.12 mins
+Run 27 ; survtmle3mo ; start
+Run 29 ; survtmle6mo ; 2.28 mins
+Run 29 ; survtmle3mo ; start
+Run 23 ; contmle ; 112 mins
+Run 23 ; survtmle6mo ; start
+Run 26 ; survtmle3mo ; 3.74 mins
+Run 38 ; concrete ; start
+Run 23 ; survtmle6mo ; 2.13 mins
+Run 23 ; survtmle3mo ; start
+Run 27 ; survtmle3mo ; 3.67 mins
+Run 39 ; concrete ; start
+Run 29 ; survtmle3mo ; 3.8 mins
+Run 40 ; concrete ; start
+Run 23 ; survtmle3mo ; 3.76 mins
+Run 41 ; concrete ; start
+Run 39 ; concrete ; 8.61 mins
+Run 39 ; contmle ; start
+Run 37 ; concrete ; 15.7 mins
+Run 37 ; contmle ; start
+Run 38 ; concrete ; 13.4 mins
+Run 38 ; contmle ; start
+Run 40 ; concrete ; 20.5 mins
+Run 40 ; contmle ; start
+Run 34 ; contmle ; 59.9 mins
+Run 34 ; survtmle6mo ; start
+Run 34 ; survtmle6mo ; 2.18 mins
+Run 34 ; survtmle3mo ; start
+Run 41 ; concrete ; 21.2 mins
+Run 41 ; contmle ; start
+Run 34 ; survtmle3mo ; 3.84 mins
+Run 42 ; concrete ; start
+Run 36 ; contmle ; 40.6 mins
+Run 36 ; survtmle6mo ; start
+Run 36 ; survtmle6mo ; 2.19 mins
+Run 36 ; survtmle3mo ; start
+Run 33 ; contmle ; 72.5 mins
+Run 33 ; survtmle6mo ; start
+Run 42 ; concrete ; 12.8 mins
+Run 42 ; contmle ; start
+Run 33 ; survtmle6mo ; 2.15 mins
+Run 33 ; survtmle3mo ; start
+Run 36 ; survtmle3mo ; 4.13 mins
+Run 43 ; concrete ; start
+Run 32 ; contmle ; 94.3 mins
+Run 32 ; survtmle6mo ; start
+Run 33 ; survtmle3mo ; 3.88 mins
+Run 44 ; concrete ; start
+Run 32 ; survtmle6mo ; 2.06 mins
+Run 32 ; survtmle3mo ; start
+Run 39 ; contmle ; 40.4 mins
+Run 39 ; survtmle6mo ; start
+Run 32 ; survtmle3mo ; 3.63 mins
+Run 45 ; concrete ; start
+Run 31 ; contmle ; 101 mins
+Run 31 ; survtmle6mo ; start
+Run 39 ; survtmle6mo ; 2.14 mins
+Run 39 ; survtmle3mo ; start
+Run 31 ; survtmle6mo ; 2.1 mins
+Run 31 ; survtmle3mo ; start
+Run 39 ; survtmle3mo ; 3.69 mins
+Run 46 ; concrete ; start
+Run 31 ; survtmle3mo ; 3.6 mins
+Run 47 ; concrete ; start
+Run 46 ; concrete ; 7.73 mins
+Run 46 ; contmle ; start
+Run 44 ; concrete ; 20.2 mins
+Run 44 ; contmle ; start
+Run 45 ; concrete ; 17.1 mins
+Run 45 ; contmle ; start
+Run 38 ; contmle ; 56.2 mins
+Run 38 ; survtmle6mo ; start
+Run 38 ; survtmle6mo ; 2.11 mins
+Run 38 ; survtmle3mo ; start
+Run 38 ; survtmle3mo ; 3.7 mins
+Run 48 ; concrete ; start
+Run 37 ; contmle ; 64.4 mins
+Run 37 ; survtmle6mo ; start
+Run 35 ; contmle ; 91.3 mins
+Run 35 ; survtmle6mo ; start
+Run 37 ; survtmle6mo ; 2.12 mins
+Run 37 ; survtmle3mo ; start
+Run 35 ; survtmle6mo ; 2.13 mins
+Run 35 ; survtmle3mo ; start
+Run 43 ; concrete ; 35.5 mins
+Run 43 ; contmle ; start
+Run 37 ; survtmle3mo ; 3.67 mins
+Run 49 ; concrete ; start
+Run 35 ; survtmle3mo ; 3.64 mins
+Run 50 ; concrete ; start
+Run 40 ; contmle ; 63.4 mins
+Run 40 ; survtmle6mo ; start
+Run 40 ; survtmle6mo ; 2.2 mins
+Run 40 ; survtmle3mo ; start
+Run 42 ; contmle ; 49.9 mins
+Run 42 ; survtmle6mo ; start
+Run 40 ; survtmle3mo ; 3.81 mins
+Run 47 ; concrete ; 34.5 mins
+Run 49 ; concrete ; 10.3 mins
+Run 51 ; concrete ; start
+Run 47 ; contmle ; start
+Run 49 ; contmle ; start
+Run 46 ; contmle ; 27.9 mins
+Run 46 ; survtmle6mo ; start
+Run 42 ; survtmle6mo ; 2.17 mins
+Run 42 ; survtmle3mo ; start
+Run 46 ; survtmle6mo ; 2.13 mins
+Run 46 ; survtmle3mo ; start
+Run 48 ; concrete ; 21.7 mins
+Run 48 ; contmle ; start
+Run 42 ; survtmle3mo ; 3.79 mins
+Run 52 ; concrete ; start
+Run 46 ; survtmle3mo ; 3.72 mins
+Run 53 ; concrete ; start
+Run 51 ; concrete ; 12.4 mins
+Run 51 ; contmle ; start
+Run 50 ; concrete ; 28.4 mins
+Run 50 ; contmle ; start
+Run 53 ; concrete ; 14.7 mins
+Run 53 ; contmle ; start
+Run 41 ; contmle ; 96.6 mins
+Run 41 ; survtmle6mo ; start
+Run 41 ; survtmle6mo ; 2.26 mins
+Run 41 ; survtmle3mo ; start
+Run 41 ; survtmle3mo ; 3.98 mins
+Run 52 ; concrete ; 31.6 mins
+Run 52 ; contmle ; start
+Run 44 ; contmle ; 67.5 mins
+Run 44 ; survtmle6mo ; start
+Run 45 ; contmle ; 67.9 mins
+Run 45 ; survtmle6mo ; start
+Run 49 ; contmle ; 44.5 mins
+Run 49 ; survtmle6mo ; start
+Run 44 ; survtmle6mo ; 2.17 mins
+Run 44 ; survtmle3mo ; start
+Run 45 ; survtmle6mo ; 2.14 mins
+Run 45 ; survtmle3mo ; start
+Run 49 ; survtmle6mo ; 2.15 mins
+Run 49 ; survtmle3mo ; start
+Run 51 ; contmle ; 34.7 mins
+Run 51 ; survtmle6mo ; start
+Run 44 ; survtmle3mo ; 3.82 mins
+Run 51 ; survtmle6mo ; 2.15 mins
+Run 51 ; survtmle3mo ; start
+Run 45 ; survtmle3mo ; 3.69 mins
+Run 54 ; concrete ; start
+Run 56 ; concrete ; start
+Run 55 ; concrete ; start
+Run 49 ; survtmle3mo ; 3.74 mins
+Run 57 ; concrete ; start
+Run 51 ; survtmle3mo ; 3.82 mins
+Run 58 ; concrete ; start
+Run 56 ; concrete ; 10 mins
+Run 56 ; contmle ; start
+Run 58 ; concrete ; 11 mins
+Run 58 ; contmle ; start
+Run 55 ; concrete ; 14.9 mins
+Run 55 ; contmle ; start
+Run 48 ; contmle ; 60.2 mins
+Run 48 ; survtmle6mo ; start
+Run 48 ; survtmle6mo ; 2.27 mins
+Run 48 ; survtmle3mo ; start
+Run 48 ; survtmle3mo ; 4.07 mins
+Run 59 ; concrete ; start
+Run 57 ; concrete ; 23.4 mins
+Run 57 ; contmle ; start
+Run 54 ; concrete ; 24.6 mins
+Run 54 ; contmle ; start
+Run 53 ; contmle ; 78.6 mins
+Run 53 ; survtmle6mo ; start
+Run 43 ; contmle ; 112 mins
+Run 43 ; survtmle6mo ; start
+Run 59 ; concrete ; 28.9 mins
+Run 59 ; contmle ; start
+Run 53 ; survtmle6mo ; 2.25 mins
+Run 53 ; survtmle3mo ; start
+Run 43 ; survtmle6mo ; 2.26 mins
+Run 43 ; survtmle3mo ; start
+Run 53 ; survtmle3mo ; 4.02 mins
+Run 60 ; concrete ; start
+Run 43 ; survtmle3mo ; 4.1 mins
+Run 61 ; concrete ; start
+Run 55 ; contmle ; 42.3 mins
+Run 55 ; survtmle6mo ; start
+Run 55 ; survtmle6mo ; 2.38 mins
+Run 55 ; survtmle3mo ; start
+Run 55 ; survtmle3mo ; 3.94 mins
+Run 62 ; concrete ; start
+Run 47 ; contmle ; 115 mins
+Run 47 ; survtmle6mo ; start
+Run 58 ; contmle ; 51.6 mins
+Run 58 ; survtmle6mo ; start
+Run 47 ; survtmle6mo ; 2.43 mins
+Run 47 ; survtmle3mo ; start
+Run 58 ; survtmle6mo ; 2.2 mins
+Run 58 ; survtmle3mo ; start
+Run 50 ; contmle ; 103 mins
+Run 50 ; survtmle6mo ; start
+Run 58 ; survtmle3mo ; 3.79 mins
+Run 63 ; concrete ; start
+Run 47 ; survtmle3mo ; 4.02 mins
+Run 64 ; concrete ; start
+Run 50 ; survtmle6mo ; 2.17 mins
+Run 50 ; survtmle3mo ; start
+Run 50 ; survtmle3mo ; 3.91 mins
+Run 65 ; concrete ; start
+Run 62 ; concrete ; 14.5 mins
+Run 62 ; contmle ; start
+Run 52 ; contmle ; 94.5 mins
+Run 52 ; survtmle6mo ; start
+Run 52 ; survtmle6mo ; 2.17 mins
+Run 52 ; survtmle3mo ; start
+Run 54 ; contmle ; 60.2 mins
+Run 54 ; survtmle6mo ; start
+Run 61 ; concrete ; 29.9 mins
+Run 61 ; contmle ; start
+Run 54 ; survtmle6mo ; 2.28 mins
+Run 54 ; survtmle3mo ; start
+Run 52 ; survtmle3mo ; 3.75 mins
+Run 66 ; concrete ; start
+Run 54 ; survtmle3mo ; 4.04 mins
+Run 67 ; concrete ; start
+Run 65 ; concrete ; 14.9 mins
+Run 65 ; contmle ; start
+Run 60 ; concrete ; 36.5 mins
+Run 60 ; contmle ; start
+Run 56 ; contmle ; 83.9 mins
+Run 56 ; survtmle6mo ; start
+Run 56 ; survtmle6mo ; 2.22 mins
+Run 56 ; survtmle3mo ; start
+Run 56 ; survtmle3mo ; 3.92 mins
+Run 68 ; concrete ; start
+Run 64 ; concrete ; 31.3 mins
+Run 64 ; contmle ; start
+Run 66 ; concrete ; 15.6 mins
+Run 66 ; contmle ; start
+Run 63 ; concrete ; 32.4 mins
+Run 63 ; contmle ; start
+Run 68 ; concrete ; 14.6 mins
+Run 68 ; contmle ; start
+Run 59 ; contmle ; 64.6 mins
+Run 59 ; survtmle6mo ; start
+Run 59 ; survtmle6mo ; 2.34 mins
+Run 59 ; survtmle3mo ; start
+Run 59 ; survtmle3mo ; 4 mins
+Run 69 ; concrete ; start
+Run 67 ; concrete ; 35.8 mins
+Run 67 ; contmle ; start
+Run 65 ; contmle ; 36.7 mins
+Run 65 ; survtmle6mo ; start
+Run 65 ; survtmle6mo ; 2.32 mins
+Run 65 ; survtmle3mo ; start
+Run 65 ; survtmle3mo ; 4.42 mins
+Run 70 ; concrete ; start
+Run 62 ; contmle ; 61.2 mins
+Run 62 ; survtmle6mo ; start
+Run 57 ; contmle ; 116 mins
+Run 57 ; survtmle6mo ; start
+Run 62 ; survtmle6mo ; 2.27 mins
+Run 62 ; survtmle3mo ; start
+Run 57 ; survtmle6mo ; 2.19 mins
+Run 57 ; survtmle3mo ; start
+Run 69 ; concrete ; 20.7 mins
+Run 69 ; contmle ; start
+Run 62 ; survtmle3mo ; 3.99 mins
+Run 71 ; concrete ; start
+Run 57 ; survtmle3mo ; 3.83 mins
+Run 72 ; concrete ; start
+Run 71 ; concrete ; 9.56 mins
+Run 71 ; contmle ; start
+Run 72 ; concrete ; 14.5 mins
+Run 72 ; contmle ; start
+Run 70 ; concrete ; 31.1 mins
+Run 70 ; contmle ; start
+Run 61 ; contmle ; 88.5 mins
+Run 61 ; survtmle6mo ; start
+Run 68 ; contmle ; 61.9 mins
+Run 68 ; survtmle6mo ; start
+Run 61 ; survtmle6mo ; 2.18 mins
+Run 61 ; survtmle3mo ; start
+Run 68 ; survtmle6mo ; 2.26 mins
+Run 68 ; survtmle3mo ; start
+Run 61 ; survtmle3mo ; 3.77 mins
+Run 73 ; concrete ; start
+Run 68 ; survtmle3mo ; 3.97 mins
+Run 74 ; concrete ; start
+Run 3 ; concrete ; start
+Run 67 ; concrete ; start
+Run 66 ; concrete ; start
+Run 60 ; concrete ; start
+Run 70 ; concrete ; start
+Run 73 ; concrete ; start
+Run 69 ; concrete ; start
+Run 71 ; concrete ; start
+Run 64 ; concrete ; start
+Run 63 ; concrete ; start
+Run 72 ; concrete ; start
+Run 74 ; concrete ; start
+Run 71 ; concrete ; 7.86 mins
+Run 71 ; contmle ; start
+Run 72 ; concrete ; 11.7 mins
+Run 72 ; contmle ; start
+Run 66 ; concrete ; 13.6 mins
+Run 66 ; contmle ; start
+Run 74 ; concrete ; 16.2 mins
+Run 74 ; contmle ; start
+Run 69 ; concrete ; 16.7 mins
+Run 69 ; contmle ; start
+Run 70 ; concrete ; 25.3 mins
+Run 70 ; contmle ; start
+Run 64 ; concrete ; 28.8 mins
+Run 64 ; contmle ; start
+Run 63 ; concrete ; 29.3 mins
+Run 63 ; contmle ; start
+Run 73 ; concrete ; 30.3 mins
+Run 73 ; contmle ; start
+Run 67 ; concrete ; 30.9 mins
+Run 67 ; contmle ; start
+Run 60 ; concrete ; 32.9 mins
+Run 60 ; contmle ; start
+Run 3 ; concrete ; 35.2 mins
+Run 3 ; contmle ; start
+Run 72 ; contmle ; 58.9 mins
+Run 72 ; survtmle6mo ; start
+Run 72 ; survtmle6mo ; 2.07 mins
+Run 72 ; survtmle3mo ; start
+Run 72 ; survtmle3mo ; 3.67 mins
+Run 69 ; contmle ; 61.3 mins
+Run 69 ; survtmle6mo ; start
+Run 69 ; survtmle6mo ; 1.98 mins
+Run 69 ; survtmle3mo ; start
+Run 69 ; survtmle3mo ; 3.52 mins
+Run 74 ; contmle ; 70 mins
+Run 74 ; survtmle6mo ; start
+Run 74 ; survtmle6mo ; 2 mins
+Run 74 ; survtmle3mo ; start
+Run 74 ; survtmle3mo ; 3.46 mins
+Run 63 ; contmle ; 76 mins
+Run 63 ; survtmle6mo ; start
+Run 70 ; contmle ; 80.9 mins
+Run 70 ; survtmle6mo ; start
+Run 63 ; survtmle6mo ; 1.87 mins
+Run 63 ; survtmle3mo ; start
+Run 70 ; survtmle6mo ; 1.96 mins
+Run 70 ; survtmle3mo ; start
+Run 63 ; survtmle3mo ; 3.25 mins
+Run 70 ; survtmle3mo ; 3.34 mins
+Run 3 ; contmle ; 80.1 mins
+Run 3 ; survtmle6mo ; start
+Run 64 ; contmle ; 86.4 mins
+Run 64 ; survtmle6mo ; start
+Run 3 ; survtmle6mo ; 1.83 mins
+Run 3 ; survtmle3mo ; start
+Run 64 ; survtmle6mo ; 1.82 mins
+Run 64 ; survtmle3mo ; start
+Run 60 ; contmle ; 84.3 mins
+Run 60 ; survtmle6mo ; start
+Run 73 ; contmle ; 87.4 mins
+Run 73 ; survtmle6mo ; start
+Run 60 ; survtmle6mo ; 1.88 mins
+Run 60 ; survtmle3mo ; start
+Run 73 ; survtmle6mo ; 1.9 mins
+Run 73 ; survtmle3mo ; start
+Run 3 ; survtmle3mo ; 3.1 mins
+Run 64 ; survtmle3mo ; 3.15 mins
+Run 60 ; survtmle3mo ; 3.29 mins
+Run 73 ; survtmle3mo ; 3.23 mins
+Run 67 ; concrete ; start
+Run 71 ; concrete ; start
+Run 80 ; concrete ; start
+Run 78 ; concrete ; start
+Run 66 ; concrete ; start
+Run 75 ; concrete ; start
+Run 77 ; concrete ; start
+Run 76 ; concrete ; start
+Run 79 ; concrete ; start
+Run 82 ; concrete ; start
+Run 81 ; concrete ; start
+Run 83 ; concrete ; start
+Run 71 ; concrete ; 7.8 mins
+Run 71 ; contmle ; start
+Run 79 ; concrete ; 8.26 mins
+Run 79 ; contmle ; start
+Run 75 ; concrete ; 8.33 mins
+Run 75 ; contmle ; start
+Run 78 ; concrete ; 11.2 mins
+Run 78 ; contmle ; start
+Run 81 ; concrete ; 13.3 mins
+Run 81 ; contmle ; start
+Run 66 ; concrete ; 13.9 mins
+Run 66 ; contmle ; start
+Run 80 ; concrete ; 14.1 mins
+Run 80 ; contmle ; start
+Run 83 ; concrete ; 15.4 mins
+Run 83 ; contmle ; start
+Run 76 ; concrete ; 15.7 mins
+Run 76 ; contmle ; start
+Run 82 ; concrete ; 19.6 mins
+Run 82 ; contmle ; start
+Run 77 ; concrete ; 25.6 mins
+Run 77 ; contmle ; start
+Run 67 ; concrete ; 32.7 mins
+Run 67 ; contmle ; start
+Run 71 ; contmle ; 36.4 mins
+Run 71 ; survtmle6mo ; start
+Run 71 ; survtmle6mo ; 2.13 mins
+Run 71 ; survtmle3mo ; start
+Run 71 ; survtmle3mo ; 3.76 mins
+Run 84 ; concrete ; start
+Run 75 ; contmle ; 53.2 mins
+Run 75 ; survtmle6mo ; start
+Run 75 ; survtmle6mo ; 2.15 mins
+Run 75 ; survtmle3mo ; start
+Run 75 ; survtmle3mo ; 3.82 mins
+Run 85 ; concrete ; start
+Run 84 ; concrete ; 19.8 mins
+Run 84 ; contmle ; start
+Run 79 ; contmle ; 63.6 mins
+Run 79 ; survtmle6mo ; start
+Run 76 ; contmle ; 57.2 mins
+Run 76 ; survtmle6mo ; start
+Run 81 ; contmle ; 60.6 mins
+Run 79 ; survtmle6mo ; 2.07 mins
+Run 81 ; survtmle6mo ; start
+Run 79 ; survtmle3mo ; start
+Run 78 ; contmle ; 63.2 mins
+Run 78 ; survtmle6mo ; start
+Run 76 ; survtmle6mo ; 2.13 mins
+Run 76 ; survtmle3mo ; start
+Run 81 ; survtmle6mo ; 2.06 mins
+Run 81 ; survtmle3mo ; start
+Run 78 ; survtmle6mo ; 2.02 mins
+Run 78 ; survtmle3mo ; start
+Run 85 ; concrete ; 9.8 mins
+Run 85 ; contmle ; start
+Run 79 ; survtmle3mo ; 3.61 mins
+Run 86 ; concrete ; start
+Run 76 ; survtmle3mo ; 3.55 mins
+Run 87 ; concrete ; start
+Run 81 ; survtmle3mo ; 3.72 mins
+Run 88 ; concrete ; start
+Run 78 ; survtmle3mo ; 3.68 mins
+Run 89 ; concrete ; start
+Run 83 ; contmle ; 68 mins
+Run 83 ; survtmle6mo ; start
+Run 83 ; survtmle6mo ; 2.14 mins
+Run 83 ; survtmle3mo ; start
+Run 83 ; survtmle3mo ; 3.72 mins
+Run 90 ; concrete ; start
+Run 87 ; concrete ; 13.4 mins
+Run 87 ; contmle ; start
+Run 77 ; contmle ; 73.6 mins
+Run 77 ; survtmle6mo ; start
+Run 89 ; concrete ; 20.4 mins
+Run 89 ; contmle ; start
+Run 77 ; survtmle6mo ; 2.18 mins
+Run 77 ; survtmle3mo ; start
+Run 82 ; contmle ; 82 mins
+Run 82 ; survtmle6mo ; start
+Run 82 ; survtmle6mo ; 2.13 mins
+Run 82 ; survtmle3mo ; start
+Run 66 ; contmle ; 90.3 mins
+Run 66 ; survtmle6mo ; start
+Run 77 ; survtmle3mo ; 3.79 mins
+Run 91 ; concrete ; start
+Run 66 ; survtmle6mo ; 2.15 mins
+Run 66 ; survtmle3mo ; start
+Run 90 ; concrete ; 17.3 mins
+Run 90 ; contmle ; start
+Run 82 ; survtmle3mo ; 3.74 mins
+Run 92 ; concrete ; start
+Run 80 ; contmle ; 93.7 mins
+Run 80 ; survtmle6mo ; start
+Run 86 ; concrete ; 30.9 mins
+Run 86 ; contmle ; start
+Run 80 ; survtmle6mo ; 2.12 mins
+Run 80 ; survtmle3mo ; start
+Run 66 ; survtmle3mo ; 3.72 mins
+Run 93 ; concrete ; start
+Run 80 ; survtmle3mo ; 3.75 mins
+Run 94 ; concrete ; start
+Run 85 ; contmle ; 39.6 mins
+Run 85 ; survtmle6mo ; start
+Run 88 ; concrete ; 37.4 mins
+Run 88 ; contmle ; start
+Run 84 ; contmle ; 47.3 mins
+Run 84 ; survtmle6mo ; start
+Run 92 ; concrete ; 11.4 mins
+Run 92 ; contmle ; start
+Run 85 ; survtmle6mo ; 2.19 mins
+Run 85 ; survtmle3mo ; start
+Run 84 ; survtmle6mo ; 2.18 mins
+Run 84 ; survtmle3mo ; start
+Run 85 ; survtmle3mo ; 3.76 mins
+Run 95 ; concrete ; start
+Run 84 ; survtmle3mo ; 3.64 mins
+Run 96 ; concrete ; start
+Run 93 ; concrete ; 13.9 mins
+Run 93 ; contmle ; start
+Run 67 ; contmle ; 93.2 mins
+Run 67 ; survtmle6mo ; start
+Run 87 ; contmle ; 35.8 mins
+Run 87 ; survtmle6mo ; start
+Run 67 ; survtmle6mo ; 2.1 mins
+Run 67 ; survtmle3mo ; start
+Run 87 ; survtmle6mo ; 2.05 mins
+Run 87 ; survtmle3mo ; start
+Run 94 ; concrete ; 17.5 mins
+Run 94 ; contmle ; start
+Run 67 ; survtmle3mo ; 3.72 mins
+Run 87 ; survtmle3mo ; 3.58 mins
+Run 95 ; concrete ; 10.8 mins
+Run 95 ; contmle ; start
+Run 96 ; concrete ; 13 mins
+Run 96 ; contmle ; start
+Run 91 ; concrete ; 35.1 mins
+Run 91 ; contmle ; start
+Run 92 ; contmle ; 34.4 mins
+Run 92 ; survtmle6mo ; start
+Run 92 ; survtmle6mo ; 2.04 mins
+Run 92 ; survtmle3mo ; start
+Run 92 ; survtmle3mo ; 3.68 mins
+Run 86 ; contmle ; 68.2 mins
+Run 86 ; survtmle6mo ; start
+Run 90 ; contmle ; 71.1 mins
+Run 90 ; survtmle6mo ; start
+Run 86 ; survtmle6mo ; 2.02 mins
+Run 86 ; survtmle3mo ; start
+Run 90 ; survtmle6mo ; 2.04 mins
+Run 90 ; survtmle3mo ; start
+Run 95 ; contmle ; 46.6 mins
+Run 95 ; survtmle6mo ; start
+Run 86 ; survtmle3mo ; 3.47 mins
+Run 89 ; contmle ; 81.7 mins
+Run 89 ; survtmle6mo ; start
+Run 95 ; survtmle6mo ; 1.94 mins
+Run 95 ; survtmle3mo ; start
+Run 90 ; survtmle3mo ; 3.59 mins
+Run 89 ; survtmle6mo ; 1.9 mins
+Run 89 ; survtmle3mo ; start
+Run 95 ; survtmle3mo ; 3.36 mins
+Run 96 ; contmle ; 50.9 mins
+Run 96 ; survtmle6mo ; start
+Run 89 ; survtmle3mo ; 3.38 mins
+Run 96 ; survtmle6mo ; 1.96 mins
+Run 96 ; survtmle3mo ; start
+Run 94 ; contmle ; 59.4 mins
+Run 94 ; survtmle6mo ; start
+Run 96 ; survtmle3mo ; 3.44 mins
+Run 94 ; survtmle6mo ; 1.89 mins
+Run 94 ; survtmle3mo ; start
+Run 94 ; survtmle3mo ; 3.17 mins
+Run 88 ; contmle ; 80.7 mins
+Run 88 ; survtmle6mo ; start
+Run 88 ; survtmle6mo ; 1.72 mins
+Run 88 ; survtmle3mo ; start
+Run 88 ; survtmle3mo ; 2.94 mins
+Run 91 ; contmle ; 63.2 mins
+Run 91 ; survtmle6mo ; start
+Run 91 ; survtmle6mo ; 1.84 mins
+Run 91 ; survtmle3mo ; start
+Run 91 ; survtmle3mo ; 3.19 mins
+Run 93 ; concrete ; start
+Run 101 ; concrete ; start
+Run 99 ; concrete ; start
+Run 103 ; concrete ; start
+Run 105 ; concrete ; start
+Run 104 ; concrete ; start
+Run 106 ; concrete ; start
+Run 100 ; concrete ; start
+Run 107 ; concrete ; start
+Run 97 ; concrete ; start
+Run 98 ; concrete ; start
+Run 102 ; concrete ; start
+Run 107 ; concrete ; 3.44 mins
+Run 107 ; contmle ; start
+Run 102 ; concrete ; 9.05 mins
+Run 105 ; concrete ; 9.06 mins
+Run 102 ; contmle ; start
+Run 105 ; contmle ; start
+Run 98 ; concrete ; 9.21 mins
+Run 98 ; contmle ; start
+Run 104 ; concrete ; 12.2 mins
+Run 104 ; contmle ; start
+Run 99 ; concrete ; 12.3 mins
+Run 99 ; contmle ; start
+Run 93 ; concrete ; 13 mins
+Run 93 ; contmle ; start
+Run 97 ; concrete ; 13.3 mins
+Run 97 ; contmle ; start
+Run 100 ; concrete ; 13.7 mins
+Run 100 ; contmle ; start
+Run 103 ; concrete ; 16.1 mins
+Run 103 ; contmle ; start
+Run 101 ; concrete ; 17.1 mins
+Run 101 ; contmle ; start
+Run 106 ; concrete ; 17.2 mins
+Run 106 ; contmle ; start

@@ -42,35 +42,38 @@ risks %>% mutate(Event = factor(Event)) %>%
 rm(list = c("risks0", "risks1"))
 
 # simulation --------------------------------------------------------------
-set.seed(0)
-B <- 400
-seeds <- sample(0:12345678, size = B + 100)
-output <- list()
 library(foreach)
 library(doParallel)
 n_cores <- min(parallel::detectCores(), 12)
-j <- k <- 1
-while(j <= length(seeds) & k <= B) {
-    seeds_j <- seeds[j:min(length(seeds), j + 2*n_cores - 1)]
+B <- 500
+j <- 0
+OutputPath <- "/Shared/Projects/ConCR-TMLE/scripts/sim-data/sim-out/"
+set.seed(0)
+seeds <- sample(0:12345678, size = B)
+Start <- Sys.time()
+while(j <= B) {
     cl <- makeCluster(n_cores, type = "FORK")
     registerDoParallel(cl)
-    Start <- Sys.time()
     sim.result <- try({
-        foreach(i = seq_along(seeds_j),
-        # foreach(i = seq_along(seeds),
+        foreach(i = seq_along(seeds),
                 .errorhandling = "remove",
                 .packages = "readr") %dopar% {
                     loadPackages()
-                    DiagPath <- "scripts/sim-data/sim-diag/diagnostic.txt"
+                    DiagPath <- "scripts/sim-data/diagnostic.txt"
+                    OutputPath <- "/Shared/Projects/ConCR-TMLE/scripts/sim-data/sim-out/"
+                    if (file.exists(paste0(OutputPath, i, ".RDS"))) return(NULL)
                     out <- list()
-                    estimators <- c("concrete", "contmle", "survtmle-6mo", "survtmle-3mo")
+                    estimators <- c(
+                        "concrete",
+                        "contmle",
+                        "survtmle-6mo",
+                        "survtmle-3mo")
                     out$estimates <- data.table()
                     out$meta <- list("time" = data.table("Estimator" = estimators, "Time" = NaN),
                                      "error" = list(), "notconverge" = list())
 
                     MaxIter <- 100
-                    Data <- simConCR(n = 8e2, random_seed = seeds_j[i])
-                    # Data <- simConCR(n = 8e2, random_seed = seeds[i])
+                    Data <- simConCR(n = 8e2, random_seed = seeds[i])
                     TargetTime <- seq(730, 1460, length.out = 5)
 
                     # helper functions --------------------------------------------------------
@@ -303,26 +306,28 @@ while(j <= length(seeds) & k <= B) {
                     }
 
                     # return ------------------------------------------------------------------
-                    return(out)
+                    saveRDS(object = out, file = paste0(OutputPath, i, ".RDS"))
+                    rm(out); gc()
+                    return(NULL)
                 }
     }, silent = TRUE)
-    j <- max(seeds_j) + 1
-    sim.result <- lapply(sim.result, function(run) {ifelse(inherits(run, "try-error"), NULL, run)})
-    k <- k + length(sim.result)
-    output <- c(output, sim.result)
+    j <- length(list.files(OutputPath))
     registerDoSEQ()
     stopCluster(cl)
     rm(cl); gc()
-    rm(sim.result)
-    Stop <- Sys.time()
-    print(difftime(Stop, Start, units = "hours"))
+    if (!inherits(sim.result, "try-error")) {
+        Stop <- Sys.time()
+        print(difftime(Stop, Start, units = "hours"))
+    }
 }
 
 # Processing --------------------------------------------------------------
+Output <- lapply(list.files(OutputPath, full.names = TRUE),
+                 function(run) readRDS(file = run))
 
-estimates <- do.call(rbind, lapply(seq_along(output), function(iter) {
-    if (inherits(output[[iter]]$estimates, "data.frame"))
-        return(cbind("iter" = iter, output[[iter]]$estimates))
+estimates <- do.call(rbind, lapply(seq_along(Output), function(iter) {
+    if (inherits(Output[[iter]]$estimates, "data.frame"))
+        return(cbind("iter" = iter, Output[[iter]]$estimates))
     NULL
 }))
 estimates <- rbind(estimates,
@@ -338,9 +343,9 @@ estimates <- rbind(estimates,
                              by = c("iter", "Package", "Estimator", "Event", "Time")]
 )
 estimates <- rbind(estimates,
-                   do.call(rbind, lapply(seq_along(output), function(iter) {
-                       if (inherits(output[[iter]]$contmle, "data.frame")) {
-                           out <- setDT(output[[iter]]$contmle)
+                   do.call(rbind, lapply(seq_along(Output), function(iter) {
+                       if (inherits(Output[[iter]]$contmle, "data.frame")) {
+                           out <- setDT(Output[[iter]]$contmle)
                            out[, Intervention := "RD"]
                            setnames(out, "RD", "Risk")
                            return(cbind("iter" = iter, out))
