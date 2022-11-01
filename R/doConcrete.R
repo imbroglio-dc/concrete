@@ -2,7 +2,7 @@
 #'
 #' @param ConcreteArgs list : a "ConcreteArgs" object returned by concrete::formatArguments()
 #'
-# #' @param Data : data.table (N x ?)
+# #' @param DataTable : data.table (N x ?)
 # #' @param CovDataTable : data.table (N x ?)
 # #' @param LongTime : numeric vector (?? x 1)
 # #' @param ID : vector (N x 1)
@@ -74,20 +74,20 @@ doConcrete <- function(ConcreteArgs) {
     return(do.call(doConCRTmle, ConcreteArgs))
 }
 
-doConCRTmle <- function(Data, TargetTime, TargetEvent, Regime, CVFolds, Model, PropScoreBackend, 
+doConCRTmle <- function(DataTable, TargetTime, TargetEvent, Regime, CVFolds, Model, PropScoreBackend, 
                         HazEstBackend, MaxUpdateIter, OneStepEps, MinNuisance, Verbose, GComp, 
                         ReturnModels)
 {
     ratio <- Time <- Event <- PnEIC <- `seEIC/(sqrt(n)log(n))` <- NULL # for data.table compatibility w/ global var binding check
     
     # initial estimation ------------------------------------------------------------------------
-    Estimates <- getInitialEstimate(Data = Data, Model = Model, CVFolds = CVFolds, MinNuisance = MinNuisance,
+    Estimates <- getInitialEstimate(Data = DataTable, Model = Model, CVFolds = CVFolds, MinNuisance = MinNuisance,
                                     TargetEvent = TargetEvent, TargetTime = TargetTime, Regime = Regime,
                                     PropScoreBackend = PropScoreBackend, HazEstBackend = HazEstBackend, 
                                     ReturnModels = ReturnModels)
     
     # get initial EIC (possibly with GComp plug-in estimate) ---------------------------------------------
-    Estimates <- getEIC(Estimates = Estimates, Data = Data, Regime = Regime,
+    Estimates <- getEIC(Estimates = Estimates, Data = DataTable, Regime = Regime,
                         TargetEvent = TargetEvent, TargetTime = TargetTime, 
                         MinNuisance = MinNuisance, GComp = GComp)
     
@@ -106,7 +106,7 @@ doConCRTmle <- function(Data, TargetTime, TargetEvent, Regime, CVFolds, Model, P
     
     ## one-step tmle loop (one-step) ----
     if (!all(sapply(OneStepStop[["check"]], isTRUE))) {
-        Estimates <- doTmleUpdate(Estimates = Estimates, SummEIC = SummEIC, Data = Data,
+        Estimates <- doTmleUpdate(Estimates = Estimates, SummEIC = SummEIC, Data = DataTable,
                                   TargetEvent = TargetEvent, TargetTime = TargetTime,
                                   MaxUpdateIter = MaxUpdateIter, OneStepEps = OneStepEps,
                                   NormPnEIC = NormPnEIC, Verbose = Verbose)

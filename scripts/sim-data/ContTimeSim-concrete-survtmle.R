@@ -5,14 +5,15 @@ loadPackages <- function() {
     # x <- lapply(surv_tmle.dir, function(dir) lapply(list.files(dir, full.names = TRUE),
     #                                                 function(x) try(source(x), silent = TRUE)))
     # unloadNamespace("mice")
-
+    
     library(survival); library(zoo)
     contmle.dir <- c("/Shared/Projects/continuousTMLE/R", "~/research/SoftWare/continuousTMLE/R")
     x <- lapply(contmle.dir, function(dir) lapply(list.files(dir, full.names = TRUE), source))
-
+    
     library(data.table); library(concrete)
     data.table::setDTthreads(threads = 2)
-    x <- try(source("/Shared/Projects/ConCR-TMLE/scripts/sim-data/sim_functions.R"))
+    concrete.dir <- c("/Shared/Projects/ConCR-TMLE/", "/Shared/Projects/concrete/")
+    x <- lapply(concrete.dir, function(dir) try(source(paste0(dir, "scripts/sim-data/sim_functions.R"))))
     library(tidyverse)
     invisible(NULL)
 }
@@ -71,16 +72,18 @@ while(j <= B) {
                     out$estimates <- data.table()
                     out$meta <- list("time" = data.table("Estimator" = estimators, "Time" = NaN),
                                      "error" = list(), "notconverge" = list())
-
+                    
                     MaxIter <- 100
                     Data <- simConCR(n = 8e2, random_seed = seeds[i])
                     TargetTime <- seq(730, 1460, length.out = 5)
-
+                    
                     # helper functions --------------------------------------------------------
-                    simConcrete <- function(TargetTime, Data, MaxIter, DiagPath, j = 1) {
+                    simConcrete <- function(TargetTime, Data, MaxIter, DiagPath = NULL, j = 1) {
                         require(concrete); require(data.table)
-                        readr::write_lines(paste0("Run ", j + i - 1, " ; concrete ; start"),
-                                           file = DiagPath, append = TRUE)
+                        if (!is.null(DiagPath)) {
+                            readr::write_lines(paste0("Run ", j + i - 1, " ; concrete ; start"),
+                                               file = DiagPath, append = TRUE)
+                        }
                         concreteArgs <- formatArguments(DataTable = Data,
                                                         EventTime = "TIME",
                                                         EventType = "EVENT",
@@ -97,20 +100,24 @@ while(j <= B) {
                         estimates <- cbind(Package = "concrete", concreteOut)
                         attr(estimates, "converged") <- attr(concreteEst, "TmleConverged")$converged
                         attr(estimates, "time") <- difftime(Stop, Start, units = "mins")
-                        readr::write_lines(paste0("Run ", j + i - 1, " ; concrete ; ",
-                                                  format(unclass(attr(estimates, "time")), digits = 3),
-                                                  " ", attr(attr(estimates, "time"), "units")),
-                                           file = DiagPath, append = TRUE)
+                        if (!is.null(DiagPath)) {
+                            readr::write_lines(paste0("Run ", j + i - 1, " ; concrete ; ",
+                                                      format(unclass(attr(estimates, "time")), digits = 3),
+                                                      " ", attr(attr(estimates, "time"), "units")),
+                                               file = DiagPath, append = TRUE)
+                        }
                         return(estimates)
                     }
-
-                    simContmle <- function(TargetTime, Data, MaxIter, DiagPath, j = 1) {
+                    
+                    simContmle <- function(TargetTime, Data, MaxIter, DiagPath = NULL, j = 1) {
                         required <- c("data.table", "zoo", "glmnet", "survival", "stringr",
                                       "nleqslv","prodlim", "Matrix", "coefplot", "hdnom")
                         z <- sapply(required, function(p) try(library(p, character.only = TRUE),
                                                               silent = TRUE))
-                        readr::write_lines(paste0("Run ", j + i - 1, " ; contmle ; start"),
-                                           file = DiagPath, append = TRUE)
+                        if (!is.null(DiagPath)) {
+                            readr::write_lines(paste0("Run ", j + i - 1, " ; contmle ; start"),
+                                               file = DiagPath, append = TRUE)
+                        }
                         Start <- Sys.time()
                         contmleRun <- contmle(
                             Data, #-- Data
@@ -140,14 +147,15 @@ while(j <= B) {
                         )
                         Stop <- Sys.time()
                         attr(contmleRun, "time") <- difftime(Stop, Start, units = "mins")
-                        readr::write_lines(paste0("Run ", j + i - 1, " ; contmle ; ",
-                                                  format(unclass(attr(contmleRun, "time")), digits = 3),
-                                                  " ", attr(attr(contmleRun, "time"), "units")),
-                                           file = DiagPath, append = TRUE)
-
+                        if (!is.null(DiagPath)) {
+                            readr::write_lines(paste0("Run ", j + i - 1, " ; contmle ; ",
+                                                      format(unclass(attr(contmleRun, "time")), digits = 3),
+                                                      " ", attr(attr(contmleRun, "time"), "units")),
+                                               file = DiagPath, append = TRUE)
+                        }
                         return(contmleRun)
                     }
-
+                    
                     formatContmle <- function(contmleOutput) {
                         tmleOutput <- data.table(
                             "J" = rep(names(contmleOutput$tmle), each = 2),
@@ -161,7 +169,7 @@ while(j <= B) {
                         tmleOutput <- dcast(tmleOutput, J + time ~ val, value.var = "value")
                         setnames(tmleOutput, c("J", "time", 'ATE'), c("Event", "Time", "RD"))
                         tmleOutput <- cbind("Package" = "contmle", "Estimator" = "tmle", tmleOutput)
-
+                        
                         gcompOutput <-
                             data.table(
                                 "J" = rep(names(contmleOutput$init), each = 2),
@@ -175,22 +183,24 @@ while(j <= B) {
                         gcompOutput <- dcast(gcompOutput, J + time ~ val, value.var = "value")
                         setnames(gcompOutput, c("J", "time", 'ATE'), c("Event", "Time", "RD"))
                         gcompOutput <- cbind("Package" = "contmle", "Estimator" = "gcomp", gcompOutput)
-
+                        
                         return(as.data.frame(rbind(tmleOutput, gcompOutput)))
                     }
-
-                    simSurvtmle <- function(TargetTime, Bins, Data, MaxIter, DiagPath, j = 1) {
+                    
+                    simSurvtmle <- function(TargetTime, Bins, Data, MaxIter, DiagPath = NULL, j = 1) {
                         require(SuperLearner); require(survtmle)
                         survMonths <- paste0("survtmle", as.integer(12 / Bins), "mo")
-                        readr::write_lines(paste0("Run ", j + i - 1, " ; ", survMonths," ; start"),
-                                           file = DiagPath, append = TRUE)
+                        if (!is.null(DiagPath)) {
+                            readr::write_lines(paste0("Run ", j + i - 1, " ; ", survMonths," ; start"),
+                                               file = DiagPath, append = TRUE)
+                        }
                         sl_lib_failure <- c("SL.glmnet", "SL.xgboost")
                         sl_lib_censor <- c("SL.glmnet", "SL.xgboost")
                         sl_lib_g <- c("SL.glmnet", "SL.xgboost")
                         TargetTime <- ceiling(TargetTime / 365 * Bins)
                         TargetEvent <- sort(setdiff(unique(Data$EVENT), 0))
                         W <- as.data.frame(Data[, !c("id", "TIME", "EVENT", "ARM")])
-
+                        
                         Start <- Sys.time()
                         tmleFit <- survtmle(ftime = ceiling(Data$TIME / 365 * Bins),
                                             ftype = Data$EVENT,
@@ -210,16 +220,18 @@ while(j <= B) {
                                             Gcomp = FALSE)
                         survtmleOut <- print(timepoints(object = tmleFit, times = TargetTime))
                         survtmleOut <- getSurvtmleTbl(survtmleOut, TargetEvent, TargetTime, Bins)
-
+                        
                         Stop <- Sys.time()
                         attr(survtmleOut, "time") <- difftime(Stop, Start, units = "mins")
-                        readr::write_lines(paste0("Run ", j + i - 1, " ; ", survMonths," ; ",
+                        if (!is.null(DiagPath)) {
+                            readr::write_lines(paste0("Run ", j + i - 1, " ; ", survMonths," ; ",
                                                   format(unclass(attr(survtmleOut, "time")), digits = 3), " ",
                                                   attr(attr(survtmleOut, "time"), "units")),
                                            file = DiagPath, append = TRUE)
+                        }
                         return(survtmleOut)
                     }
-
+                    
                     getSurvtmleTbl <- function(survtmleOut, TargetEvent, TargetTime, Bins) {
                         require(dplyr)
                         x <- c("Risk", "se")
@@ -236,7 +248,7 @@ while(j <= B) {
                         })
                         do.call(dplyr::full_join, survtmle.list)
                     }
-
+                    
                     # concrete --------------------------------------------------------------------
                     if ("concrete" %in% estimators) {
                         concreteOut <- try(simConcrete(TargetTime, Data, MaxIter, DiagPath),
@@ -251,12 +263,12 @@ while(j <= B) {
                         }
                         rm(concreteOut); gc()
                     }
-
+                    
                     # contmle ------------------------------------------------------------------------------
                     if ("contmle" %in% estimators) {
                         contmleOut <- try(simContmle(TargetTime, Data, MaxIter, DiagPath),
                                           silent = TRUE)
-
+                        
                         if (inherits(contmleOut, "try-error")) {
                             out$contmle <- data.table()
                             out$meta$error <- c(out$meta$error, "contmle")
@@ -268,13 +280,13 @@ while(j <= B) {
                         }
                         rm(contmleOut); gc()
                     }
-
+                    
                     # survtmle 6mo ----------------------------------------------------------------
                     if ("survtmle-6mo" %in% estimators) {
                         Bins <- 2
                         survtmle6mo <- try(simSurvtmle(TargetTime, Bins, Data, MaxIter, DiagPath),
                                            silent = TRUE)
-
+                        
                         if (inherits(survtmle6mo, "try-error")) {
                             out$meta$error <- c(out$meta$error, paste0("survtmle", as.integer(12 / Bins), "mo"))
                         } else {
@@ -286,13 +298,13 @@ while(j <= B) {
                         }
                         rm(survtmle6mo); gc()
                     }
-
+                    
                     # survtmle 3mo ----------------------------------------------------------------
                     if ("survtmle-3mo" %in% estimators) {
                         Bins <- 4
                         survtmle3mo <- try(simSurvtmle(TargetTime, Bins, Data, MaxIter, DiagPath),
                                            silent = TRUE)
-
+                        
                         if (inherits(survtmle3mo, "try-error")) {
                             out$meta$error <- c(out$meta$error, paste0("survtmle", as.integer(12 / Bins), "mo"))
                         } else {
@@ -304,7 +316,7 @@ while(j <= B) {
                         }
                         rm(survtmle3mo); gc()
                     }
-
+                    
                     # return ------------------------------------------------------------------
                     saveRDS(object = out, file = paste0(OutputPath, i, ".RDS"))
                     rm(out); gc()

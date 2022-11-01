@@ -94,7 +94,7 @@ getHazFit <- function(Data, Model, CVFolds, Hazards, HazEstBackend, ReturnModels
 
 getHazSurvPred <- function(Data, HazFits, MinNuisance, TargetEvent,
                            TargetTime, Regime, HazEstBackend) {
-    Censored <- 0 %in% Data[[attr(Data, "EventType")]]
+    Censored <- length(setdiff(TargetEvent, unique(Data[[attr(Data, "EventType")]]))) > 0
     Target <- expand.grid("Time" = TargetTime, "Event" = TargetEvent)
     PredHazSurv <- lapply(Regime, function(Reg) {
         PredData <- as.data.table(Data)
