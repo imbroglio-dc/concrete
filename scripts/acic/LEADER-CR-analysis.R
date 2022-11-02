@@ -94,7 +94,7 @@ intervention <- list("A == 1" = list("intervention" = function(a, L) {rep_len(1,
                      "A == 0" = list("intervention" = function(a, L) {rep_len(0, length(a))},
                                      "g.star" = function(a, L) {as.numeric(a == 0)}))
 
-concrete.args <- formatArguments(DataTable = dt,
+concrete.args <- formatArguments(Data = dt,
                                  EventTime = "time", EventType = "delta",
                                  Treatment = "A", ID = NULL, Intervention = intervention,
                                  TargetTime = target.time, TargetEvent = target.event,

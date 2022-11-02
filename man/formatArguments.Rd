@@ -6,7 +6,7 @@
 \title{formatArguments}
 \usage{
 formatArguments(
-  DataTable,
+  Data,
   EventTime,
   EventType,
   Treatment,
@@ -32,8 +32,8 @@ formatArguments(
 makeITT()
 }
 \arguments{
-\item{DataTable}{data.table (n x (d + (3:5)); data.table of the observed data, with rows n =
-the number of observations and d = the number of baseline covariates. DataTable must include
+\item{Data}{data.table (n x (d + (3:5)); data.table of the observed data, with rows n =
+the number of observations and d = the number of baseline covariates. Data must include
 the following columns:
 \itemize{
 \item{"EventTime"}{: non-negative real numbers; the observed event or censoring time}
@@ -68,7 +68,7 @@ time will be targeted.}
 all non-censoring observed event types will be targeted.}
 
 \item{CVArg}{list: arguments to be passed into do.call(origami::make_folds). If NULL, the default is
-list(n = nrow(DataTable), fold_fun = folds_vfold, cluster_ids = NULL, strata_ids = NULL)}
+list(n = nrow(Data), fold_fun = folds_vfold, cluster_ids = NULL, strata_ids = NULL)}
 
 \item{Model}{list (default: NULL): named list of models, one for each failure or censoring event
 and one for the 'Treatment' variable. If Model = NULL, then
@@ -137,7 +137,7 @@ makeITT() returns an Intervention list for a single, binary, point-treatment var
 }
 \section{Functions}{
 \itemize{
-\item \code{makeITT()}: 
+\item \code{makeITT()}: makeITT sample Intervention function list
 
 }}
 \examples{
@@ -150,7 +150,7 @@ cols <- c("id", "time", "status", "trt",
           "age", "albumin", "sex", "bili")
 data <- data[, .SD, .SDcols = cols]
 
-# makeITT() creates a list of functions to specify intent-to-treat 
+# makeITT() creates a list of functions to specify intent-to-treat
 #   regimes for a binary, single, point treatment variable
 intervention <- makeITT()
 target.time <- 2500
@@ -161,7 +161,7 @@ model <- list("trt" = c("SL.glm", "SL.glmnet"),
               "2" = list(Surv(time, status == 2) ~ .))
 
 # formatArguments() returns correctly formatted arguments for doConcrete()
-concrete.args <- formatArguments(DataTable = data,
+concrete.args <- formatArguments(Data = data,
                                  EventTime = "time",
                                  EventType = "status",
                                  Treatment = "trt",
@@ -175,11 +175,11 @@ concrete.args <- formatArguments(DataTable = data,
 # examples of modifying/adding models for censoring and failure events
 concrete.args[["Model"]][["0"]] <-
     list(Surv(time, status == 0) ~ trt:sex + age + bili)
-concrete.args[["Model"]][["1"]] <- 
+concrete.args[["Model"]][["1"]] <-
     list("mod1" = Surv(time, status == 1) ~ trt,
          "mod2" = Surv(time, status == 1) ~ .)
 
-# 
+#
 # examples of modifying "Superlearner" treatment models
 concrete.args[["Model"]][["trt"]] <- c("SL.glm", "SL.glmnet", "SL.bayesglm")
 

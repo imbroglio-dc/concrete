@@ -11,7 +11,7 @@ data[is.na(stage), stage := sample(1:4, sum(is.na(stage)), replace = TRUE)][, st
 data <- data[, c("id", "time", "status", "trt", "age", "sex", "albumin", "stage")]
 
 ## specifying the tmle problem ----
-concrete_args <- formatArguments(DataTable = data,
+concrete_args <- formatArguments(Data = data,
                                  EventTime = "time", 
                                  EventType = "status",
                                  Treatment = "trt", 

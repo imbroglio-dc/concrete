@@ -1,8 +1,8 @@
 #' doConcrete
 #'
-#' @param ConcreteArgs list : a "ConcreteArgs" object returned by concrete::formatArguments()
+#' @param ConcreteArgs "ConcreteArgs" sl3 object : output of concrete::formatArguments()
 #'
-# #' @param DataTable : data.table (N x ?)
+# #' @param Data : data.table (N x ?)
 # #' @param CovDataTable : data.table (N x ?)
 # #' @param LongTime : numeric vector (?? x 1)
 # #' @param ID : vector (N x 1)
@@ -45,7 +45,7 @@
 #'               "2" = list(Surv(time, status == 2) ~ .))
 #' 
 #' # formatArguments() returns correctly formatted arguments for doConcrete()
-#' concrete.args <- formatArguments(DataTable = data,
+#' concrete.args <- formatArguments(Data = data,
 #'                                  EventTime = "time",
 #'                                  EventType = "status",
 #'                                  Treatment = "trt",
@@ -71,23 +71,25 @@ doConcrete <- function(ConcreteArgs) {
              "Run that function first and pass the resulting output into doConcrete() after ", 
              "addressing any errors or warnings.")
     }
-    return(do.call(doConCRTmle, ConcreteArgs))
+    ArgList <- lapply(ls(ConcreteArgs), function(x) ConcreteArgs[[x]])
+    names(ArgList) <- ls(ConcreteArgs)
+    return(do.call(doConCRTmle, ArgList))
 }
 
-doConCRTmle <- function(DataTable, TargetTime, TargetEvent, Regime, CVFolds, Model, PropScoreBackend, 
+doConCRTmle <- function(Data, TargetTime, TargetEvent, Regime, CVFolds, Model, PropScoreBackend, 
                         HazEstBackend, MaxUpdateIter, OneStepEps, MinNuisance, Verbose, GComp, 
                         ReturnModels)
 {
     ratio <- Time <- Event <- PnEIC <- `seEIC/(sqrt(n)log(n))` <- NULL # for data.table compatibility w/ global var binding check
     
     # initial estimation ------------------------------------------------------------------------
-    Estimates <- getInitialEstimate(Data = DataTable, Model = Model, CVFolds = CVFolds, MinNuisance = MinNuisance,
+    Estimates <- getInitialEstimate(Data = Data, Model = Model, CVFolds = CVFolds, MinNuisance = MinNuisance,
                                     TargetEvent = TargetEvent, TargetTime = TargetTime, Regime = Regime,
                                     PropScoreBackend = PropScoreBackend, HazEstBackend = HazEstBackend, 
                                     ReturnModels = ReturnModels)
     
     # get initial EIC (possibly with GComp plug-in estimate) ---------------------------------------------
-    Estimates <- getEIC(Estimates = Estimates, Data = DataTable, Regime = Regime,
+    Estimates <- getEIC(Estimates = Estimates, Data = Data, Regime = Regime,
                         TargetEvent = TargetEvent, TargetTime = TargetTime, 
                         MinNuisance = MinNuisance, GComp = GComp)
     
@@ -106,7 +108,7 @@ doConCRTmle <- function(DataTable, TargetTime, TargetEvent, Regime, CVFolds, Mod
     
     ## one-step tmle loop (one-step) ----
     if (!all(sapply(OneStepStop[["check"]], isTRUE))) {
-        Estimates <- doTmleUpdate(Estimates = Estimates, SummEIC = SummEIC, Data = DataTable,
+        Estimates <- doTmleUpdate(Estimates = Estimates, SummEIC = SummEIC, Data = Data,
                                   TargetEvent = TargetEvent, TargetTime = TargetTime,
                                   MaxUpdateIter = MaxUpdateIter, OneStepEps = OneStepEps,
                                   NormPnEIC = NormPnEIC, Verbose = Verbose)

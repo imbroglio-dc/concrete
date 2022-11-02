@@ -108,6 +108,8 @@ getRisk <- function(Estimate, TargetTime, TargetEvent, GComp) {
 }
 
 getSimultaneous <- function(Estimate, Risks = NULL, SignifLevel = 0.05) {
+    Estimates <- TargetEvent <- TargetTime <- T.tilde <- Delta <- 
+        EvalTimes <- IC <- Intervention <- NULL
     ICs <- lapply(seq_along(Estimates), function(a) {
         est.a <- Estimates[[a]]
         IC.a <- getIC(GStar =  attr(est.a[["PropScore"]], "g.star.obs"),

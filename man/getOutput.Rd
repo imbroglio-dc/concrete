@@ -12,16 +12,17 @@ getOutput(Estimate, Estimand = c("RD", "RR", "Risk"))
 \item{Estimand}{character (default: c("RD", "RR", "Risk")) or a function or a list of functions}
 }
 \value{
-tbd
+data.table of point estimates and standard deviations
 }
 \description{
 getOutput
 }
 \examples{
 # getOutput returns risk difference, relative risk, and treatment-specific risks
-# concrete.out <- getOutput(Estimate = concrete.est, Estimand = c("rd", "rr", "risk"), 
+# concrete.out <- getOutput(Estimate = concrete.est, Estimand = c("rd", "rr", "risk"),
 #                           TargetTime = target.time, TargetEvent = target.event, GComp = TRUE)
 # concrete.out$RD
 # concrete.out$RR
 # concrete.out$Risk
+
 }

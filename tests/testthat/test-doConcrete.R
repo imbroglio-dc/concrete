@@ -13,7 +13,7 @@ test_that("doConcrete() hasn't changed for competing risks",
                   a_lrnrs <- make_learner(Stack, Lrnr_glm$new(), Lrnr_glmnet$new())
                   
                   concrete.args.SL <- try(
-                      formatArguments(DataTable = data, EventTime = "time", EventType = "status",
+                      formatArguments(Data = data, EventTime = "time", EventType = "status",
                                       Treatment = "trt", ID = "id", Intervention = makeITT(),
                                       TargetTime = 2500, TargetEvent = NULL,
                                       Model = NULL, Verbose = TRUE, ReturnModels = TRUE)
@@ -44,7 +44,7 @@ test_that("doConcrete() hasn't changed for uncensored competing risks",
                   a_lrnrs <- make_learner(Stack, Lrnr_glm$new(), Lrnr_glmnet$new())
                   
                   concrete.args.SL <- try(
-                      formatArguments(DataTable = data, EventTime = "time", EventType = "status",
+                      formatArguments(Data = data, EventTime = "time", EventType = "status",
                                       Treatment = "trt", ID = "id", Intervention = makeITT(),
                                       TargetTime = 2500, TargetEvent = NULL,
                                       Model = NULL, Verbose = TRUE, ReturnModels = TRUE)
@@ -75,7 +75,7 @@ test_that("doConcrete() hasn't changed for right-censored survival",
                   a_lrnrs <- make_learner(Stack, Lrnr_glm$new(), Lrnr_glmnet$new())
                   
                   concrete.args.SL <- try(
-                      formatArguments(DataTable = data, EventTime = "time", EventType = "status",
+                      formatArguments(Data = data, EventTime = "time", EventType = "status",
                                       Treatment = "trt", ID = "id", Intervention = makeITT(),
                                       TargetTime = 2500, TargetEvent = NULL,
                                       Model = NULL, Verbose = TRUE, ReturnModels = TRUE)
@@ -106,7 +106,7 @@ test_that("doConcrete() hasn't changed for uncensored survival",
                   a_lrnrs <- make_learner(Stack, Lrnr_glm$new(), Lrnr_glmnet$new())
                   
                   concrete.args.SL <- try(
-                      formatArguments(DataTable = data, EventTime = "time", EventType = "status",
+                      formatArguments(Data = data, EventTime = "time", EventType = "status",
                                       Treatment = "trt", ID = "id", Intervention = makeITT(),
                                       TargetTime = 2500, TargetEvent = NULL,
                                       Model = NULL, Verbose = TRUE, ReturnModels = TRUE)

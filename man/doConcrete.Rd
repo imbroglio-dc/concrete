@@ -33,7 +33,7 @@ model <- list("trt" = c("SL.glm", "SL.glmnet"),
               "2" = list(Surv(time, status == 2) ~ .))
 
 # formatArguments() returns correctly formatted arguments for doConcrete()
-concrete.args <- formatArguments(DataTable = data,
+concrete.args <- formatArguments(Data = data,
                                  EventTime = "time",
                                  EventType = "status",
                                  Treatment = "trt",

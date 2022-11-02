@@ -84,7 +84,7 @@ while(j <= B) {
                             readr::write_lines(paste0("Run ", j + i - 1, " ; concrete ; start"),
                                                file = DiagPath, append = TRUE)
                         }
-                        concreteArgs <- formatArguments(DataTable = Data,
+                        concreteArgs <- formatArguments(Data = Data,
                                                         EventTime = "TIME",
                                                         EventType = "EVENT",
                                                         Treatment = "ARM",
