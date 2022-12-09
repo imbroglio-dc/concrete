@@ -12,7 +12,10 @@ loadPackages <- function() {
 
     library(data.table); library(concrete)
     data.table::setDTthreads(threads = 2)
-    x <- try(source("/Shared/Projects/ConCR-TMLE/scripts/sim-data/sim_functions.R"))
+    concrete.dir <- c("/Shared/Projects/concrete/scripts/sim-data/sim_functions.R", 
+                      "/Shared/Projects/ConCR-TMLE/scripts/sim-data/sim_functions.R")
+    x <- lapply(concrete.dir, function(dir) try(source(dir)))
+    
     library(tidyverse)
     invisible(NULL)
 }

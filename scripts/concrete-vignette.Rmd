@@ -39,7 +39,7 @@ output: pdf_document
 3. get output from getOutput() (pretty printing and plotting not yet implemented)
 
 ```{r setup, include=TRUE}
-devtools::install_github("imbroglio-dc/concrete")
+# devtools::install_github("imbroglio-dc/concrete")
 library(concrete)
 library(data.table)
 ```
@@ -68,7 +68,7 @@ library(data.table)
 set.seed(0)
 obs <- as.data.table(survival::pbc)
 obs <- obs[,  c("time", "status", "trt", "id", "age", "albumin", "sex", "stage")]
-obs <- obs[!is.na(trt), ]
+obs <- obs[!is.na(trt), ][, trt := trt - 1]
 obs <- obs[, stage := as.factor(stage)]
 head(obs)
 ```
@@ -290,10 +290,28 @@ ConcreteArgs <- formatArguments(DataTable = obs, EventTime = "time", EventType =
 
 ### doConcrete
 ```{r}
+ConcreteArgs <- formatArguments(DataTable = obs, 
+                                EventTime = "time", 
+                                EventType = "status", 
+                                Treatment = "trt", 
+                                ID = "id", 
+                                Intervention = 0:1, 
+                                TargetEvent = 1:2, 
+                                TargetTime = (3:7)*500, 
+                                PropScoreBackend = "SuperLearner", 
+                                HazEstBackend = "coxph", 
+                                Verbose = FALSE)
 
+ConcreteEst <- doConcrete(ConcreteArgs)
 ```
-
 
 ### getOutput
 
+```{r}
+concreteOut <- getOutput(ConcreteEst)$Risk
+```
+
+```{r}
+
+```
 

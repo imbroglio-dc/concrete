@@ -1,0 +1,120 @@
+---
+title: "Other Packages"
+author: "David Chen"
+date: "2022-12-09"
+output: pdf_document
+---
+# Install packages
+```{r setup, results='hide'}
+pkgs <- c("riskRegression", "adjustedCurves", "CFsurvival", "survSuperLearner", "grf")
+x <- lapply(pkgs, function(pkg) {
+    if (!require(pkg, character.only = TRUE, quietly = TRUE)) {
+        try(install.packages(pkg, quiet = ), silent = TRUE)
+        try(remotes::install_github(paste0("tedwestling/", pkg)), silent = TRUE)
+        require(pkg, character.only = TRUE)
+    } else {
+        cat(pkg, "loaded\n")
+    }
+})
+```
+
+# Simulated Data based on PBC using simPBC()
+
+```{r pbc-sim}
+library(survival)
+library(data.table)
+source("./scripts/simPBC.R")
+set.seed(0)
+data <- as.data.table(simPBC(n = 1000))
+targtime <- 3:5 * 500
+```
+
+# RiskRegression
+
+```{r}
+treatment_model <- glm(trt ~ age + sex + stage, data = data, family = "binomial")
+outcome_model <- CSC(Hist(time, status) ~ trt + age + sex + stage, data = data)
+censor_model <-  coxph(Surv(time, status == 0) ~ trt + age + sex + stage, data = data, x = TRUE, y = TRUE)
+rr1 <- ate(event = outcome_model, 
+                               treatment = treatment_model, 
+                               censor = censor_model, 
+                               data = data, 
+                               estimator = "AIPTW", 
+                               times = targtime, 
+                               cause = 1)
+rr2 <- ate(event = outcome_model, 
+           treatment = treatment_model, 
+           censor = censor_model, 
+           data = data, 
+           estimator = "AIPTW", 
+           times = targtime, 
+           cause = 2)
+```
+
+# AdjustedCurves
+
+```{r}
+data_ac <- data
+data_ac[, trt := as.factor(trt)]
+
+# DISCRETE-TIME TMLE USING SURVTMLE NOT RUN - LONG RUN TIME
+## adjustedCurves AIPTW, at least for ate just uses riskRegression ----
+cif1 <- adjustedcif(data = data_ac,
+                    variable = "trt",
+                    ev_time = "time",
+                    event = "status",
+                    cause = 1,
+                    method = "aiptw", 
+                    conf_int = TRUE,
+                    times = targtime, 
+                    outcome_model = outcome_model, 
+                    treatment_model = treatment_model
+)
+
+cif2 <- adjustedcif(data = data_ac,
+                    variable = "trt",
+                    ev_time = "time",
+                    event = "status",
+                    cause = 2,
+                    method = "aiptw",
+                    conf_int = TRUE,
+                    times = targtime, 
+                    outcome_model = outcome_model, 
+                    treatment_model = treatment_model
+)
+
+cif <- rbind(cbind("Event" = 1, cif1$adjcif), 
+             cbind("Event" = 2, cif2$adjcif))
+```
+
+# CFSurvival
+
+```{r}
+# No obvious way to handle competing risks - long run time?
+data_cfs <- data
+data_cfs[, status01 := as.numeric(status >= 1)][, trt := as.factor(trt)]
+
+confounders <- model.matrix(~ -1 + ., data = data_cfs[, list(age, sex, stage)])
+colnames(confounders) <- paste0("col", 1:ncol(confounders))
+fit.time <- sort(union(targtime, unique(data_cfs[["time"]])))
+fit.time <- fit.time[fit.time > 0 & fit.time <= max(data_cfs[["time"]][data_cfs[["status"]] > 0])]
+
+t0 <- Sys.time()
+cfs <- CFsurvival(time = data_cfs$time,
+                  event = data_cfs$status01,
+                  treat = as.numeric(data_cfs$trt) - 1,
+                  confounders = confounders,
+                  fit.times = fit.time)
+t1 <- Sys.time()
+eval.time <- t1 - t0
+```
+
+# GRF (Causal Forests)
+
+```{r}
+# No obvious way to handle competing risks
+csf <- causal_survival_forest(X = confounders, Y = data$time, 
+                              W = as.numeric(data$trt) - 1, D = data$status01, 
+                              target = "survival.probability", horizon = 2500)
+average_treatment_effect(csf)
+```
