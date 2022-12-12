@@ -3,10 +3,11 @@
 \name{formatArguments}
 \alias{formatArguments}
 \alias{makeITT}
+\alias{print.ConcreteArgs}
 \title{formatArguments}
 \usage{
 formatArguments(
-  Data,
+  DataTable,
   EventTime,
   EventType,
   Treatment,
@@ -19,7 +20,7 @@ formatArguments(
   HazEstBackend = "coxph",
   MaxUpdateIter = 100,
   OneStepEps = 0.1,
-  MinNuisance = 0.05,
+  MinNuisance = 5/sqrt(nrow(DataTable))/log(nrow(DataTable)),
   Verbose = TRUE,
   GComp = TRUE,
   ReturnModels = TRUE,
@@ -30,10 +31,12 @@ formatArguments(
 )
 
 makeITT()
+
+\method{print}{ConcreteArgs}(x, ...)
 }
 \arguments{
-\item{Data}{data.table (n x (d + (3:5)); data.table of the observed data, with rows n =
-the number of observations and d = the number of baseline covariates. Data must include
+\item{DataTable}{data.table (n x (d + (3:5)); data.table of the observed data, with rows n =
+the number of observations and d = the number of baseline covariates. DataTable must include
 the following columns:
 \itemize{
 \item{"EventTime"}{: non-negative real numbers; the observed event or censoring time}
@@ -68,7 +71,7 @@ time will be targeted.}
 all non-censoring observed event types will be targeted.}
 
 \item{CVArg}{list: arguments to be passed into do.call(origami::make_folds). If NULL, the default is
-list(n = nrow(Data), fold_fun = folds_vfold, cluster_ids = NULL, strata_ids = NULL)}
+list(n = nrow(DataTable), fold_fun = folds_vfold, cluster_ids = NULL, strata_ids = NULL)}
 
 \item{Model}{list (default: NULL): named list of models, one for each failure or censoring event
 and one for the 'Treatment' variable. If Model = NULL, then
@@ -82,8 +85,7 @@ a template will be generated for the user to amend.}
 
 \item{OneStepEps}{numeric (default: 1): the one-step tmle step size}
 
-\item{MinNuisance}{numeric (default: 0.05): the minimum value of the nuisance parameter denominator in the
-clever covariate}
+\item{MinNuisance}{numeric (default: 5/log(n)/sqrt(n)): value between (0, 1) for truncating the g-related denominator of the clever covariate}
 
 \item{Verbose}{boolean}
 
@@ -99,7 +101,9 @@ longitudinal data structures}
 
 \item{RenameCovs}{boolean (default: TRUE): whether or not to rename covariates}
 
-\item{...}{...}
+\item{...}{additional arguments to be passed into print methods}
+
+\item{x}{a ConcreteArgs object}
 }
 \value{
 a list of class "ConcreteArgs"
@@ -137,7 +141,9 @@ makeITT() returns an Intervention list for a single, binary, point-treatment var
 }
 \section{Functions}{
 \itemize{
-\item \code{makeITT()}: makeITT sample Intervention function list
+\item \code{makeITT()}: makeITT ...
+
+\item \code{print(ConcreteArgs)}: print.ConcreteArgs print method for "ConcreteArgs" class
 
 }}
 \examples{
@@ -161,7 +167,7 @@ model <- list("trt" = c("SL.glm", "SL.glmnet"),
               "2" = list(Surv(time, status == 2) ~ .))
 
 # formatArguments() returns correctly formatted arguments for doConcrete()
-concrete.args <- formatArguments(Data = data,
+concrete.args <- formatArguments(DataTable = data,
                                  EventTime = "time",
                                  EventType = "status",
                                  Treatment = "trt",

@@ -1,0 +1,82 @@
+---
+title: "Final Project Presentation"
+author: "David Chen"
+date: "2022-12-12"
+output: html_document
+---
+
+I wrote the "concrete" R package to perform the continuous-time one-step TMLE for cause-specific absolute risks in right-censored survival data with or without competing risks. 
+
+# Simulated Data based on PBC using simPBC()
+
+```{r pbc-sim}
+library(concrete)
+library(survival)
+library(data.table)
+source("simPBC.R")
+set.seed(0)
+data <- as.data.table(simPBC(n = 800))
+data <- data[, list(time, status, trt, age, sex, stage, logbili, protime)]
+data[time > 2500, status := 0][time > 2500, time := 2500]
+data
+```
+
+# concrete 
+Concrete in a nutshell involves 3 steps: specifying the analysis, estimation, and producing output.
+
+```{r, eval=FALSE}
+# 1. Specify Analysis
+ConcreteArgs <- formatArguments(DataTable = data, 
+                                EventTime = "time", 
+                                EventType = "status", 
+                                Treatment = "trt", 
+                                Intervention = 0:1, 
+                                TargetTime = 2000, 
+                                TargetEvent = 1:2)
+
+# 2. Perform Estimation
+ConcreteEst <- doConcrete(ConcreteArgs)
+
+# 3. Return Output
+ConcreteOut <- getOutput(ConcreteEst)
+```
+
+# 1. Specifying the Analysis
+The formatArguments() function takes inputs that in combination define the desired survival analysis. Most arguments fall into one of 3 tasks: specifying the observed
+data structure, specifying the target estimand, or specifying the TMLE update procedure. The output of formatArguments() is a "ConcreteArgs" S3 object, with an associated print method which summarizes the major points of the specified analysis.
+
+```{r}
+ConcreteArgs <- formatArguments(DataTable = data, 
+                                EventTime = "time", 
+                                EventType = "status", 
+                                Treatment = "trt", 
+                                Intervention = 0:1, 
+                                TargetTime = seq(1000, 2000, 100), 
+                                TargetEvent = 1:2,
+                                Verbose = TRUE)
+```
+The output "ConcreteArgs" class object can be edited, e.g. adding candidate algorithms to the default libraries. The amended "ConcreteArgs" object can then be passed back through formatArguments() for re-checking. This process can be iterated as needed.
+
+```{r}
+ConcreteArgs$Verbose <- FALSE
+ConcreteArgs$MaxUpdateIter <- 300
+ConcreteArgs <- formatArguments(ConcreteArgs)
+```
+
+# 2. Estimation
+Once the analysis has been set up to user satisfaction, the "ConcreteArgs" object is simply passed to doConcrete() for computation. The result is a S3 class "ConcreteEst" object, which contains point estimates and IC-based estimated standard errors, along with diagnostic information about the estimation procedure.
+
+```{r, cache=TRUE}
+ConcreteEst <- doConcrete(ConcreteArgs)
+```
+
+It may be especially important to check that the TMLE converged and that there was not excessive truncation of the estimated G portions of the EIC. If TMLE did not converge, then it may lack desired asymptotic properties, and concrete currently relies on IC-based variance estimates, which in the case of positivity violations can heavily underestimate the true variance, so the amount of truncation should be appropriately scrutinized. 
+
+# 3. Output
+If estimation diagnostics do not send up alarms, then the "ConcreteEst" object can be passed into getOutput to produce point estimates and inference (pointwise or simultaneous bands) 
+```{r}
+ConcreteOut <- getOutput(ConcreteEst, A1 = 1, A0 = 2)
+ConcreteOut
+```
+
+methods for plotting and printing have not yet been implemented for output of getOutput().

@@ -1,8 +1,9 @@
 #' getOutput
 #'
 #' @param Estimate list : a "ConcreteEst" object
-#' @param Estimand character (default: c("RD", "RR", "Risk")) or a function or a list of functions
-# #' @param plot boolean (default = TRUE) : whether or not to plot the
+#' @param Estimand character: a subset of c("RD", "RR", "Risk") specifying the target estimand
+#' @param A1 the Estimate list element that should be treated as "Treated" for RR and RD comparisons
+#' @param A0 the Estimate list element that should be treated as "Control" for RR and RD comparisons
 #'
 #' @return data.table of point estimates and standard deviations
 #' @export getOutput
@@ -16,8 +17,9 @@
 #' # concrete.out$Risk
 #' 
 #' @importFrom MASS mvrnorm
+#' @importFrom stats cor cov
 
-getOutput <- function(Estimate, Estimand = c("RD", "RR", "Risk")) {
+getOutput <- function(Estimate, Estimand = c("RD", "RR", "Risk"), A1 = NULL, A0 = NULL) {
     if (!all(sapply(Estimand, function(e) any(is.function(e), grepl("(rd)|(rr)|(risk)", tolower(e)))))) {
         stop("Estimand must be in c('RD', 'RR', 'Risk'), or be a list of user-specified function(s) of",
              "`Estimate`, `Estimand`, `TargetEvent`, `TargetTime`, and `GComp`.")
@@ -29,114 +31,143 @@ getOutput <- function(Estimate, Estimand = c("RD", "RR", "Risk")) {
     TargetTime <- attr(Estimate, "TargetTime")
     TargetEvent <- attr(Estimate, "TargetEvent")
     GComp <- attr(Estimate, "GComp")
-
-    output <- list()
+    
+    Output <- data.table()
+    Risks <- getRisk(Estimate = Estimate, TargetTime = TargetTime, TargetEvent = TargetEvent, GComp = GComp)
     if (any(sapply(Estimand, is.function))) {
-        output <- lapply(Estimand[which(sapply(Estimand, is.function))], function(estimand) {
+        Output <- lapply(Estimand[which(sapply(Estimand, is.function))], function(estimand) {
             do.call(estimand, list("Estimate" = Estimate, "TargetTime" = TargetTime,
                                    "TargetEvent" = TargetEvent, "GComp" = GComp))
         })
-        names(output) <- names(Estimand)[which(sapply(Estimand, is.function))]
+        names(Output) <- names(Estimand)[which(sapply(Estimand, is.function))]
     }
-    if (any(tolower(Estimand) == "rd")) {
-        output[["RD"]] <- getRD(Estimate = Estimate, TargetTime = TargetTime, TargetEvent = TargetEvent, GComp = GComp)
-    }
-
-    if (any(tolower(Estimand) == "rr")) {
-        output[["RR"]] <- getRR(Estimate = Estimate, TargetTime = TargetTime, TargetEvent = TargetEvent, GComp = GComp)
-    }
-
-    if (any("risk" %in% tolower(Estimand))) {
-        risks <- getRisk(Estimate = Estimate, TargetTime = TargetTime, TargetEvent = TargetEvent, GComp = GComp)
-        risks <- do.call(rbind, lapply(seq_along(risks), function(a) {
-            risk.a <- setDT(cbind("Intervention" = names(risks)[a], risks[[a]]))
-            return(setcolorder(risk.a, c("Estimator", "Intervention")))
-        }))
-        risks <- structure(risks,
-                           Estimand = "Absolute Risks",
-                           class = union("ConcreteOut", class(risks)))
-        output[["Risk"]] <- risks
-    }
-    return(output)
-}
-
-getRD <- function(Estimate, TargetTime, TargetEvent, GComp) {
-    Estimator <- Event <- Time <- seEIC <- Risk.x <- Risk.y <- se.x <- se.y <- NULL
-    risk <- getRisk(Estimate = Estimate, TargetTime = TargetTime, TargetEvent = TargetEvent, GComp = GComp)
-    rd.out <- as.data.table(merge(risk[[1]], risk[[2]], by = c("Estimator", "Event", "Time")))[order(Time)]
-    rd.out <- rd.out[, list("Estimator" = Estimator, "Event" = Event, "Time" = Time, "RD" = Risk.x - Risk.y,
-                            se = sqrt(se.x^2 + se.y^2))]
-    rd.out <- structure(rd.out,
-                        Interventions = paste0(names(Estimate), collapse = " - "),
-                        Estimand = "Risk Difference",
-                        class = union("ConcreteOut", class(rd.out)))
-    return(rd.out[order(Estimator, decreasing = TRUE)])
-}
-
-getRR <- function(Estimate, TargetTime, TargetEvent, GComp) {
-    Estimator <- Event <- Time <- seEIC <- Risk.x <- Risk.y <- se.x <- se.y <- NULL
-    risk <- getRisk(Estimate = Estimate, TargetTime = TargetTime, TargetEvent = TargetEvent, GComp = GComp)
-    rr.out <- as.data.table(merge(risk[[1]], risk[[2]], by = c("Estimator", "Event", "Time")))[order(Time)]
-    rr.out <- rr.out[, list("Estimator" = Estimator, "Event" = Event, "Time" = Time, "RR" = Risk.x / Risk.y,
-                            se = sqrt((se.x / Risk.y)^2 + (se.y * Risk.x / Risk.y^2)^2))]
-    rr.out <- structure(rr.out,
-                        Interventions = paste0(names(Estimate), collapse = " / "),
-                        Estimand = "Relative Risk",
-                        class = union("ConcreteOut", class(rr.out)))
-    return(rr.out[order(Estimator, decreasing = TRUE)])
+    
+    if (any(grepl("risk", tolower(Estimand))))
+        Output <- rbind(Output, Risks)
+    
+    if (any(grepl("rd", tolower(Estimand)))) 
+        Output <- rbind(Output, 
+                        getRD(Risks = Risks, A1 = names(Estimate)[A1], A0 = names(Estimate)[A0], 
+                              TargetTime = TargetTime, TargetEvent = TargetEvent, GComp = GComp))
+    
+    if (any(tolower(Estimand) == "rr")) 
+        Output <- rbind(Output, 
+                        getRR(Risks = Risks, A1 = names(Estimate)[A1], A0 = names(Estimate)[A0], 
+                              TargetTime = TargetTime, TargetEvent = TargetEvent, GComp = GComp))
+    
+    return(Output)
 }
 
 getRisk <- function(Estimate, TargetTime, TargetEvent, GComp) {
-    Event <- Time <- seEIC <- NULL
-    risk <- lapply(Estimate, function(est.a) {
+    Event <- Time <- seEIC <- Estimand <- NULL
+    risk <- lapply(seq_along(Estimate), function(a) {
+        est.a <- Estimate[[a]]
         risk.a <- do.call(rbind, lapply(as.character(TargetEvent), function(j) {
             risks <- apply(est.a[["Hazards"]][[j]] * est.a[["EvntFreeSurv"]], 2, cumsum)
-            Psi <- cbind("Time" = attr(Estimate, "times")[which(attr(Estimate, "times") %in% TargetTime)],
-                         "Risk" = rowMeans(subset(risks, subset = attr(Estimate, "times") %in% TargetTime)))
+            Psi <- cbind("Time" = attr(Estimate, "Times")[which(attr(Estimate, "Times") %in% TargetTime)],
+                         "Risk" = rowMeans(subset(risks, subset = attr(Estimate, "Times") %in% TargetTime)))
             se <- subset(est.a$SummEIC[Event == j, ], select = c("Time", "seEIC"))
             Psi <- merge(Psi, se[, list("Time" = Time, "se" = seEIC / sqrt(ncol(risks)))], by = "Time")
-            return(cbind("Estimator" = "tmle", "Event" = j, Psi))
+            return(cbind("Estimator" = "tmle", "Event" = as.numeric(j), Psi))
         }))
         if (GComp)
             risk.a <- rbind(risk.a,
                             cbind("Estimator" = "gcomp",
                                   est.a$GCompEst[Event %in% TargetEvent, ],
                                   "se" = NA))
+        risk.a <- cbind(Intervention = names(Estimate)[a], 
+                        risk.a)
         return(risk.a)
     })
-    return(risk)
+    Risk <- setDT(do.call(rbind, risk))
+    Risk[, Estimand := "Abs. Risk"]
+    setnames(Risk, "Risk", "Pt Est")
+    setcolorder(Risk, c("Intervention", "Estimand", "Estimator", "Event", "Time", "Pt Est", "se"))
+    return(Risk)
 }
 
-getSimultaneous <- function(Estimate, Risks = NULL, SignifLevel = 0.05) {
-    Estimates <- TargetEvent <- TargetTime <- T.tilde <- Delta <- 
-        EvalTimes <- IC <- Intervention <- NULL
-    ICs <- lapply(seq_along(Estimates), function(a) {
-        est.a <- Estimates[[a]]
-        IC.a <- getIC(GStar =  attr(est.a[["PropScore"]], "g.star.obs"),
-                      Hazards = est.a[["Hazards"]], TotalSurv = est.a[["EvntFreeSurv"]],
-                      NuisanceWeight = est.a[["NuisanceWeight"]],
-                      TargetEvent = TargetEvent, TargetTime = TargetTime,
-                      T.tilde = T.tilde, Delta = Delta,
-                      EvalTimes = EvalTimes, GComp = FALSE)
-        return(cbind("Intervention" = names(Estimates)[a], IC.a))
-    })
-    ICs <- do.call(rbind, ICs)
-    ICs <- rbind(ICs, 
-                 ICs[, list("Intervention" = "RD", ID = 1:418, 
-                            "IC" = IC[Intervention == "A=1"] - IC[Intervention == "A=0"]), 
-                     by = c("Time", "Event")], 
-                 ICs[, list("Intervention" = "RR", ID = 1:418, 
-                            "IC" = IC[Intervention == "A=1"] - IC[Intervention == "A=0"]), 
-                     by = c("Time", "Event")])
-    wideIC <- dcast(ICs, ID ~ Intervention + Time + Event, value.var = "IC")[, !c("ID")]
+getRD <- function(Risks, A1, A0, TargetTime, TargetEvent, GComp) {
+    `Pt Est` <- se <- Intervention <- Estimand <- NULL
+    RD <- Risks[, list("Pt Est" = `Pt Est`[Intervention == A1] - `Pt Est`[Intervention == A0], 
+                       se = sqrt(se[Intervention == A1]^2 + se[Intervention == A0]^2)), 
+                by = c("Estimator", "Event", "Time")]
+    RD[, Intervention := paste0("[", A1, "] - [", A0, "]")]
+    RD[, Estimand := "Risk Diff"]
+    setcolorder(RD, c("Intervention", "Estimand", "Estimator", "Event", "Time", "Pt Est", "se"))
+    return(RD)
+}
+
+getRR <- function(Risks, A1, A0, TargetTime, TargetEvent, GComp) {
+    `Pt Est` <- se <- Intervention <- Estimand <- NULL
+    RR <- Risks[, list("Pt Est" = `Pt Est`[Intervention == A1] / `Pt Est`[Intervention == A0], 
+                       se = sqrt((se[Intervention == A1] / `Pt Est`[Intervention == A0])^2 + 
+                                     se[Intervention == A0]^2 * 
+                                     (`Pt Est`[Intervention == A1] / `Pt Est`[Intervention == A0]^2)^2)), 
+                by = c("Estimator", "Event", "Time")]
+    RR[, Intervention := paste0("[", A1, "] / [", A0, "]")]
+    RR[, Estimand := "Rel Risk"]
+    setcolorder(RR, c("Intervention", "Estimand", "Estimator", "Event", "Time", "Pt Est", "se"))
+    return(RR)
+}
+
+getSimultaneous <- function(Estimate, A1 = 1, A0 = 2, Parameter = c("Risk", "RR", "RD"), 
+                            SignifLevel = 0.05) {
+    Intervention <- IC <- Risk <- NULL
+    A1 <- names(Estimate)[A1]
+    A0 <- names(Estimate)[A0]
     
+    ICs <- do.call(rbind, 
+                   lapply(seq_along(Estimate), function(a) {
+                       est.a <- Estimate[[a]]
+                       IC.a <- getIC(GStar =  attr(est.a[["PropScore"]], "g.star.obs"),
+                                     Hazards = est.a[["Hazards"]], 
+                                     TotalSurv = est.a[["EvntFreeSurv"]],
+                                     NuisanceWeight = est.a[["NuisanceWeight"]],
+                                     TargetEvent = attr(Estimate, "TargetEvent"), 
+                                     TargetTime = attr(Estimate, "TargetTime"),
+                                     T.tilde = attr(Estimate, "T.tilde"), 
+                                     Delta = attr(Estimate, "Delta"),
+                                     EvalTimes = attr(Estimate, "Times"), 
+                                     GComp = FALSE)
+                       return(cbind("Intervention" = names(Estimate)[a], IC.a))
+                   }))
+    Risks <- do.call(rbind, 
+                     getRisk(Estimate = Estimate, TargetTime = attr(Estimate, "TargetTime"), 
+                             TargetEvent = attr(Estimate, "TargetEvent"), GComp = FALSE))
+    ICs <- merge(ICs, subset(Risks, select = c("Intervention", "Time", "Event", "Risk")), 
+                 by = c("Intervention", "Time", "Event"))
     
+    ICs <- rbind(subset(ICs, select = c("ID", "Time", "Event", "Intervention", "IC")), 
+                 ICs[, list("Intervention" = "RD",
+                            "IC" = IC[Intervention == A1] - IC[Intervention == A0]), 
+                     by = c("ID", "Time", "Event")], 
+                 ICs[, list("Intervention" = "RR",
+                            "IC" = IC[Intervention == A1] / Risk[Intervention == A0] - 
+                                IC[Intervention == A0] * Risk[Intervention == A1] / Risk[Intervention == A0]^2), 
+                     by = c("ID", "Time", "Event")])
+    WideICs <- dcast(ICs, ID ~ Intervention + Time + Event, value.var = "IC")[, !c("ID")]
     
-    CovEIC <- attr(Estimate, "CovEIC")
-    CorrEIC <- attr(Estimate, "CorrEIC")
-    n <- attr(Estimate, "n")
+    IndicesRR <- which(grepl("RR", colnames(WideICs)))
+    IndicesRD <- which(grepl("RD", colnames(WideICs)))
+    IndicesRisk <- setdiff(1:ncol(WideICs), c(IndicesRR, IndicesRD))
+    IndicesKeep <- c()
+    if (any(grepl("risk", tolower(Parameter))))
+        IndicesKeep <- c(IndicesKeep, IndicesRisk)
+    if (any(grepl("rd", tolower(Parameter))))
+        IndicesKeep <- c(IndicesKeep, IndicesRD)
+    if (any(grepl("rr", tolower(Parameter))))
+        IndicesKeep <- c(IndicesKeep, IndicesRR)
+    
+    WideICs <- subset(WideICs, select = IndicesKeep)
+    CovEIC <- cov(WideICs)
     CovEIC[is.na(CovEIC)] <- 1e-9
+    CorrEIC <- cor(WideICs)
+    n <- length(attr(Estimate, "T.tilde"))
+    
     q <- apply(abs(MASS::mvrnorm(n = 1e3, mu = rep(0, nrow(CorrEIC)), Sigma = CorrEIC)), 1, max)
     q <- as.numeric(stats::quantile(q, 1 - SignifLevel))
-    return(sqrt(diag(CovEIC)) / sqrt(n) * q)
+    se <- data.table(names = rownames(CovEIC), se = sqrt(diag(CovEIC)) / sqrt(n) * q)
+    se[, c("Intervention", "Time", "Event") := tstrsplit(names, "_")]
+    se <- subset(se, select = c("Intervention", "Time", "Event", "se"))
+    return(se)
 }

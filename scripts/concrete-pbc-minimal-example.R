@@ -1,4 +1,4 @@
-devtools::install_github("imbroglio-dc/concrete")
+# devtools::install_github("imbroglio-dc/concrete")
 library(data.table)
 library(concrete)
 set.seed(12345)
@@ -22,6 +22,7 @@ concrete_args <- formatArguments(Data = data,
                                  Model = NULL, 
                                  Verbose = TRUE, 
                                  ReturnModels = TRUE)
+concrete_args <- formatArguments(concrete_args)
 
 ## example of modifying 'ConcreteArgs' objects & rechecking them with formatArguments() ----
 concrete_args$Model$`1`$model2 <- "~ trt + sex + stage"
