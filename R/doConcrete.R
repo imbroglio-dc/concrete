@@ -150,13 +150,20 @@ print.ConcreteEst <- function(x, ...) {
         paste0(attr(x, "TargetEvent"), collapse = ", "), "  |  ", sep = "")
     cat("Target Time", ifelse(length(attr(x, "TargetTime")) > 1, "s", ""), ": ", 
         ifelse(length(attr(x, "TargetTime")) > 6,
-               paste0(head(attr(x, "TargetTime"), 3), "...", 
-                      tail(attr(x, "TargetTime"), 3), collapse = ", "), 
+               paste0(paste0(head(attr(x, "TargetTime"), 3), collapse = ", "), ",...,", 
+                      paste0(tail(attr(x, "TargetTime"), 3, collapse = ", "), collapse = "")), 
                paste0(attr(x, "TargetTime"), collapse = ", ")), "\n\n", sep = "")
     
     cat(ifelse(isTRUE(attr(x, "TmleConverged")$converged), 
                paste0("TMLE converged at step ", attr(x, "TmleConverged")$step), 
-               paste0("**TMLE did not converge!!** Recommend increasing `MaxUpdateIter`")), "\n\n")
+               paste0("**TMLE did not converge!!**")), "\n\n")
+    if (!(isTRUE(attr(x, "TmleConverged")$converged))) {
+        PnEICs <- do.call(rbind, lapply(seq_along(x), function(a) 
+            cbind("Intervention" = names(x)[a], x[[a]]$SummEIC)))
+        print(PnEICs[order(abs(PnEIC)/`seEIC/(sqrt(n)log(n))`, decreasing = TRUE), ], 
+              digits = 4)
+        cat("\n")
+    }
     
     for (a in seq_along(x)) {
         cat(attr(x[[a]]$NuisanceWeight, "message"), "\n")

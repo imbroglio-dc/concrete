@@ -19,7 +19,7 @@
 #' @importFrom MASS mvrnorm
 #' @importFrom stats cor cov
 
-getOutput <- function(Estimate, Estimand = c("RD", "RR", "Risk"), A1 = NULL, A0 = NULL) {
+getOutput <- function(Estimate, Estimand = c("RD", "RR", "Risk"), A1 = 1, A0 = 2) {
     if (!all(sapply(Estimand, function(e) any(is.function(e), grepl("(rd)|(rr)|(risk)", tolower(e)))))) {
         stop("Estimand must be in c('RD', 'RR', 'Risk'), or be a list of user-specified function(s) of",
              "`Estimate`, `Estimand`, `TargetEvent`, `TargetTime`, and `GComp`.")
@@ -50,7 +50,7 @@ getOutput <- function(Estimate, Estimand = c("RD", "RR", "Risk"), A1 = NULL, A0 
                         getRD(Risks = Risks, A1 = names(Estimate)[A1], A0 = names(Estimate)[A0], 
                               TargetTime = TargetTime, TargetEvent = TargetEvent, GComp = GComp))
     
-    if (any(tolower(Estimand) == "rr")) 
+    if (any(grepl("rr", tolower(Estimand)))) 
         Output <- rbind(Output, 
                         getRR(Risks = Risks, A1 = names(Estimate)[A1], A0 = names(Estimate)[A0], 
                               TargetTime = TargetTime, TargetEvent = TargetEvent, GComp = GComp))

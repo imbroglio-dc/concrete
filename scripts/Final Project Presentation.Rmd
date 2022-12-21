@@ -13,7 +13,19 @@ I wrote the "concrete" R package to perform the continuous-time one-step TMLE fo
 library(concrete)
 library(survival)
 library(data.table)
+library(tidyverse)
 source("simPBC.R")
+set.seed(0)
+data <- as.data.table(simPBC(n = 1e7))
+data <- data[status != 0, ]
+data[, Time := pmin(time.transplant, time.death, 3000)]
+data[, Event := (1 + (time.transplant > time.death)) * (Time >= 3000)]
+data <- data[Event != 0, ]
+risks <- do.call(rbind, lapply(seq(0, 3000, 200), function(x) data[, list("x" = x, y = mean(Time <= x)), by = c("Event", "trt")]))
+```
+
+
+```{r pbc-sim}
 set.seed(0)
 data <- as.data.table(simPBC(n = 800))
 data <- data[, list(time, status, trt, age, sex, stage, logbili, protime)]
@@ -51,7 +63,7 @@ ConcreteArgs <- formatArguments(DataTable = data,
                                 EventType = "status", 
                                 Treatment = "trt", 
                                 Intervention = 0:1, 
-                                TargetTime = seq(1000, 2000, 100), 
+                                TargetTime = seq(1000, 2000, 250), 
                                 TargetEvent = 1:2,
                                 Verbose = TRUE)
 ```
@@ -59,7 +71,7 @@ The output "ConcreteArgs" class object can be edited, e.g. adding candidate algo
 
 ```{r}
 ConcreteArgs$Verbose <- FALSE
-ConcreteArgs$MaxUpdateIter <- 300
+ConcreteArgs$MaxUpdateIter <- 500
 ConcreteArgs <- formatArguments(ConcreteArgs)
 ```
 
@@ -80,3 +92,10 @@ ConcreteOut
 ```
 
 methods for plotting and printing have not yet been implemented for output of getOutput().
+
+```{r}
+library(tidyverse)
+as.data.frame(ConcreteOut) %>% 
+    ```
+    
+    

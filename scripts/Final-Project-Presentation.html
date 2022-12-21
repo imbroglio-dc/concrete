@@ -469,6 +469,7 @@ candidate algorithms to the default libraries. The amended
 “ConcreteArgs” object can then be passed back through formatArguments()
 for re-checking. This process can be iterated as needed.</p>
 <pre class="r"><code>ConcreteArgs$Verbose &lt;- FALSE
+ConcreteArgs$MaxUpdateIter &lt;- 500
 ConcreteArgs &lt;- formatArguments(ConcreteArgs)</code></pre>
 <pre><code>## Observed Data (800 rows x 10 cols)
 ## Unique IDs: &quot;ID&quot; (n=800),  Time-to-Event: &quot;time&quot;,  Event Type: &quot;status&quot;,  Treatment: &quot;trt&quot;
@@ -485,7 +486,7 @@ ConcreteArgs &lt;- formatArguments(ConcreteArgs)</code></pre>
 ## Event 2 Estimation (coxph): Discrete SL Selector, Log Partial-LL Loss, 2 candidates - TrtOnly, MainTerms
 ## 
 ## One-step TMLE (finite sum approx.) simultaneously targeting all cause-specific Absolute Risks
-## g nuisance bounds = [0.02645, 1],  max update steps = 100,  starting one-step epsilon = 0.1</code></pre>
+## g nuisance bounds = [0.02645, 1],  max update steps = 500,  starting one-step epsilon = 0.1</code></pre>
 </div>
 <div id="estimation" class="section level1">
 <h1>2. Estimation</h1>
@@ -509,10 +510,18 @@ information about the estimation procedure.</p>
 ## Starting TMLE Update:
 ## 
   |                                                                            
-  |                                                                      |   0%Continuous-Time One-Step TMLE targeting the Cause-Specific Absolute Risks for:
-## Interventions: &quot;A=1&quot;, &quot;A=0&quot;  |  Target Events: 1, 2  |  Target Time: 2000
+  |                                                                      |   0%
+  |                                                                            
+  |==============                                                        |  20%
+  |                                                                            
+  |============================                                          |  40%</code></pre>
+<pre><code>## Warning in doTmleUpdate(Estimates = Estimates, SummEIC = SummEIC, Data =
+## DataTable, : TMLE has not converged by step 500 - Estimates may not have the
+## desired asymptotic properties</code></pre>
+<pre><code>## Continuous-Time One-Step TMLE targeting the Cause-Specific Absolute Risks for:
+## Interventions: &quot;A=1&quot;, &quot;A=0&quot;  |  Target Events: 1, 2  |  Target Times: 1000...1800, 1100...1900, 1200...2000
 ## 
-## TMLE converged at step 33 
+## **TMLE did not converge!!** Recommend increasing `MaxUpdateIter` 
 ## 
 ## For Intervention &quot;A=1&quot;, no G-related nuisance parameter estimates had to be bounded to 0.0264 
 ## For Intervention &quot;A=0&quot;, no G-related nuisance parameter estimates had to be bounded to 0.0264 
@@ -527,7 +536,6 @@ information about the estimation procedure.</p>
 ##               Risk Coef
 ## TrtOnly   1882.785    0
 ## MainTerms 1879.068    1
-## 2-way     1885.328    0
 ## 
 ## Event 1: 
 ##               Risk Coef
@@ -535,10 +543,9 @@ information about the estimation procedure.</p>
 ## MainTerms 52.44842    0
 ## 
 ## Event 2: 
-##                   Risk Coef
-## TrtOnly       809.9996    0
-## MainTerms     749.2511    1
-## Age-Sex-Stage 812.1885    0</code></pre>
+##               Risk Coef
+## TrtOnly   809.9996    0
+## MainTerms 749.2511    1</code></pre>
 <p>It may be especially important to check that the TMLE converged and
 that there was not excessive truncation of the estimated G portions of
 the EIC. If TMLE did not converge, then it may lack desired asymptotic
@@ -554,23 +561,18 @@ appropriately scrutinized.</p>
 estimates and inference (pointwise or simultaneous bands)</p>
 <pre class="r"><code>ConcreteOut &lt;- getOutput(ConcreteEst, A1 = 1, A0 = 2)
 ConcreteOut</code></pre>
-<pre><code>##      Intervention  Estimand Estimator Event Time      Pt Est          se
-##  1:           A=1 Abs. Risk      tmle     1 2000 0.018955587 0.006729822
-##  2:           A=1 Abs. Risk      tmle     2 2000 0.213891789 0.019555937
-##  3:           A=1 Abs. Risk     gcomp     1 2000 0.015364033          NA
-##  4:           A=1 Abs. Risk     gcomp     2 2000 0.226213748          NA
-##  5:           A=0 Abs. Risk      tmle     1 2000 0.003262013 0.002791083
-##  6:           A=0 Abs. Risk      tmle     2 2000 0.207951093 0.019171754
-##  7:           A=0 Abs. Risk     gcomp     1 2000 0.005645251          NA
-##  8:           A=0 Abs. Risk     gcomp     2 2000 0.201087928          NA
-##  9: [A=1] - [A=0] Risk Diff      tmle     1 2000 0.015693574 0.007285647
-## 10: [A=1] - [A=0] Risk Diff      tmle     2 2000 0.005940696 0.027385960
-## 11: [A=1] - [A=0] Risk Diff     gcomp     1 2000 0.009718782          NA
-## 12: [A=1] - [A=0] Risk Diff     gcomp     2 2000 0.025125821          NA
-## 13: [A=1] / [A=0]  Rel Risk      tmle     1 2000 5.811009114 5.383119369
-## 14: [A=1] / [A=0]  Rel Risk      tmle     2 2000 1.028567754 0.133551265
-## 15: [A=1] / [A=0]  Rel Risk     gcomp     1 2000 2.721585413          NA
-## 16: [A=1] / [A=0]  Rel Risk     gcomp     2 2000 1.124949423          NA</code></pre>
+<pre><code>##       Intervention  Estimand Estimator Event Time      Pt Est          se
+##   1:           A=1 Abs. Risk      tmle     1 1000 0.007918091 0.004282679
+##   2:           A=1 Abs. Risk      tmle     1 1100 0.007918091 0.004282679
+##   3:           A=1 Abs. Risk      tmle     1 1200 0.013375050 0.005584815
+##   4:           A=1 Abs. Risk      tmle     1 1300 0.013375050 0.005584815
+##   5:           A=1 Abs. Risk      tmle     1 1400 0.013375050 0.005584815
+##  ---                                                                     
+## 172: [A=1] / [A=0]  Rel Risk     gcomp     2 1600 1.133421994          NA
+## 173: [A=1] / [A=0]  Rel Risk     gcomp     2 1700 1.131477961          NA
+## 174: [A=1] / [A=0]  Rel Risk     gcomp     2 1800 1.129268540          NA
+## 175: [A=1] / [A=0]  Rel Risk     gcomp     2 1900 1.127008923          NA
+## 176: [A=1] / [A=0]  Rel Risk     gcomp     2 2000 1.124949423          NA</code></pre>
 <p>methods for plotting and printing have not yet been implemented for
 output of getOutput().</p>
 </div>
