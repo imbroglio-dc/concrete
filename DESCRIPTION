@@ -20,7 +20,8 @@ Imports:
     data.table, 
     origami,
     SuperLearner, 
-    nleqslv
+    nleqslv, 
+    MASS
 Depends:
     R (>= 3.5.0)
 Remotes: 

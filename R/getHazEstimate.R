@@ -57,12 +57,15 @@ getHazFit <- function(Data, Model, CVFolds, Hazards, HazEstBackend, ReturnModels
             ## metalearner (discrete selector) ----
             SLCVRisk <- -colSums(SupLrnLibRisk)
             SLModel <- ModelJ[[which.min(SLCVRisk)]]
+            SLCoef <- as.numeric(SLCVRisk / min(SLCVRisk) == 1)
+            names(SLCoef) <- names(SLCVRisk)
             
             if (ReturnModels) {
-                return(c(list("SupLrnCVRisks" = SLCVRisk, "SupLrnModel" = SLModel, "j" = j), 
-                         "ModelFits" = ModelFits))
+                return(list("SupLrnCVRisks" = SLCVRisk, "SupLrnModel" = SLModel, "j" = j, 
+                         "SLCoef" = SLCoef, "ModelFits" = ModelFits))
             } else 
-                return(list("SupLrnCVRisks" = SLCVRisk, "SupLrnModel" = SLModel, "j" = j))
+                return(list("SupLrnCVRisks" = SLCVRisk, "SupLrnModel" = SLModel, "j" = j, 
+                            "SLCoef" = SLCoef))
         })
     } else {
         stop("Other hazard estimation methods not yet implemented")
@@ -83,8 +86,9 @@ getHazFit <- function(Data, Model, CVFolds, Hazards, HazEstBackend, ReturnModels
             BaseHazJ[, BaseHaz := c(0, diff(zoo::na.locf(BaseHaz)))]
         }
         
-        HazFitOut <- list("HazFit" = ModelFit, "BaseHaz" = BaseHazJ, "HazModel" = SLMod)
+        HazFitOut <- list("HazFit" = ModelFit, "BaseHaz" = BaseHazJ)
         attr(HazFitOut, "j") <- SLMod[["j"]]
+        SLMod[["SupLrnModel"]] <- NULL
         attr(HazFitOut, "HazSL") <- SLMod
         return(HazFitOut)
     })
@@ -94,7 +98,7 @@ getHazFit <- function(Data, Model, CVFolds, Hazards, HazEstBackend, ReturnModels
 
 getHazSurvPred <- function(Data, HazFits, MinNuisance, TargetEvent,
                            TargetTime, Regime, HazEstBackend) {
-    Censored <- 0 %in% Data[[attr(Data, "EventType")]]
+    Censored <- any(Data[[attr(Data, "EventType")]] <= 0)
     Target <- expand.grid("Time" = TargetTime, "Event" = TargetEvent)
     PredHazSurv <- lapply(Regime, function(Reg) {
         PredData <- as.data.table(Data)
@@ -111,7 +115,6 @@ getHazSurvPred <- function(Data, HazFits, MinNuisance, TargetEvent,
         HazInd <- setdiff(seq_along(PredHaz), CensInd)
         
         TotalSurv <- apply(Reduce(`+`, PredHaz[HazInd]), 2, function(haz) exp(-cumsum(haz)))
-        
         if (Censored) {
             LaggedCensSurv <- apply(PredHaz[[CensInd]], 2, function(haz) c(1, utils::head(exp(-cumsum(haz)), -1)))
         } else {

@@ -3,6 +3,7 @@
 \name{formatArguments}
 \alias{formatArguments}
 \alias{makeITT}
+\alias{print.ConcreteArgs}
 \title{formatArguments}
 \usage{
 formatArguments(
@@ -19,7 +20,7 @@ formatArguments(
   HazEstBackend = "coxph",
   MaxUpdateIter = 100,
   OneStepEps = 0.1,
-  MinNuisance = 0.05,
+  MinNuisance = 5/sqrt(nrow(DataTable))/log(nrow(DataTable)),
   Verbose = TRUE,
   GComp = TRUE,
   ReturnModels = TRUE,
@@ -30,6 +31,8 @@ formatArguments(
 )
 
 makeITT()
+
+\method{print}{ConcreteArgs}(x, ...)
 }
 \arguments{
 \item{DataTable}{data.table (n x (d + (3:5)); data.table of the observed data, with rows n =
@@ -82,8 +85,7 @@ a template will be generated for the user to amend.}
 
 \item{OneStepEps}{numeric (default: 1): the one-step tmle step size}
 
-\item{MinNuisance}{numeric (default: 0.05): the minimum value of the nuisance parameter denominator in the
-clever covariate}
+\item{MinNuisance}{numeric (default: 5/log(n)/sqrt(n)): value between (0, 1) for truncating the g-related denominator of the clever covariate}
 
 \item{Verbose}{boolean}
 
@@ -99,7 +101,9 @@ longitudinal data structures}
 
 \item{RenameCovs}{boolean (default: TRUE): whether or not to rename covariates}
 
-\item{...}{...}
+\item{...}{additional arguments to be passed into print methods}
+
+\item{x}{a ConcreteArgs object}
 }
 \value{
 a list of class "ConcreteArgs"
@@ -137,7 +141,9 @@ makeITT() returns an Intervention list for a single, binary, point-treatment var
 }
 \section{Functions}{
 \itemize{
-\item \code{makeITT()}: 
+\item \code{makeITT()}: makeITT ...
+
+\item \code{print(ConcreteArgs)}: print.ConcreteArgs print method for "ConcreteArgs" class
 
 }}
 \examples{
@@ -150,7 +156,7 @@ cols <- c("id", "time", "status", "trt",
           "age", "albumin", "sex", "bili")
 data <- data[, .SD, .SDcols = cols]
 
-# makeITT() creates a list of functions to specify intent-to-treat 
+# makeITT() creates a list of functions to specify intent-to-treat
 #   regimes for a binary, single, point treatment variable
 intervention <- makeITT()
 target.time <- 2500
@@ -175,11 +181,11 @@ concrete.args <- formatArguments(DataTable = data,
 # examples of modifying/adding models for censoring and failure events
 concrete.args[["Model"]][["0"]] <-
     list(Surv(time, status == 0) ~ trt:sex + age + bili)
-concrete.args[["Model"]][["1"]] <- 
+concrete.args[["Model"]][["1"]] <-
     list("mod1" = Surv(time, status == 1) ~ trt,
          "mod2" = Surv(time, status == 1) ~ .)
 
-# 
+#
 # examples of modifying "Superlearner" treatment models
 concrete.args[["Model"]][["trt"]] <- c("SL.glm", "SL.glmnet", "SL.bayesglm")
 

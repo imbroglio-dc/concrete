@@ -1,3 +1,21 @@
+test_that("formatArguments works for some sample analyses", {
+    require(data.table)
+    data <- as.data.table(survival::pbc)[, c("time", "status", "trt", "id", "age", "sex")]
+    set.seed(0)
+    data[, trt := sample(0:1, length(trt), replace = TRUE)]
+    expect_s3_class(formatArguments(Data = data, 
+                                    EventTime = "time", 
+                                    EventType = "status", 
+                                    Treatment = "trt", 
+                                    ID = 'id', 
+                                    Intervention = makeITT(), 
+                                    TargetTime = mean(data[["time"]]), 
+                                    TargetEvent = unique(data[["status"]])
+                                    ), 
+                    class = "ConcreteArgs")
+    # data[, status := as.numeric(status >= 1)] # to make simple right-censored survival
+    # data[status == 0, status := sample(1:2, sum(status == 0), replace = TRUE)]
+})
 
 test_that("EventTimes is a positive, finite numeric vector", {
     test_vals <- list(NULL, NaN, NA, Inf, TRUE, "a", 0, matrix(1, ncol = 3, nrow = 3), as.list(1:3))

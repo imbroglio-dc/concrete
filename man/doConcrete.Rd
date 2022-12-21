@@ -2,19 +2,31 @@
 % Please edit documentation in R/doConcrete.R
 \name{doConcrete}
 \alias{doConcrete}
+\alias{print.ConcreteEst}
 \title{doConcrete}
 \usage{
 doConcrete(ConcreteArgs)
+
+\method{print}{ConcreteEst}(x, ...)
 }
 \arguments{
-\item{ConcreteArgs}{list : a "ConcreteArgs" object returned by concrete::formatArguments()}
+\item{ConcreteArgs}{"ConcreteArgs" sl3 object : output of formatArguments()}
+
+\item{x}{a ConcreteEst object}
+
+\item{...}{additional arguments to be passed into print methods}
 }
 \value{
-tbd
+object with s3 class "ConcreteEst"
 }
 \description{
 doConcrete
 }
+\section{Functions}{
+\itemize{
+\item \code{print(ConcreteEst)}: print.ConcreteEst print method for "ConcreteEst" class
+
+}}
 \examples{
 library(data.table)
 library(survival)
@@ -33,7 +45,7 @@ model <- list("trt" = c("SL.glm", "SL.glmnet"),
               "2" = list(Surv(time, status == 2) ~ .))
 
 # formatArguments() returns correctly formatted arguments for doConcrete()
-concrete.args <- formatArguments(DataTable = data,
+concrete.args <- formatArguments(Data = data,
                                  EventTime = "time",
                                  EventType = "status",
                                  Treatment = "trt",

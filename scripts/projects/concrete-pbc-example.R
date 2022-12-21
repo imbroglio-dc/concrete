@@ -49,7 +49,7 @@ model <- list("Trt" = a_lrnrs,
 
 
 # plug data and arguments in to checking function ---------------------------------------------
-concrete.args <- formatArguments(DataTable = data[, c("time", "status", "trt", "id", "age", "sex")],
+concrete.args <- formatArguments(Data = data[, c("time", "status", "trt", "id", "age", "sex")],
                                  EventTime = "time", EventType = "status",
                                  Treatment = "trt", ID = "id", Intervention = intervention,
                                  TargetTime = target.time, TargetEvent = target.event,

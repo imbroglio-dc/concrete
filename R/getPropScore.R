@@ -94,6 +94,9 @@ getSuperLearnerPropScore <- function(TrtVal, CovDT, TrtModel, Regime, CVFolds, R
         
         return(PropScore)
     })
-    if (ReturnModels) attr(PropScores, "TrtFit") <- TrtFit
+    if (ReturnModels) 
+        attr(PropScores, "TrtFit") <- TrtFit
+    else 
+        attr(PropScores, "TrtFit") <- cbind(Risk = TrtFit$cvRisk, Coef = TrtFit$coef)
     return(PropScores)
 }

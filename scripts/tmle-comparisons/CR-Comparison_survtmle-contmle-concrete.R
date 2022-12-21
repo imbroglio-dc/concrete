@@ -157,7 +157,7 @@ for (i in 1:B) {
                          "A == 0" = list("intervention" = function(a, L) {rep_len(0, length(a))},
                                          "g.star" = function(a, L) {as.numeric(a == 0)}))
 
-    concrete.args <- formatArguments(DataTable = dt[, c("time", "delta", "A", "id",
+    concrete.args <- formatArguments(Data = dt[, c("time", "delta", "A", "id",
                                                         "L1", "L2", 'L3', 'L4', "L5")],
                                      EventTime = "time", EventType = "delta",
                                      Treatment = "A", ID = "id", Intervention = intervention,

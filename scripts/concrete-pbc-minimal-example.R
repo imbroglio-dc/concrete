@@ -1,4 +1,4 @@
-devtools::install_github("imbroglio-dc/concrete")
+# devtools::install_github("imbroglio-dc/concrete")
 library(data.table)
 library(concrete)
 set.seed(12345)
@@ -11,7 +11,7 @@ data[is.na(stage), stage := sample(1:4, sum(is.na(stage)), replace = TRUE)][, st
 data <- data[, c("id", "time", "status", "trt", "age", "sex", "albumin", "stage")]
 
 ## specifying the tmle problem ----
-concrete_args <- formatArguments(DataTable = data,
+concrete_args <- formatArguments(Data = data,
                                  EventTime = "time", 
                                  EventType = "status",
                                  Treatment = "trt", 
@@ -22,6 +22,7 @@ concrete_args <- formatArguments(DataTable = data,
                                  Model = NULL, 
                                  Verbose = TRUE, 
                                  ReturnModels = TRUE)
+concrete_args <- formatArguments(concrete_args)
 
 ## example of modifying 'ConcreteArgs' objects & rechecking them with formatArguments() ----
 concrete_args$Model$`1`$model2 <- "~ trt + sex + stage"

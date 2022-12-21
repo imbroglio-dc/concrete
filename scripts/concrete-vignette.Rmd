@@ -78,7 +78,7 @@ The EventTime column must be positive numeric (e.g. obs\$time), the EventType co
 This data is passed into concrete as:
 
 ```{r formatArguments: data structure}
-ConcreteArgs <- formatArguments(DataTable = obs, 
+ConcreteArgs <- formatArguments(Data = obs, 
                                 EventTime = "time", 
                                 EventType = "status", 
                                 Treatment = "trt", 
@@ -136,7 +136,7 @@ The continuous-time TMLE for survival outcomes implemented in concrete estimates
 For instance, in the `pbc` dataset, there are 3 possible values of "status": 0 for censored, 1 for transplant, and 2 for death. In concrete 0 is similarly reserved to indicate the presence of censoring, while failure events can be encoded as any positive integer. If we are interested in looking at the risk of transplant and death jointly in this pbc dataset, this can be specified as:
 
 ```{r Target Events,eval=FALSE}
-ConcreteArgs <- formatArguments(DataTable = obs, EventTime = "time", EventType = "status", 
+ConcreteArgs <- formatArguments(Data = obs, EventTime = "time", EventType = "status", 
                                 Treatment = "trt", ID = "id", 
                                 Intervention = 0:1, TargetEvent = 1:2)
 ```
@@ -148,7 +148,7 @@ Target times should be restricted to the time range in which failure events are 
 
 ```{r, Target Times, eval=FALSE}
 ExtrapolationTime <- unique(obs[status > 0, max(time)]) + 1
-ConcreteArgs <- formatArguments(DataTable = obs, EventTime = "time", EventType = "status", 
+ConcreteArgs <- formatArguments(Data = obs, EventTime = "time", EventType = "status", 
                                 Treatment = "trt", ID = "id", 
                                 Intervention = 0:1, TargetEvent = 1:2, TargetTime = ExtrapolationTime)
 ```
@@ -160,7 +160,7 @@ tmp <- as.character(attr(try(concrete:::getTargetTime(
 ```
 
 ```{r formatArgumentsTargetTimes}
-ConcreteArgs <- formatArguments(DataTable = obs, EventTime = "time", EventType = "status", 
+ConcreteArgs <- formatArguments(Data = obs, EventTime = "time", EventType = "status", 
                                 Treatment = "trt", ID = "id", 
                                 Intervention = 0:1, TargetEvent = 1:2, TargetTime = (3:7)*500)
 ```
@@ -174,19 +174,19 @@ library(origami)
 # If the CVArg argument is NULL, concrete uses a simple 10-fold CV as the default specification, i.e.
 CVArgs <- list(n = ncol(obs), fold_fun = folds_vfold, cluster_ids = NULL, strata_ids = NULL)
 
-ConcreteArgs <- formatArguments(DataTable = obs, EventTime = "time", EventType = "status", 
+ConcreteArgs <- formatArguments(Data = obs, EventTime = "time", EventType = "status", 
                                 Treatment = "trt", ID = "id", 
                                 Intervention = 0:1, TargetEvent = 1:2, TargetTime = (3:7)*500,
                                 CVArg = NULL)
 
-ConcreteArgs <- formatArguments(DataTable = obs, EventTime = "time", EventType = "status", 
+ConcreteArgs <- formatArguments(Data = obs, EventTime = "time", EventType = "status", 
                                 Treatment = "trt", ID = "id", 
                                 Intervention = 0:1, TargetEvent = 1:2, TargetTime = (3:7)*500, 
                                 CVArg = CVArgs)
 
 # For different number of folds, simply add the `V = ` argument, e.g. 
 CV5Fold <- list(n = ncol(obs), V = 5L, fold_fun = folds_vfold, cluster_ids = NULL, strata_ids = NULL)
-ConcreteArgs <- formatArguments(DataTable = obs, EventTime = "time", EventType = "status", 
+ConcreteArgs <- formatArguments(Data = obs, EventTime = "time", EventType = "status", 
                                 Treatment = "trt", ID = "id", 
                                 Intervention = 0:1, TargetEvent = 1:2, TargetTime = (3:7)*500, 
                                 CVArg = CV5Fold)
@@ -197,13 +197,13 @@ ConcreteArgs <- formatArguments(DataTable = obs, EventTime = "time", EventType =
 TMLE requires initial estimation of some parts of the observed data distribution; for continuous-time TMLE of survival and absolute risks, we require estimates of the treatment propensity score and conditional hazards for each event and censoring type. The formatArguments(Model = ) argument is how `concrete` accepts model specifications for estimating those parameters. Inputs into the Model argument must be named lists with one entry for the 'Treatment' variable, and for each of the event type (and censoring). The list element corresponding to the 'Treatment' variable must be named as the variable name, and the list elements corresponding to each event type must be named as the numeric value of the event type (with "0" being reserved for censoring)
 
 ```{r Model structure hidden, include=FALSE}
-ConcreteArgs <- formatArguments(DataTable = obs, EventTime = "time", EventType = "status", 
+ConcreteArgs <- formatArguments(Data = obs, EventTime = "time", EventType = "status", 
                                 Treatment = "trt", ID = "id", 
                                 Intervention = 0:1, TargetEvent = 1:2, TargetTime = (3:7)*500, 
                                 CVArg = NULL, Model = NULL)
 ```
 ```{r Model structure input, eval=FALSE}
-ConcreteArgs <- formatArguments(DataTable = obs, EventTime = "time", EventType = "status", 
+ConcreteArgs <- formatArguments(Data = obs, EventTime = "time", EventType = "status", 
                                 Treatment = "trt", ID = "id", 
                                 Intervention = 0:1, TargetEvent = 1:2, TargetTime = (3:7)*500, 
                                 CVArg = NULL, Model = NULL)
@@ -229,7 +229,7 @@ SLModel <- list(c("SL.ranger", "screen.corRank"), c("SL.glmnet", "All", "screen.
                 c("SL.bayesglm", "screen.glmnet"), "SL.polymars")
 
 ConcreteArgs[["Model"]][["trt"]] <- SLModel
-ConcreteArgs <- formatArguments(DataTable = obs, EventTime = "time", EventType = "status", 
+ConcreteArgs <- formatArguments(Data = obs, EventTime = "time", EventType = "status", 
                                 Treatment = "trt", ID = "id", 
                                 Intervention = 0:1, TargetEvent = 1:2, TargetTime = (3:7)*500, 
                                 CVArg = NULL, Model = ConcreteArgs[["Model"]], 
@@ -248,7 +248,7 @@ sl3dbarts <- Lrnr_dbarts$new()
 sl3Model <- Stack$new(sl3glmnet, sl3hal, sl3dbarts)
 ConcreteArgs[["Model"]][["trt"]] <- sl3Model
 
-ConcreteArgs <- formatArguments(DataTable = obs, EventTime = "time", EventType = "status", 
+ConcreteArgs <- formatArguments(Data = obs, EventTime = "time", EventType = "status", 
                                 Treatment = "trt", ID = "id", 
                                 Intervention = 0:1, TargetEvent = 1:2, TargetTime = (3:7)*500, 
                                 CVArg = NULL, Model = ConcreteArgs[["Model"]], 
@@ -268,7 +268,7 @@ ConcreteArgs[["Model"]][["2"]] <- "."
 ```
 
 ```{r formatArguments(Model = )}
-ConcreteArgs <- formatArguments(DataTable = obs, EventTime = "time", EventType = "status", 
+ConcreteArgs <- formatArguments(Data = obs, EventTime = "time", EventType = "status", 
                                 Treatment = "trt", ID = "id", 
                                 Intervention = 0:1, TargetEvent = 1:2, TargetTime = (3:7)*500, 
                                 CVArg = NULL, Model = ConcreteArgs[["Model"]], 
@@ -280,7 +280,7 @@ ConcreteArgs <- formatArguments(DataTable = obs, EventTime = "time", EventType =
 MaxUpdateIter is an integer that controls the maximum number of small steps along the universal least favorable path for one-step tmle. OneStepEps is a positive number that controls the size of the small steps for one-step tmle, which is shrunk by factors of 2 whenever a step would increase the norm of the efficient influence function. MinNuisance is a positive number less than 1 that determines the lower bounding the nuisance parameters, essentially decreasing variance at the cost of introducing bias. Recommend to keep this value small, but even better would be to ask questions about regimes that are better supported in data.
 
 ```{r formatArguments tmle parameters}
-ConcreteArgs <- formatArguments(DataTable = obs, EventTime = "time", EventType = "status", 
+ConcreteArgs <- formatArguments(Data = obs, EventTime = "time", EventType = "status", 
                                 Treatment = "trt", ID = "id", 
                                 Intervention = 0:1, TargetEvent = 1:2, TargetTime = (3:7)*500, 
                                 CVArg = NULL, Model = ConcreteArgs[["Model"]], 

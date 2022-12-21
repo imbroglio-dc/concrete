@@ -4,6 +4,7 @@ author: "David Chen"
 date: "2022-12-09"
 output: pdf_document
 ---
+
 # Install packages
 ```{r setup, results='hide'}
 pkgs <- c("riskRegression", "adjustedCurves", "CFsurvival", "survSuperLearner", "grf")
@@ -23,25 +24,27 @@ x <- lapply(pkgs, function(pkg) {
 ```{r pbc-sim}
 library(survival)
 library(data.table)
-source("./scripts/simPBC.R")
+source("simPBC.R")
 set.seed(0)
-data <- as.data.table(simPBC(n = 1000))
+data <- as.data.table(simPBC(n = 1e3))
+data <- data[, list(time, status, trt, age, sex, stage, logbili, protime)]
 targtime <- 3:5 * 500
 ```
 
 # RiskRegression
 
 ```{r}
+data[, trt := factor(trt)]
 treatment_model <- glm(trt ~ age + sex + stage, data = data, family = "binomial")
 outcome_model <- CSC(Hist(time, status) ~ trt + age + sex + stage, data = data)
 censor_model <-  coxph(Surv(time, status == 0) ~ trt + age + sex + stage, data = data, x = TRUE, y = TRUE)
 rr1 <- ate(event = outcome_model, 
-                               treatment = treatment_model, 
-                               censor = censor_model, 
-                               data = data, 
-                               estimator = "AIPTW", 
-                               times = targtime, 
-                               cause = 1)
+           treatment = treatment_model, 
+           censor = censor_model, 
+           data = data, 
+           estimator = "AIPTW", 
+           times = targtime, 
+           cause = 1)
 rr2 <- ate(event = outcome_model, 
            treatment = treatment_model, 
            censor = censor_model, 
@@ -49,17 +52,17 @@ rr2 <- ate(event = outcome_model,
            estimator = "AIPTW", 
            times = targtime, 
            cause = 2)
+data[, trt := as.numeric(trt) - 1]
 ```
 
 # AdjustedCurves
 
 ```{r}
-data_ac <- data
-data_ac[, trt := as.factor(trt)]
+data[, trt := as.factor(trt)]
 
 # DISCRETE-TIME TMLE USING SURVTMLE NOT RUN - LONG RUN TIME
 ## adjustedCurves AIPTW, at least for ate just uses riskRegression ----
-cif1 <- adjustedcif(data = data_ac,
+cif1 <- adjustedcif(data = data,
                     variable = "trt",
                     ev_time = "time",
                     event = "status",
@@ -71,7 +74,7 @@ cif1 <- adjustedcif(data = data_ac,
                     treatment_model = treatment_model
 )
 
-cif2 <- adjustedcif(data = data_ac,
+cif2 <- adjustedcif(data = data,
                     variable = "trt",
                     ev_time = "time",
                     event = "status",
@@ -85,28 +88,31 @@ cif2 <- adjustedcif(data = data_ac,
 
 cif <- rbind(cbind("Event" = 1, cif1$adjcif), 
              cbind("Event" = 2, cif2$adjcif))
+
+data[, trt := as.numeric(trt) - 1]
 ```
 
 # CFSurvival
 
 ```{r}
 # No obvious way to handle competing risks - long run time?
-data_cfs <- data
-data_cfs[, status01 := as.numeric(status >= 1)][, trt := as.factor(trt)]
+data[, status01 := as.numeric(status >= 1)][, trt := as.factor(trt)]
 
-confounders <- model.matrix(~ -1 + ., data = data_cfs[, list(age, sex, stage)])
+confounders <- model.matrix(~ -1 + ., data = data[, list(age, sex, stage)])
 colnames(confounders) <- paste0("col", 1:ncol(confounders))
-fit.time <- sort(union(targtime, unique(data_cfs[["time"]])))
-fit.time <- fit.time[fit.time > 0 & fit.time <= max(data_cfs[["time"]][data_cfs[["status"]] > 0])]
+fit.time <- sort(union(targtime, unique(data[["time"]])))
+fit.time <- fit.time[fit.time > 0 & fit.time <= max(data[["time"]][data[["status"]] > 0])]
 
 t0 <- Sys.time()
-cfs <- CFsurvival(time = data_cfs$time,
-                  event = data_cfs$status01,
-                  treat = as.numeric(data_cfs$trt) - 1,
+cfs <- CFsurvival(time = data$time,
+                  event = data$status01,
+                  treat = as.numeric(data$trt) - 1,
                   confounders = confounders,
                   fit.times = fit.time)
 t1 <- Sys.time()
 eval.time <- t1 - t0
+
+data[, trt := as.numeric(trt) - 1]
 ```
 
 # GRF (Causal Forests)
@@ -118,3 +124,26 @@ csf <- causal_survival_forest(X = confounders, Y = data$time,
                               target = "survival.probability", horizon = 2500)
 average_treatment_effect(csf)
 ```
+
+# concrete
+
+```{r}
+library(concrete)
+ConcreteArgs <- formatArguments(DataTable = data, 
+                                EventTime = "time", 
+                                EventType = "status", 
+                                Treatment = "trt", 
+                                Intervention = 0:1, 
+                                TargetTime = 2000, 
+                                TargetEvent = 1:2, 
+                                Verbose = FALSE)
+```
+
+```{r}
+ConcreteEst <- doConcrete(ConcreteArgs)
+```
+
+```{r}
+ConcreteOut <- getOutput(ConcreteEst, A1 = 1, A0 = 2)
+```
+

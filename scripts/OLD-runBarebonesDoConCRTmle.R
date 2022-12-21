@@ -24,7 +24,7 @@ model <- list("trt" = a_lrnrs,
               "0" = list(mod1 = Surv(time, status == 0) ~ trt + age + sex),
               "1" = list(mod1 = Surv(time, status == 1) ~ trt + age + sex))
 
-concrete.args <- formatArguments(DataTable = data[, c("time", "status", "trt", "id", "age", "sex")],
+concrete.args <- formatArguments(Data = data[, c("time", "status", "trt", "id", "age", "sex")],
                                  EventTime = "time", EventType = "status",
                                  Treatment = "trt", ID = "id", Intervention = intervention,
                                  TargetTime = target.time, TargetEvent = target.event,

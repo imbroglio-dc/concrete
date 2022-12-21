@@ -11,7 +11,7 @@
 #'
 
 getEIC <- function(Estimates, Data, Regime, TargetEvent, TargetTime, MinNuisance, GComp = FALSE) {
-    EvalTimes <- attr(Estimates, "times")
+    EvalTimes <- attr(Estimates, "Times")
     # Censored <- 0 %in% Data[[attr(Data, "EventType")]]
     T.tilde <- Data[[attr(Data, "EventTime")]]
     Delta <- Data[[attr(Data, "EventType")]]
