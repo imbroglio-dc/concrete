@@ -1,26 +1,37 @@
+on: ["push","pull_request"]
 
-- name: Enable Repo on Coveralls
-  id: enable_coveralls
-  run: |
-          curl -s -H "Accept: application/json" \
-            -H "Content-Type: application/json" \
-            -H "Authorization: token $COVERALLS_TOKEN" \
-            -d '{"repo": {"service": "github","name": "'$GITHUB_REPOSITORY'"}}' \
-            -X POST https://coveralls.io/api/repos
-     
-- name: Get Coveralls Repo Token
-  id: get_coverall_repo_token
-  run: |
-          echo "COVERALLS_REPO_TOKEN=$(\
-            curl -s -H "Accept: application/json" \
-            -H "Content-Type: application/json" \
-            -H "Authorization: token $COVERALLS_TOKEN" \
-            https://coveralls.io/api/repos/github/$GITHUB_REPOSITORY \
-            | jq '.token')" >> $GITHUB_ENV
+name: build
 
-- name: Generate and Upload R Package Coverage
-  run: covr::coveralls(service_name='drone', repo_token=${{ env.COVERALLS_REPO_TOKEN }})
-  shell: Rscript {0}
-  
-env:
-      COVERALLS_TOKEN: ${{ secrets.COVERALLS_TOKEN }}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        test_number:
+          - 1
+          - 2
+    steps:
+      - uses: actions/checkout@master
+      - uses: actions/setup-node@master
+        with:
+          version: 10.x
+      - run: npm install
+      - run: make test-coverage-${{ matrix.test_number }}
+      - name: Coveralls
+        uses: coverallsapp/github-action@v1.1.0
+        env:
+          NODE_COVERALLS_DEBUG: 1
+        with:
+          github-token: ${{ secrets.github_token }}
+          parallel: true
+          flag-name: run-${{ matrix.test_number }}
+
+  finish:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Coveralls Finished
+        uses: coverallsapp/github-action@v1.1.0
+        with:
+          github-token: ${{ secrets.github_token }}
+          parallel-finished: true
