@@ -47,5 +47,8 @@ vignettes/*.pdf
 output/
 
 scripts/sim-data/sim-diagnostics.txt
-
 scripts/sim-data/sim-diag/diagnostic.txt
+
+.covrignore
+.coveralls_github_token
+
