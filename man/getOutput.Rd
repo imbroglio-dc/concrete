@@ -4,7 +4,7 @@
 \alias{getOutput}
 \title{getOutput}
 \usage{
-getOutput(Estimate, Estimand = c("RD", "RR", "Risk"), A1 = NULL, A0 = NULL)
+getOutput(Estimate, Estimand = c("RD", "RR", "Risk"), A1 = 1, A0 = 2)
 }
 \arguments{
 \item{Estimate}{list : a "ConcreteEst" object}

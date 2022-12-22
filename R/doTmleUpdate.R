@@ -70,7 +70,7 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, TargetEvent, TargetTime,
         
         ## Get updated hazards and EICs
         newEsts <- lapply(Estimates, function(est.a) {
-            NewHazards <- updateHazard(GStar = attr(est.a[["PropScore"]], "g.star.intervention"),
+            NewHazards <- updateHazard(GStar = attr(est.a[["PropScore"]], "g.star.obs"),
                                        Hazards = est.a[["Hazards"]],
                                        TotalSurv = est.a[["EvntFreeSurv"]],
                                        NuisanceWeight = est.a[["NuisanceWeight"]],

@@ -7,3 +7,6 @@
 ^obsolete-concrete$
 ^codemeta\.json$
 ^.github$
+.coveralls_github_token
+.covrignore
+.travis.yml
