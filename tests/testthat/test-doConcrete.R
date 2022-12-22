@@ -33,7 +33,7 @@ test_that("doConcrete() runs with competing risks",
 test_that("doConcrete() runs right-censored survival", 
           code = {
               # competing risk
-              expect_snapshot_value(x = {
+              expect_error(object = {
                   data <- as.data.table(survival::pbc)[, c("time", "status", "trt", "id", "age", "sex")]
                   set.seed(0)
                   data[, trt := sample(0:1, length(trt), replace = TRUE)]
@@ -57,6 +57,6 @@ test_that("doConcrete() runs right-censored survival",
                   
                   concrete.ests <- list("SL" = try(doConcrete(ConcreteArgs = concrete.args.SL)), 
                                         "sl3" = try(doConcrete(ConcreteArgs = concrete.args.sl3)))
-              })
+              }, regexp = NA)
           }
 )
