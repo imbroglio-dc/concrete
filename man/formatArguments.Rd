@@ -190,8 +190,8 @@ concrete.args[["Model"]][["1"]] <-
 concrete.args[["Model"]][["trt"]] <- c("SL.glm", "SL.glmnet", "SL.bayesglm")
 
 # examples of modifying "sl3" treatment models
-library(sl3)
-concrete.args[["Model"]][["trt"]] <-
-    make_learner(Stack, Lrnr_hal9001$new(), Lrnr_glmnet$new(), Lrnr_glm$new())
+# library(sl3)
+# concrete.args[["Model"]][["trt"]] <-
+#     make_learner(Stack, Lrnr_hal9001$new(), Lrnr_glmnet$new(), Lrnr_glm$new())
 
 }

@@ -143,6 +143,7 @@ getNormPnEIC <- function(PnEIC, Sigma = NULL) {
 #' @param ... additional arguments to be passed into print methods
 #' @exportS3Method print ConcreteEst
 print.ConcreteEst <- function(x, ...) {
+    PnEIC <- `seEIC/(sqrt(n)log(n))` <- NULL
     cat("Continuous-Time One-Step TMLE targeting the Cause-Specific Absolute Risks for:\n")
     cat("Intervention", ifelse(length(x) > 1, "s", ""), ": ", 
         paste0("\"", names(x), "\"", collapse = ", "), "  |  ", sep = "")
