@@ -1,61 +1,132 @@
-test_that("formatArguments works for some sample analyses", {
+test_that("formatArguments works for a few sample analyses", {
     require(data.table)
     data <- as.data.table(survival::pbc)[, c("time", "status", "trt", "id", "age", "sex")]
+    
     set.seed(0)
     data[, trt := sample(0:1, length(trt), replace = TRUE)]
-    expect_s3_class(formatArguments(Data = data, 
-                                    EventTime = "time", 
-                                    EventType = "status", 
-                                    Treatment = "trt", 
-                                    ID = 'id', 
-                                    Intervention = makeITT(), 
-                                    TargetTime = mean(data[["time"]]), 
-                                    TargetEvent = unique(data[["status"]])
-                                    ), 
-                    class = "ConcreteArgs")
+    concrete.args <- formatArguments(Data = data, 
+                                     EventTime = "time", 
+                                     EventType = "status", 
+                                     Treatment = "trt", 
+                                     ID = 'id', 
+                                     Intervention = 0:1, 
+                                     TargetTime = mean(data[["time"]]), 
+                                     TargetEvent = unique(data[["status"]])
+    )
+    expect_s3_class(concrete.args, class = "ConcreteArgs")
+    expect_s3_class(formatArguments(concrete.args), class = "ConcreteArgs")
+    expect_error(formatArguments(ConcreteArgs = data))
     # data[, status := as.numeric(status >= 1)] # to make simple right-censored survival
     # data[status == 0, status := sample(1:2, sum(status == 0), replace = TRUE)]
 })
 
-test_that("EventTimes is a positive, finite numeric vector", {
-    test_vals <- list(NULL, NaN, NA, Inf, TRUE, "a", 0, matrix(1, ncol = 3, nrow = 3), as.list(1:3))
+test_that("Data with missingness or incorrect type throw errors", {
+    require(data.table)
+    data <- as.data.table(survival::pbc)[, c("time", "status", "trt", "id", "age", "sex")]
+    expect_error(formatArguments(Data = data, 
+                                 EventTime = "time", 
+                                 EventType = "status", 
+                                 Treatment = "trt", 
+                                 ID = 'id', 
+                                 Intervention = 0:1, 
+                                 TargetTime = mean(data[["time"]]), 
+                                 TargetEvent = unique(data[["status"]])))
+    expect_error(formatArguments(Data = NA, 
+                                 EventTime = "time", 
+                                 EventType = "status", 
+                                 Treatment = "trt", 
+                                 ID = 'id', 
+                                 Intervention = 0:1, 
+                                 TargetTime = mean(data[["time"]]), 
+                                 TargetEvent = unique(data[["status"]])))
+})
+
+test_that("EventTime is a positive, finite numeric vector", {
+    test_vals <- list(NaN, NA, Inf, TRUE, "a", 0, -1)
     for (value in test_vals) {
-        expect_error(checkEventTimes(value))
+        data <- data.frame("x" = value)
+        expect_error(checkEventTime(value, data))
+        expect_error(checkEventTime("x", data))
     }
 })
 
-test_that("EventTypes is a non-negative numeric vector", {
-    test_vals <- list(NULL, NaN, NA, TRUE, "a", -1, matrix(1, 3, 3), as.list(1:3))
+test_that("EventType is a non-negative numeric vector", {
+    test_vals <- list(NaN, NA, TRUE, "a", -1)
     for (value in test_vals) {
-        expect_error(checkEventTypes(value))
+        data <- data.frame("x" = value)
+        expect_error(checkEventType(value, data))
+        expect_error(checkEventType("x", data))
     }
 })
 
 test_that("Treatment is a numeric vector", {
-    test_vals <- list(NULL, NaN, NA, Inf, TRUE, "a", matrix(1, 3, 3), as.list(1:3))
+    test_vals <- list(NaN, NA, Inf, TRUE, "a")
     for (value in test_vals) {
-        expect_error(checkTreatment(value))
+        data <- data.frame("x" = value)
+        expect_error(checkTreatment(value, data))
+        expect_error(checkTreatment("x", data))
     }
 })
 
-test_that("Intervention", {
-    test_vals <- list(NULL, NaN, NA, Inf, TRUE, "a", 1, matrix(1, 3, 3),
+test_that("Intervention specifications", {
+    require(data.table)
+    data <- as.data.table(survival::pbc)[, c("time", "status", "trt", "id", "age", "sex")]
+    
+    set.seed(0)
+    data[, trt := sample(0:1, length(trt), replace = TRUE)]
+    test_vals <- list(NaN, NA, Inf, TRUE, "a", 1, matrix(1, 3, 3),
                       list(function(x) x, function(y) y))
     for (value in test_vals) {
-        expect_error(checkIntervetion(value))
-    }
-})
-
-test_that("CovDataTable is a matrix, data.frame, or data.table", {
-    test_vals <- list(NULL, NaN, NA, Inf, TRUE, "a", 1, as.list(1:3))
-    for (value in test_vals) {
-        expect_error(checkCovDataTable(value))
+        expect_error(getRegime(value, data = data))
     }
 })
 
 test_that("ID is a vector with non-\'null\'-type values", {
-    test_vals <- list(NULL, NaN, NA, Inf, matrix(1, 3, 3), as.list(1:3))
+    test_vals <- list(NaN, NA)
     for (value in test_vals) {
-        expect_error(checkID(value))
+        data <- data.frame("x" = value)
+        expect_error(getID(value, data))
+        expect_error(getID("x", data))
     }
+})
+
+test_that("Boolean cheecks for non-boolean values and resets values to FALSE", {
+    require(data.table)
+    data <- as.data.table(survival::pbc)[, c("time", "status", "trt", "id", "age", "sex")]
+    
+    set.seed(0)
+    data[, trt := sample(0:1, length(trt), replace = TRUE)]
+    concrete.args <- formatArguments(Data = data, 
+                                     EventTime = "time", 
+                                     EventType = "status", 
+                                     Treatment = "trt", 
+                                     ID = 'id', 
+                                     Intervention = 0:1, 
+                                     TargetTime = mean(data[["time"]]), 
+                                     TargetEvent = unique(data[["status"]]),
+                                     Verbose = 2, 
+                                     GComp = NA, 
+                                     ReturnModels = "c", 
+                                     RenameCovs = Inf)
+    for (bool in c("Verbose", "GComp", "ReturnModels", "RenameCovs")) {
+        expect_equal(concrete.args[[bool]], FALSE)
+    }
+})
+
+test_that("RenameCovs = FALSE gets processed correctly", {
+    require(data.table)
+    data <- as.data.table(survival::pbc)[, c("time", "status", "trt", "id", "age", "sex")]
+    
+    set.seed(0)
+    data[, trt := sample(0:1, length(trt), replace = TRUE)]
+    concrete.args <- formatArguments(Data = data, 
+                                     EventTime = "time", 
+                                     EventType = "status", 
+                                     Treatment = "trt", 
+                                     ID = 'id', 
+                                     Intervention = 0:1, 
+                                     TargetTime = mean(data[["time"]]), 
+                                     TargetEvent = unique(data[["status"]]),
+                                     RenameCovs = FALSE)
+    expect_equal(colnames(concrete.args$DataTable), colnames(data))
 })

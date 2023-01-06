@@ -11,9 +11,9 @@ getOutput(Estimate, Estimand = c("RD", "RR", "Risk"), A1 = 1, A0 = 2)
 
 \item{Estimand}{character: a subset of c("RD", "RR", "Risk") specifying the target estimand}
 
-\item{A1}{the Estimate list element that should be treated as "Treated" for RR and RD comparisons}
+\item{A1}{default = 1, the ConcreteEst list element that is the "Treated" arm for risk comparisons}
 
-\item{A0}{the Estimate list element that should be treated as "Control" for RR and RD comparisons}
+\item{A0}{default = 2, the ConcreteEst list element that is the "Control" arm for risk comparisons}
 }
 \value{
 data.table of point estimates and standard deviations

@@ -16,6 +16,7 @@
 
 getPropScore <- function(TrtVal, CovDT, TrtModel, MinNuisance, Regime,
                          PropScoreBackend, CVFolds, TrtLoss = NULL, ReturnModels) {
+    options(warn = 0)
     if (PropScoreBackend == "sl3") {
         PropScores <- getSl3PropScore(TrtVal = TrtVal, CovDT = CovDT, TrtModel = TrtModel, 
                                       Regime = Regime, CVFolds = CVFolds, ReturnModels = ReturnModels)
@@ -25,6 +26,8 @@ getPropScore <- function(TrtVal, CovDT, TrtModel, MinNuisance, Regime,
     } else {
         stop("functionality for propensity score calculation not using sl3 has not yet been implemented")
     }
+    attr(PropScores, "warnings") <- summary(warnings())
+    last.warning <- NULL
     return(PropScores)
 }
 

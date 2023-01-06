@@ -1,3 +1,26 @@
+# concrete-pbc-minimal
+library(concrete)
+library(data.table)
+set.seed(12345)
+data <- as.data.table(survival::pbc)
+data <- data[!is.na(trt), ][, trt := trt - 1]
+data <- data[, c("time", "status", "trt", "age", "sex", "albumin")]
+
+ConcreteArgs <- formatArguments(DataTable = data,
+                                EventTime = "time",
+                                EventType = "status",
+                                Treatment = "trt",
+                                Intervention = 0:1,
+                                TargetTime = 90 * (6:30),
+                                TargetEvent = 1:2,
+                                MaxUpdateIter = 200,
+                                Verbose = FALSE)
+
+ConcreteEst <- doConcrete(ConcreteArgs)
+
+ConcreteOut <- getOutput(ConcreteEst, A1 = 1, A0 = 2)
+
+
 # devtools::install_github("imbroglio-dc/concrete")
 library(data.table)
 library(concrete)

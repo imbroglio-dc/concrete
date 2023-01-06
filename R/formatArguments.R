@@ -183,7 +183,8 @@ formatArguments <- function(DataTable,
         # Miscellaneous Args ----
         checkBoolean(ArgList = list("Verbose" = Verbose, 
                                     "GComp" = GComp, 
-                                    "ReturnModels" = ReturnModels), 
+                                    "ReturnModels" = ReturnModels, 
+                                    "RenameCovs" = RenameCovs), 
                      Envir = ConcreteArgs)
         
         
@@ -258,10 +259,11 @@ makeConcreteArgs <- function(DataTable, EventTime, EventType, Treatment, Interve
 
 checkBoolean <- function(ArgList, Envir) {
     lapply(seq_along(ArgList), function(i) {
-        ArgOK <- try(all(is.logical(ArgList[[i]]), length(ArgList[[i]]) == 1))
-        if (any(inherits(ArgOK, "try-error"), !ArgOK)) {
-            cat("Invalid value passed into argument", names(ArgList)[i], 
-                " which must be either TRUE or FALSE. Value is set to FALSE by default\n")
+        ArgOK <- try(all(is.logical(ArgList[[i]]), length(ArgList[[i]]) == 1, 
+                         !is.na(ArgList[[i]])))
+        if (any(inherits(ArgOK, "try-error"), !ArgOK, is.null(ArgOK))) {
+            cat("Argument '", names(ArgList)[i], "' must be either TRUE or FALSE, ", 
+                "so has been set to FALSE by default\n", sep = "")
             assign(names(ArgList)[i], FALSE, envir = Envir)
         } else {
             assign(names(ArgList)[i], ArgList[[i]], envir = Envir)
@@ -290,21 +292,23 @@ formatDataTable <- function(DT, EventTime, EventType, Treatment, ID, LongTime, V
     SpecialCols <- c(ID, EventTime, EventType, Treatment, LongTime)
     CovNames <- setdiff(colnames(DT), SpecialCols)
     
-    if (identical(paste0(gsub("L\\d+", "", CovNames), collapse = ""), "") | !RenameCovs) {
+    if (RenameCovs) {
+        if (is.null(attr(DT, "CovNames"))) {
+            CovDT <- getCovDataTable(DataTable = DT,
+                                     EventTime = EventTime,
+                                     EventType = EventType,
+                                     Treatment = Treatment,
+                                     ID = ID,
+                                     LongTime = LongTime,
+                                     Verbose = Verbose)
+            DT <- cbind(DT[, .SD, .SDcols = SpecialCols], CovDT)
+            attr(DT, "CovNames") <- attr(CovDT, "CovNames")
+        }
+    } else {
         if (is.null(attr(DT, "CovNames")))
             attr(DT, "CovNames") <- data.table(ColName = CovNames,
                                                CovName = CovNames,
                                                CovVal = rep_len(".", length(CovNames)))
-    } else {
-        CovDT <- getCovDataTable(DataTable = DT,
-                                 EventTime = EventTime,
-                                 EventType = EventType,
-                                 Treatment = Treatment,
-                                 ID = ID,
-                                 LongTime = LongTime,
-                                 Verbose = Verbose)
-        DT <- cbind(DT[, .SD, .SDcols = SpecialCols], CovDT)
-        attr(DT, "CovNames") <- attr(CovDT, "CovNames")
     }
     DT <- structure(DT,
                     EventTime = EventTime,
@@ -321,13 +325,11 @@ formatDataTable <- function(DT, EventTime, EventType, Treatment, ID, LongTime, V
 checkEventTime <- function(EventTime, DataTable = NULL) {
     if (is.character(EventTime)) {
         tmp <- try(DataTable[[EventTime]])
-        if (inherits(tmp, "try-error"))
+        if (inherits(tmp, "try-error") | is.null(tmp))
             stop("No column named '", EventTime, "' was found in the supplied DataTable")
-        attr(tmp, "var.name") <- EventTime
-        EventTime <- tmp
-        if (any(!is.numeric(EventTime), try(EventTime <= 0), is.infinite(EventTime),
-                inherits(try(EventTime <= 0), "try-error"), is.list(EventTime)))
-            stop("The 'EventTime' column must contain positive, finite values with no missingness.")
+        if (any(!is.numeric(tmp), try(tmp <= 0), is.infinite(tmp),
+                inherits(try(tmp <= 0), "try-error"), is.list(tmp)))
+            stop("The 'EventTime' column must be finite, positive values without missingness.")
     } else
         stop("`EventTime` must be the name of the column containing the observed event times.")
     invisible(NULL)
@@ -336,13 +338,11 @@ checkEventTime <- function(EventTime, DataTable = NULL) {
 checkEventType <- function(EventType, DataTable = NULL) {
     if (is.character(EventType)) {
         tmp <- try(DataTable[[EventType]])
-        if (inherits(tmp, "try-error"))
+        if (inherits(tmp, "try-error") | is.null(tmp))
             stop("No column named '", EventType, "' was found in the supplied DataTable.")
-        attr(tmp, "var.name") <- EventType
-        EventType <- tmp
-        if (any(!is.numeric(EventType), try(EventType < 0),
-                inherits(try(EventType < 0), "try-error"), is.list(EventType)))
-            stop("EventType must be a numeric vector with non-negative values (0 indicating censoring)")
+        if (any(!is.numeric(tmp), try(tmp < 0), inherits(try(tmp < 0), "try-error"), is.list(tmp)))
+            stop("The 'EventType' column must be finite, non-negative values without missingness, ",
+                 "with 0 indicating censoring")
     } else
         stop("`EventType` must be the name of the column containing the observed event types (",
              "with 0 indicating the onset of right censoring).")
@@ -351,15 +351,18 @@ checkEventType <- function(EventType, DataTable = NULL) {
 
 checkTreatment <- function(Treatment, DataTable = NULL) {
     if (is.character(Treatment)) {
-        tmp <- try(DataTable[[Treatment]])
-        if (inherits(tmp, "try-error"))
-            stop("No column named '", Treatment, "' was found in the supplied data. Check spelling ",
-                 "or input argument into DataTable")
+        tmp <- try(subset(DataTable, select = Treatment))
+        if (inherits(tmp, "try-error") | is.null(tmp))
+            stop("Column", ifelse(length(Treatment) > 1, "s", ""), " '", paste0(Treatment, collapse = ", "), 
+                 "' ", ifelse(length(Treatment) > 1, "were", "was"), " not found in the supplied data.",  
+                 "Check Treatment and DataTable argument inputs \n", attr(tmp, "condition"))
         attr(tmp, "var.name") <- Treatment
-        Treatment <- tmp
-        if (any(!is.numeric(Treatment), is.nan(Treatment), is.infinite(Treatment), is.list(Treatment)))
-            stop("Treatment must be a numeric vector with finite values. Encode binary variables ",
-                 "as 0 or 1 and encode multinomial (factor) variables as positive integers.")
+        apply(tmp, 2, function(trt) {
+            if (any(!is.numeric(trt), is.nan(trt), is.infinite(trt), is.list(trt)))
+                stop("Treatment must be a numeric vector with finite values. Encode binary variables ",
+                     "as 0 or 1 and encode multinomial (factor) variables as integers.")
+        })
+        
     } else
         stop("`Treatment` must be the name of the column containing the intervention variable.")
     invisible(NULL)
@@ -373,7 +376,7 @@ getID <- function(ID, DataTable = NULL) {
         #     "which will not be appropriate for longitudinal data structures.\n", sep = "")
     } else if (is.character(ID)) {
         IDVal <- try(DataTable[[ID]])
-        if (inherits(IDVal, "try-error"))
+        if (inherits(IDVal, "try-error") | is.null(IDVal))
             stop("No column named '", ID, "' was found in the supplied data. Check spelling ",
                  "or input argument into DataTable")
     }
@@ -382,15 +385,15 @@ getID <- function(ID, DataTable = NULL) {
     return(list(IDVal = IDVal, IDName = ID))
 }
 
-getLongTime <- function(LongTime, DataTable = NULL) {
-    if (!is.null(LongTime)) stop("Longitudinal data structures not yet supported.")
-    return(NULL)
-}
+# getLongTime <- function(LongTime, DataTable = NULL) {
+#     if (!is.null(LongTime)) stop("Longitudinal data structures not yet supported.")
+#     return(NULL)
+# }
 
 getCovDataTable <- function(DataTable, EventTime, EventType, Treatment, ID, LongTime, Verbose) {
     `(Intercept)` <- NULL
     CovNames <- setdiff(colnames(DataTable), c(EventTime, EventType, Treatment, ID, LongTime))
-    CovDT <- DataTable[, .SD ,.SDcols = CovNames]
+    CovDT <- DataTable[, .SD , .SDcols = CovNames]
     NonNumInd <- sapply(CovNames, function(CovName) {!inherits(CovDT[[CovName]], c("numeric", "integer"))})
     CovNames1Hot <- data.table()
     
@@ -433,7 +436,10 @@ getCovDataTable <- function(DataTable, EventTime, EventType, Treatment, ID, Long
 }
 
 getRegime <- function(Intervention, Data) {
-    TrtVal <- Data[[attr(Data, "Treatment")]]
+    if (length(attr(Data, "Treatment")) == 1) {
+        TrtVal <- Data[[attr(Data, "Treatment")]]
+    } else
+        TrtVal <- subset(Data, select = attr(Data, "Treatment"))
     CovDT <- Data[, .SD, .SDcols = attr(Data, "CovNames")[["ColName"]]]
     CovDT <- structure(CovDT,
                        CovNames = attr(Data, "CovNames"),
@@ -450,16 +456,28 @@ getRegime <- function(Intervention, Data) {
                 RegName <- names(Intervention)[i]
             
             # regime ----
-            if (is.numeric(unlist(Regime))) {
+            if (isTRUE(dim(Regime) == dim(TrtVal)) | 
+                all(is.numeric(TrtVal), isTRUE(length(Regime) == length(TrtVal)))) {
                 RegimeVal <- Regime
+            } else if (is.numeric(Regime) & inherits(TrtVal, "data.frame")) {
+                if (isTRUE(length(Regime) == ncol(TrtVal))) {
+                    RegimeVal <- data.table::copy(TrtVal)
+                    for (i in 1:ncol(RegimeVal)) {
+                        RegimeVal[, i] <- Regime[i]
+                    }
+                }
             } else if (is.function(Regime[["intervention"]])) {
                 RegimeVal <- try(do.call(Regime[["intervention"]], list(TrtVal, CovDT)))
-                if (inherits(RegimeVal, "try-error"))
-                    stop("Intervention must be a list of regimes specificed as list(intervention",
+                if (inherits(RegimeVal, "try-error") | is.null(RegimeVal) |
+                    all(dim(RegimeVal) != dim(TrtVal), length(RegimeVal) != length(TrtVal)))
+                    stop("Intervention must be a list of regimes specified as list(intervention",
                          " = f(A, L), g.star = g(A, L)), and intervention function f(A, L) must ",
                          "be a function of treatment and covariates that returns numeric desired",
                          " treatment assignments (a*) with the same dimensions as the observed ",
                          "treatment. Amend Intervention[[", RegName, "]] and try again")
+            } else {
+                stop("Something has gone wrong with Intervention specification. ", 
+                     "Check 'Intervention=' argument input or debug concrete:::getRegime()")
             }
             
             if (!all(length(unlist(RegimeVal)) == length(unlist(TrtVal)),
@@ -469,15 +487,15 @@ getRegime <- function(Intervention, Data) {
                      "numeric vector of desired treatment assignments (a*) with the same ",
                      "dimensions as the observed treatment and with values within the observed ",
                      "range. If providing intervention values, then the input must have the same ",
-                     "dimensions as the observed treatment withvalues within the observed range.",
+                     "dimensions as the observed treatment with values within the observed range.",
                      "Amend Intervention[[", RegName, "]] and try again")
             
-            if (mean(unlist(RegimeVal) == unlist(TrtVal)) < 0.05)
-                warning("The intervention function f(A, L) specified in Intervention[[", RegName,
-                        "]] specifies a regime that matches less than 5% of the observed treatments",
-                        ", likely resulting in practical near-positivity violations that may inflate",
-                        "variance and perhaps cause estimator instability. Recommend specifying ",
-                        "an intervention better supported in the observed data.")
+            # if (mean(unlist(RegimeVal) == unlist(TrtVal)) < 0.05)
+            #     warning("The intervention function f(A, L) specified in Intervention[[", RegName,
+            #             "]] specifies a regime that matches less than 5% of the observed treatments",
+            #             ", likely resulting in practical near-positivity violations that may inflate",
+            #             "variance and perhaps cause estimator instability. Recommend specifying ",
+            #             "an intervention better supported in the observed data.")
             
             # g.star ----
             if (!is.null(attr(Regime, "g.star"))) {
@@ -492,7 +510,7 @@ getRegime <- function(Intervention, Data) {
             }
             
             GStarOK <- try(do.call(attr(RegimeVal, "g.star"), list(TrtVal, CovDT)))
-            if (inherits(GStarOK, "try-error") | !is.numeric(GStarOK)) {
+            if (inherits(GStarOK, "try-error") | !is.numeric(GStarOK) | is.null(GStarOK)) {
                 stop("Intervention must be a list of regimes specificed as list(intervention",
                      " = f(A, L), g.star = g(A, L)), and the g.star function f(A, L) must ",
                      "be a function of treatment and covariates that returns numeric ",
@@ -587,7 +605,7 @@ getCVFolds <- function(CVArg, Data, CVSeed = sample(0:1e8, 1)) {
     
     set.seed(CVSeed)
     CVFolds <- try(do.call(origami::make_folds, CVArg))
-    if (inherits(CVFolds, "try-error"))
+    if (inherits(CVFolds, "try-error") | is.null(CVFolds))
         stop("CVArg must be a list of arguments to be passed into do.call(origami::make_folds, ...)")
     attr(CVFolds, "CVArg") <- CVArg
     attr(CVFolds, "CVSeed") <- CVSeed
@@ -738,7 +756,7 @@ makeModelList <- function(Treatment, EventTime, EventType, UniqueEvents, Model, 
 getMaxUpdateIter <- function(MaxUpdateIter) {
     MaxUpdateIterOK <- try(all(is.numeric(MaxUpdateIter), length(MaxUpdateIter) == 1,
                                MaxUpdateIter > 0, !is.infinite(MaxUpdateIter)))
-    if (any(inherits(MaxUpdateIterOK, "try-error"), !MaxUpdateIterOK)) {
+    if (any(inherits(MaxUpdateIterOK, "try-error"), is.null(MaxUpdateIterOK), !MaxUpdateIterOK)) {
         cat("MaxUpdateIter must a positive, finite whole number, so has been set to 100\n")
         MaxUpdateIter <- 100
     }
@@ -748,7 +766,7 @@ getMaxUpdateIter <- function(MaxUpdateIter) {
 checkOneStepEps <- function(OneStepEps) {
     OneStepEpsOK <- try(all(is.numeric(OneStepEps), length(OneStepEps) == 1,
                             OneStepEps > 0, OneStepEps <= 1))
-    if (any(inherits(OneStepEpsOK, "try-error"), !OneStepEpsOK)) {
+    if (any(inherits(OneStepEpsOK, "try-error"), !OneStepEpsOK, is.null(OneStepEpsOK))) {
         cat("OneStepEps must a positive number between (0, 1], so has been set to 0.5\n")
         OneStepEps <- 0.5
     }
@@ -758,7 +776,7 @@ checkOneStepEps <- function(OneStepEps) {
 getMinNuisance <- function(MinNuisance = 0.05) {
     MinNuisanceOK <- try(all(is.numeric(MinNuisance), length(MinNuisance) == 1,
                              MinNuisance > 0, MinNuisance <= 1))
-    if (any(inherits(MinNuisanceOK, "try-error"), !MinNuisanceOK)) {
+    if (any(inherits(MinNuisanceOK, "try-error"), !MinNuisanceOK, is.null(MinNuisanceOK))) {
         cat("MinNuisance must a positive number between (0, 1], so has been set to 0.05\n")
         MinNuisance <- 0.05
     }
@@ -793,7 +811,7 @@ makeITT <- function() {
 
 print.ConcreteArgs <- function(x, ...) {
     Args <- list(...)
-    cat("Observed Data (", nrow(x$DataTable)," rows x ", ncol(x$DataTable), 
+    cat("\nObserved Data (", nrow(x$DataTable)," rows x ", ncol(x$DataTable), 
         " cols)\nUnique IDs: \"", attr(x$DataTable, "ID"), "\" (n=", 
         attr(x$DataTable, "nEff"), "),  Time-to-Event: \"", 
         attr(x$DataTable, "EventTime"), "\",  Event Type: \"", 

@@ -2,6 +2,7 @@ test_that("doConcrete() runs with competing risks",
           code = {
               # competing risk
               expect_error(object = {
+                  require(data.table)
                   data <- as.data.table(survival::pbc)[, c("time", "status", "trt", "id", "age", "sex")]
                   set.seed(0)
                   data[, trt := sample(0:1, length(trt), replace = TRUE)]
@@ -14,7 +15,7 @@ test_that("doConcrete() runs with competing risks",
                   
                   concrete.args.SL <- try(
                       formatArguments(Data = data, EventTime = "time", EventType = "status",
-                                      Treatment = "trt", ID = "id", Intervention = makeITT(),
+                                      Treatment = "trt", ID = "id", Intervention = 0:1,
                                       TargetTime = 2500, TargetEvent = NULL,
                                       Model = NULL, Verbose = TRUE, ReturnModels = TRUE)
                   )
@@ -33,6 +34,7 @@ test_that("doConcrete() runs with competing risks",
 test_that("doConcrete() runs right-censored survival", 
           code = {
               # competing risk
+              require(data.table)
               expect_error(object = {
                   data <- as.data.table(survival::pbc)[, c("time", "status", "trt", "id", "age", "sex")]
                   set.seed(0)
@@ -46,7 +48,7 @@ test_that("doConcrete() runs right-censored survival",
                   
                   concrete.args.SL <- try(
                       formatArguments(Data = data, EventTime = "time", EventType = "status",
-                                      Treatment = "trt", ID = "id", Intervention = makeITT(),
+                                      Treatment = "trt", ID = "id", Intervention = 0:1,
                                       TargetTime = 2500, TargetEvent = NULL,
                                       Model = NULL, Verbose = TRUE, ReturnModels = TRUE)
                   )

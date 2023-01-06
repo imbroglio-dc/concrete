@@ -19,6 +19,7 @@ getInitialEstimate <- function(Data, Model, CVFolds, MinNuisance, TargetEvent, T
     Censored <- any(Data[[attr(Data, "EventType")]] <= 0)
     CovDT <- subset(Data, select = attr(Data, "CovNames")[["ColName"]])
     TrtModel <- try(Model[[attr(Data, "Treatment")]])
+    options(warn = 0)
     if (inherits(TrtModel, "try-error"))
         stop("TrtModel must currently be specified in the Model argument as a list named ", 
              "as the Treatment variable, ", attr(Data, "Treatment"))

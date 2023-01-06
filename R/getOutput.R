@@ -2,8 +2,8 @@
 #'
 #' @param Estimate list : a "ConcreteEst" object
 #' @param Estimand character: a subset of c("RD", "RR", "Risk") specifying the target estimand
-#' @param A1 the Estimate list element that should be treated as "Treated" for RR and RD comparisons
-#' @param A0 the Estimate list element that should be treated as "Control" for RR and RD comparisons
+#' @param A1 default = 1, the ConcreteEst list element that is the "Treated" arm for risk comparisons
+#' @param A0 default = 2, the ConcreteEst list element that is the "Control" arm for risk comparisons
 #'
 #' @return data.table of point estimates and standard deviations
 #' @export getOutput
