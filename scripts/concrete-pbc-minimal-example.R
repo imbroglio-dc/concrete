@@ -13,7 +13,7 @@ ConcreteArgs <- formatArguments(DataTable = data,
                                 Intervention = 0:1,
                                 TargetTime = 90 * (6:30),
                                 TargetEvent = 1:2,
-                                MaxUpdateIter = 200,
+                                MaxUpdateIter = 250,
                                 Verbose = FALSE)
 
 ConcreteEst <- doConcrete(ConcreteArgs)

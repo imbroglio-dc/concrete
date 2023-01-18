@@ -85,7 +85,7 @@ truncNuisanceDenom <- function(NuisanceDenom, MinNuisance, RegimeName) {
                 PositivityWarning <- paste(
                     "For Intervention \"", RegimeName, "\", ", 
                     round(mean(NuisanceDenom < MinNuisance), 3) * 100, "% of the G-related ", 
-                    "nuisance parameter estimates were bounded", 
+                    "nuisance weights were bounded", 
                     # sum(apply(NuisanceDenom, 2, function(subj) any(subj < MinNuisance))), 
                     # "/", ncol(NuisanceDenom), " subjects", 
                     " to ", signif(MinNuisance, 3), sep = "")
@@ -95,7 +95,7 @@ truncNuisanceDenom <- function(NuisanceDenom, MinNuisance, RegimeName) {
             } else {
                 attr(NuisanceDenom, "message") <- paste(
                     "For Intervention \"", RegimeName, "\", ", 
-                    "no G-related nuisance parameter estimates had to be bounded", 
+                    "no G-related nuisance weights fell below", 
                     # sum(apply(NuisanceDenom, 2, function(subj) any(subj < MinNuisance))), 
                     # "/", ncol(NuisanceDenom), " subjects", 
                     " to ", signif(MinNuisance, 3), sep = "")

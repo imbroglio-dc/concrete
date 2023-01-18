@@ -24,6 +24,9 @@
 #'
 #' @return object with s3 class "ConcreteEst"
 #'
+#' @importFrom grDevices dev.hold dev.flush devAskNewPage
+#' @importFrom graphics abline
+#' @importFrom stats density qnorm
 #' @export doConcrete
 #'
 #' @examples
@@ -143,7 +146,7 @@ getNormPnEIC <- function(PnEIC, Sigma = NULL) {
 #' @param ... additional arguments to be passed into print methods
 #' @exportS3Method print ConcreteEst
 print.ConcreteEst <- function(x, ...) {
-    PnEIC <- `seEIC/(sqrt(n)log(n))` <- NULL
+    `Pt Est` <- se <- PnEIC <- `abs(PnEIC / Stop Criteria)` <- `seEIC/(sqrt(n)log(n))` <- NULL
     cat("Continuous-Time One-Step TMLE targeting the Cause-Specific Absolute Risks for:\n")
     cat("Intervention", ifelse(length(x) > 1, "s", ""), ": ", 
         paste0("\"", names(x), "\"", collapse = ", "), "  |  ", sep = "")
@@ -152,7 +155,7 @@ print.ConcreteEst <- function(x, ...) {
     cat("Target Time", ifelse(length(attr(x, "TargetTime")) > 1, "s", ""), ": ", 
         ifelse(length(attr(x, "TargetTime")) > 6,
                paste0(paste0(head(attr(x, "TargetTime"), 3), collapse = ", "), ",...,", 
-                      paste0(tail(attr(x, "TargetTime"), 3, collapse = ", "), collapse = "")), 
+                      paste0(tail(attr(x, "TargetTime"), 3), collapse = ", "), collapse = ""), 
                paste0(attr(x, "TargetTime"), collapse = ", ")), "\n\n", sep = "")
     
     cat(ifelse(isTRUE(attr(x, "TmleConverged")$converged), 
@@ -161,8 +164,16 @@ print.ConcreteEst <- function(x, ...) {
     if (!(isTRUE(attr(x, "TmleConverged")$converged))) {
         PnEICs <- do.call(rbind, lapply(seq_along(x), function(a) 
             cbind("Intervention" = names(x)[a], x[[a]]$SummEIC)))
-        print(PnEICs[order(abs(PnEIC)/`seEIC/(sqrt(n)log(n))`, decreasing = TRUE), ], 
-              digits = 4)
+        Risks <- getRisk(x, TargetTime = attr(x, "TargetTime"), TargetEvent = attr(x, "TargetEvent"), 
+                         GComp = FALSE)[, .SD, .SDcols = c("Intervention", "Time", "Event", "Pt Est", "se")]
+        Risks <- rbind(Risks, Risks[, list("Event" = -1, "Pt Est" = 1 - sum(`Pt Est`), 
+                                           "se" = sqrt(sum(se^2))), by = c("Intervention", "Time")])
+        PnEICs <- merge(PnEICs, Risks, by = c("Intervention", "Time", "Event"))
+        PnEICs[, "abs(PnEIC / Stop Criteria)" := abs(PnEIC / `seEIC/(sqrt(n)log(n))`)]
+        PnEICs <- PnEICs[`abs(PnEIC / Stop Criteria)` > 1, .SD, 
+                         .SDcols = c("Intervention", "Time", "Event", "Pt Est", "se", "PnEIC", 
+                                     "abs(PnEIC / Stop Criteria)")]
+        print(PnEICs[order(`abs(PnEIC / Stop Criteria)`, decreasing = TRUE), ], digits = 4)
         cat("\n")
     }
     
@@ -190,6 +201,38 @@ print.ConcreteEst <- function(x, ...) {
         print(cbind(Risk = JFit$SupLrnCVRisks, Coef = JFit$SLCoef))
         cat("\n")
     }
-    
 }
 
+#' @describeIn doConcrete plot.ConcreteEst plot method for "ConcreteEst" class
+#' @param x a ConcreteEst object
+#' @param convergence logical: plot the PnEIC norms for each TMLE small update step
+#' @param propscores logical: plot the densities of the propensity scores for each intervention
+#' @param ... additional arguments to be passed into plot methods
+#' @exportS3Method plot ConcreteEst
+
+plot.ConcreteEst <- function(x, convergence = TRUE, propscores = TRUE, ask = TRUE, ...) {
+    if (ask) {
+        oask <- devAskNewPage(TRUE)
+        on.exit(devAskNewPage(oask))
+    }
+    if (convergence) {
+        dev.hold()
+        plot(x = seq_along(attr(x, "NormPnEICs")) - 1, y = attr(x, "NormPnEICs"), 
+             xlab = "TMLE step", ylab = "PnEIC Norm", main = "TMLE Convergence", 
+             pch = 20)
+        dev.flush()
+    }
+    if (propscores) {
+        for (i in seq_along(x)) {
+            propscore <- x[[i]]$NuisanceWeight
+            title = paste0("Distribution of Propensity Weights for Intervention \"",
+                           names(x)[i], "\"")
+            dev.hold()
+            plot(density(1 / propscore), 
+                 xlab = "G-related Nuisance Denominator", 
+                 main = title)
+            abline(v = 5 / sqrt(ncol(propscore)) / log(ncol(propscore)), col = "red")
+            dev.flush()
+        }
+    }
+}

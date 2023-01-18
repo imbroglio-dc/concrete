@@ -127,6 +127,7 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, TargetEvent, TargetTime,
     warning("TMLE has not converged by step ", MaxUpdateIter, " - Estimates may not have ",
             "the desired asymptotic properties")
     attr(Estimates, "TmleConverged") <- list("converged" = FALSE, "step" = StepNum)
+    attr(Estimates, "NormPnEICs") <- NormPnEICs
     return(Estimates)
 }
 

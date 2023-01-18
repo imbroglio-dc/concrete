@@ -4,16 +4,30 @@
 \alias{getOutput}
 \title{getOutput}
 \usage{
-getOutput(Estimate, Estimand = c("RD", "RR", "Risk"), A1 = 1, A0 = 2)
+getOutput(
+  Estimate,
+  Estimand = c("RD", "RR", "Risk"),
+  Intervention = seq_along(Estimate),
+  GComp = NULL,
+  Simultaneous = TRUE,
+  Signif = 0.05
+)
 }
 \arguments{
 \item{Estimate}{list : a "ConcreteEst" object}
 
 \item{Estimand}{character: a subset of c("RD", "RR", "Risk") specifying the target estimand}
 
-\item{A1}{default = 1, the ConcreteEst list element that is the "Treated" arm for risk comparisons}
+\item{Intervention}{numeric (default = seq_along(ConcreteEst)): the ConcreteEst list element
+corresponding to the target intervention. For comparison estimands such as RD and RR,
+Intervention should be a numeric vector with length 2, the first term designating
+"treatment" ConcreteEst list element and the second designating the "control".}
 
-\item{A0}{default = 2, the ConcreteEst list element that is the "Control" arm for risk comparisons}
+\item{GComp}{logical: to return g-formula point estimates based on initial nuisance parameter estimation}
+
+\item{Simultaneous}{logical: to compute simultaneous confidence intervals}
+
+\item{Signif}{numeric (default = 0.05): alpha for 2-tailed hypothesis testing}
 }
 \value{
 data.table of point estimates and standard deviations
@@ -23,8 +37,7 @@ getOutput
 }
 \examples{
 # getOutput returns risk difference, relative risk, and treatment-specific risks
-# concrete.out <- getOutput(Estimate = concrete.est, Estimand = c("rd", "rr", "risk"),
-#                           TargetTime = target.time, TargetEvent = target.event, GComp = TRUE)
+# concrete.out <- getOutput(Estimate = concrete.est, Estimand = "RR", Intervention = 1:2)
 # concrete.out$RD
 # concrete.out$RR
 # concrete.out$Risk
