@@ -531,7 +531,7 @@ getRegime <- function(Intervention, Data) {
         } else
             names(Regimes) <- names(Intervention)
     }
-    else if (all(try(as.character(Intervention)) %in% c("0", "1"))) {
+    else if (all(try(as.numeric(Intervention)) %in% c(0, 1), try(length(Intervention)) %in% c(1, 2))) {
         Regimes <- list()
         if ("1" %in% try(as.character(Intervention))) {
             Regimes[["A=1"]] <- rep_len(1, length(TrtVal))
@@ -662,6 +662,7 @@ getModel <- function(Model, Data, HazEstBackend, PropScoreBackend, Verbose) {
                     cat("Only cox-based estimation of censoring and event hazards is supported ", 
                         "so the backend for Model[['", FitVar,"']] has been changed to 'coxph\n")
                 }
+                JBackend <- attr(Model[[FitVar]], "Backend")
                 
                 if (is.list(Model[[FitVar]])) {
                     if (is.null(names(Model[[FitVar]]))) {
@@ -679,12 +680,6 @@ getModel <- function(Model, Data, HazEstBackend, PropScoreBackend, Verbose) {
                                        "\\s*==\\s*", FitVar, "\\s*\\)\\s*~\\s*")
                 for (j in seq_along(Model[[FitVar]])) {
                     Formula <- as.character(Model[[FitVar]][j])
-                    # if (!grepl(CoxLeftRegex, Formula)) {
-                    #     cat("The left hand side of the Cox model formula for Model[[\"",
-                    #         FitVar, "\"]][[", j, "]] has been corrected to ", CoxLeft, "\n",
-                    #         sep = "")
-                    # }
-                    
                     CoxRight <- paste0(" ", sub("^.*~", "", Formula), " ")
                     
                     # rename covariates ----
@@ -702,6 +697,7 @@ getModel <- function(Model, Data, HazEstBackend, PropScoreBackend, Verbose) {
                     Model[[FitVar]][[j]] <- as.formula(paste0(CoxLeft, CoxRight))
                     attr(Model[[FitVar]][[j]], "NameChecked") <- TRUE
                 }
+                attr(Model[[FitVar]], "Backend") <- JBackend
             }
         }
     }
@@ -888,7 +884,8 @@ print.ConcreteArgs <- function(x, ...) {
     PSBackend <- attr(TrtMod, "Backend")
     if (PSBackend == "SuperLearner") {
         cat("Trt Pr Estimation (", PSBackend, "): Default SL Selector, Default Loss Fn, ", 
-            length(TrtMod)," candidates - ", paste0(head(TrtMod, 5), collapse = ", "), 
+            length(TrtMod), " candidate", ifelse(length(TrtMod) > 1, "s", ""), " - ", 
+            paste0(head(TrtMod, 5), collapse = ", "), 
             ifelse(length(TrtMod) > 5, "...", ""), "\n", sep = "")
     } else {
         if (inherits(TrtMod, "Stack")) 
@@ -897,14 +894,15 @@ print.ConcreteArgs <- function(x, ...) {
         else
             lrnrs <- sub("^Lrnr_([[:alpha:]]+)(.*)", "Lrnr_\\1", TrtMod$name)
         cat("Propensity Score Estimation (", PSBackend, "): Default SL Selector, Default Loss Fn, ", 
-            length(lrnrs)," candidates - ", paste0(head(lrnrs, 5), collapse = ", "), 
+            length(lrnrs), " candidate", ifelse(length(lrnrs) > 1, "s", ""), " - ", 
+            paste0(head(lrnrs, 5), collapse = ", "), 
             ifelse(length(lrnrs) > 5, "...", ""), "\n", sep = "")
     }
     for (j in UniqueEvents) {
         JMod <- x$Model[[as.character(j)]]
         cat(ifelse(as.numeric(j) <= 0, "Cens. ", "Event "), j, 
             " Estimation (coxph): Discrete SL Selector, Log Partial-LL Loss, ", 
-            length(JMod), " candidates", sep = "")
+            length(JMod), " candidate", ifelse(length(JMod) > 1, "s", ""), sep = "")
         if (attr(JMod, "Backend") == "coxph"){
             cat(" - ", paste0(head(names(JMod), 5), collapse = ", "), 
                 ifelse(length(JMod) > 5, ", ...", ""), sep = "")

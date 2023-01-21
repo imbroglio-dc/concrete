@@ -178,10 +178,9 @@ getSimultaneous <- function(Estimate, Risks, RiskWanted, RDWanted, RRWanted, Int
                        return(cbind("Intervention" = names(Estimate)[a], IC.a))
                    }))
     
-    ICs <- merge(ICs, subset(Risks[Estimator == "tmle", ], 
-                             select = c("Intervention", "Time", "Event", "Pt Est")), 
+    ICs <- merge(ICs, getRisk(Estimate = Estimate, TargetTime = attr(Estimate, "TargetTime"), 
+                              TargetEvent = attr(Estimate, "TargetEvent"), GComp = FALSE), 
                  by = c("Intervention", "Time", "Event"))
-    
     if (RDWanted)
         RDICs <- ICs[, list("Intervention" = "Risk Diff",
                             "IC" = IC[Intervention == A1] - IC[Intervention == A0]), 

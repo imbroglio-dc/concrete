@@ -70,7 +70,7 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, TargetEvent, TargetTime,
         
         ## Get updated hazards and EICs
         newEsts <- lapply(Estimates, function(est.a) {
-            NewHazards <- updateHazard(GStar = attr(est.a[["PropScore"]], "g.star.obs"),
+            NewHazards <- updateHazard(GStar = attr(est.a[["PropScore"]], "g.star.intervention"),
                                        Hazards = est.a[["Hazards"]],
                                        TotalSurv = est.a[["EvntFreeSurv"]],
                                        NuisanceWeight = est.a[["NuisanceWeight"]],
@@ -141,8 +141,12 @@ updateHazard <- function(GStar, Hazards, TotalSurv, NuisanceWeight, EvalTimes, T
     lapply(Hazards, function(haz.al) { # loop over L
         l <- attr(haz.al, "j")
         update.l <- matrix(0, nrow = nrow(haz.al), ncol = ncol(haz.al))
+        for (j in TargetEvent) {
+            F.j.t <- apply(Hazards[[as.character(j)]] * TotalSurv, 2, cumsum)
+            
+        }
         lapply(TargetEvent, function(j) {
-            `F.j.t` <- apply(Hazards[[as.character(j)]] * TotalSurv, 2, cumsum)
+            F.j.t <- apply(Hazards[[as.character(j)]] * TotalSurv, 2, cumsum)
             update.j <- sapply(TargetTime, function(tau) {
                 `F.j.tau` <- `F.j.t`[EvalTimes == tau, ]
                 h.q <- (l == j) - t(apply(`F.j.t`, 1, function(r) `F.j.tau` - r)) / TotalSurv

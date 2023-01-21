@@ -90,10 +90,13 @@ test_that("Intervention specifications", {
     
     set.seed(0)
     data[, trt := sample(0:1, length(trt), replace = TRUE)]
-    test_vals <- list(NaN, NA, Inf, TRUE, "a", 1, matrix(1, 3, 3), function(...) return(list(...)),
-                      list(function(x) x, function(y) y))
+    test_vals <- list(NaN, NA, Inf, TRUE, "a", matrix(1, 3, 3), 
+                      function(...) return(list(...)),
+                      list(function(x) x, function(y) 1))
     for (value in test_vals) {
-        expect_error(getRegime(value, data = data))
+        expect_error(formatArguments(DataTable = data, EventTime = "time", 
+                                     EventType = "status", Treatment = "trt", 
+                                     ID = "id", Intervention = value))
     }
 })
 

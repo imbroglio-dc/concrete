@@ -1,24 +1,45 @@
 test_that("doConcrete() runs with competing risks", 
           code = {
               # competing risk
+              PnEIC <- NULL
+              require(data.table)
+              data <- as.data.table(survival::pbc)[, c("time", "status", "trt", "id", "age", "sex")]
+              set.seed(0)
+              data[, trt := sample(0:1, length(trt), replace = TRUE)]
+              
+              # using superlearner
               expect_error(object = {
-                  require(data.table)
-                  data <- as.data.table(survival::pbc)[, c("time", "status", "trt", "id", "age", "sex")]
-                  set.seed(0)
-                  data[, trt := sample(0:1, length(trt), replace = TRUE)]
-                  
-                  # data[, status := as.numeric(status >= 1)] # competing risk or not
-                  # data[status == 0, status := sample(1:2, sum(status == 0), replace = TRUE)]
-                  
                   concrete.args.SL <- formatArguments(Data = data, EventTime = "time", EventType = "status",
                                                       Treatment = "trt", ID = "id", Intervention = 0:1,
                                                       TargetTime = 2500, TargetEvent = NULL,
                                                       Model = NULL, Verbose = TRUE, ReturnModels = TRUE)
-                  
                   concrete.est <- doConcrete(ConcreteArgs = concrete.args.SL)
                   print(concrete.est, Verbose = FALSE)
                   plot(concrete.est, convergence = FALSE, propscores = TRUE, ask = FALSE)
-                  
+                  }, regexp = NA)
+              
+              # getOutput
+              expect_error(object = {
+                  concrete.out <- getOutput(concrete.est)
+                  plot(concrete.out, "RR", NullLine = TRUE, GComp = TRUE, ask = FALSE)
+                  plot(concrete.out, "RR", NullLine = TRUE, GComp = FALSE, ask = FALSE)
+                  plot(concrete.out, "RR", NullLine = FALSE, GComp = TRUE, ask = FALSE)
+                  plot(concrete.out, "RR", NullLine = FALSE, GComp = FALSE, ask = FALSE)
+              }, regexp = NA)
+              
+              # not-converged tmle
+              expect_warning(object = {
+                  concrete.args.SL$MaxUpdateIter <- 1
+                  doConcrete(concrete.args.SL)
+              })
+              
+              # getNormPnEIC using sigma - needs stricter tests to actually be used
+              expect_error(object = {
+                  concrete:::getNormPnEIC(concrete.est$`A=1`$SummEIC[, PnEIC], NaN)
+              }, regexp = NA)
+              
+              # using sl3
+              expect_error(object = {
                   if(require(sl3) & require(Rsolnp)){
                       a_lrnrs <- make_learner(Stack, Lrnr_glm$new(), Lrnr_glmnet$new())
                       concrete.args.sl3 <- formatArguments(Data = data, EventTime = "time", EventType = "status",
@@ -32,8 +53,9 @@ test_that("doConcrete() runs with competing risks",
                       print(concrete.est)
                       plot(concrete.est, convergence = FALSE, propscores = TRUE, ask = FALSE)
                   }
+              }, regexp = NA)  
                   
-              }, regexp = NA)
+                  
           }
 )
 
@@ -98,3 +120,5 @@ test_that("doConcrete() throws an error if input is not a ConcreteArgs object",
               })
           }
 )
+
+
