@@ -531,7 +531,8 @@ getRegime <- function(Intervention, Data) {
         } else
             names(Regimes) <- names(Intervention)
     }
-    else if (all(try(as.numeric(Intervention)) %in% c(0, 1), try(length(Intervention)) %in% c(1, 2))) {
+    else if (all(try(as.numeric(Intervention), silent = TRUE) %in% c(0, 1), 
+             try(length(Intervention)) %in% c(1, 2))) {
         Regimes <- list()
         if ("1" %in% try(as.character(Intervention))) {
             Regimes[["A=1"]] <- rep_len(1, length(TrtVal))
