@@ -27,6 +27,8 @@
 getOutput <- function(Estimate, Estimand = c("RD", "RR", "Risk"), Intervention = seq_along(Estimate), 
                       GComp = NULL, Simultaneous = TRUE, Signif = 0.05) {
     `CI Low` <- `CI Hi` <- `Pt Est` <- `se` <- NULL
+    if (!inherits(Estimate, "ConcreteEst")) 
+        stop("Estimate must be a 'ConcreteEst' class object")
     if (!all(sapply(Estimand, function(e) ifelse(is.function(e), TRUE, 
                                                  grepl("(rd)|(rr)|(risk)|(risks)", tolower(e)))))) {
         stop("Estimand must be in c('RD', 'RR', 'Risk')")
@@ -96,7 +98,7 @@ getOutput <- function(Estimate, Estimand = c("RD", "RR", "Risk"), Intervention =
         Output <- getSimultaneous(Estimate = Estimate, Risks = Output, RiskWanted = RiskWanted, 
                                   RDWanted = RDWanted, RRWanted = RRWanted, 
                                   Intervention = Intervention, Signif = Signif)
-    
+    class(Output) <- union("ConcreteOut", class(Output))
     return(Output)
 }
 
@@ -230,9 +232,8 @@ getSimultaneous <- function(Estimate, Risks, RiskWanted, RDWanted, RRWanted, Int
 plot.ConcreteOut <- function(x, Estimand = c("rr", "rd", "risk"), NullLine = TRUE, GComp = FALSE, 
                              ask = TRUE, ...) {
     Event <- Time <- `Pt Est` <- Estimator <- se <- NULL
-    if(!requireNamespace("ggplot2", quietly = TRUE)) {
+    if(!requireNamespace("ggplot2", quietly = TRUE))
         stop("Plotting requires the 'ggplot2' package")
-    }
     if (ask) {
         oask <- devAskNewPage(TRUE)
         on.exit(devAskNewPage(oask))

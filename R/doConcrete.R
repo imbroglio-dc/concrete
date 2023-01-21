@@ -116,6 +116,9 @@ doConCRTmle <- function(DataTable, TargetTime, TargetEvent, Regime, CVFolds, Mod
                                   TargetEvent = TargetEvent, TargetTime = TargetTime,
                                   MaxUpdateIter = MaxUpdateIter, OneStepEps = OneStepEps,
                                   NormPnEIC = NormPnEIC, Verbose = Verbose)
+    } else {
+        attr(Estimates, "TmleConverged") <- list("converged" = TRUE, "step" = 0)
+        attr(Estimates, "NormPnEICs") <- NormPnEIC
     }
     
     attr(Estimates, "TargetTime") <- TargetTime

@@ -568,8 +568,8 @@ getTargetTime <- function(TargetTime, TargetEvent, Data) {
     TypeVal <- TimeVal <- NULL
     Times <- data.table::data.table("TimeVal" = Data[[attr(Data, "EventTime")]], 
                                     "TypeVal" = Data[[attr(Data, "EventType")]])
-    MaxTime <- Times[TypeVal > 0, ][, max(TimeVal)]
-    MinTime <- Times[TypeVal > 0, ][, list(TimeVal = min(TimeVal)), by = "TypeVal"]
+    MaxTime <- Times[TypeVal %in% TargetEvent, ][, max(TimeVal)]
+    MinTime <- Times[TypeVal %in% TargetEvent, ][, list(TimeVal = min(TimeVal)), by = "TypeVal"]
     MinTimeEvents <- MinTime[["TypeVal"]]
     MinTime <- MinTime[["TimeVal"]]
     
@@ -717,23 +717,25 @@ makeModelList <- function(Treatment, EventTime, EventType, UniqueEvents, Model, 
     # Prop Score
     sl3SpecOK <- all(inherits(Model[[Treatment]], "R6"), 
                      inherits(Model[[Treatment]], "Lrnr_base"))
-    SLSpecOK <- as.logical(all(sapply(Model[[Treatment]], is.character)) * 
-                               (length(sapply(Model[[Treatment]], is.character)) > 0))
     if (isTRUE(sl3SpecOK)) {
         attr(Model[[Treatment]], "Backend") <- "sl3"
-    } else if (isTRUE(SLSpecOK)) {
-        SLLrnrs <- try(invisible(utils::capture.output(suppressMessages(SuperLearner::listWrappers()))), silent = TRUE)
-        TrtLrnrs <- unlist(Model[[Treatment]], recursive = TRUE)
-        NonDefaultLrnrs <- TrtLrnrs[!sapply(TrtLrnrs, function(x) x %in% SLLrnrs)]
-        if (length(NonDefaultLrnrs > 0) & Verbose) {
-            # cat("These candidate learners are not included in SuperLearner by default:", 
-            #     NonDefaultLrnrs, "\n")
-        }
-        attr(Model[[Treatment]], "Backend") <- "SuperLearner"
     } else {
-        Model[[Treatment]] <- c("SL.xgboost", "SL.glmnet")
-        attr(Model[[Treatment]], "Backend") <- "SuperLearner"
-    }
+        SLSpecOK <- as.logical(all(sapply(Model[[Treatment]], is.character)) * 
+                                   (length(sapply(Model[[Treatment]], is.character)) > 0))
+        if (isTRUE(SLSpecOK)) {
+            SLLrnrs <- try(invisible(utils::capture.output(suppressMessages(SuperLearner::listWrappers()))), silent = TRUE)
+            TrtLrnrs <- unlist(Model[[Treatment]], recursive = TRUE)
+            NonDefaultLrnrs <- TrtLrnrs[!sapply(TrtLrnrs, function(x) x %in% SLLrnrs)]
+            if (length(NonDefaultLrnrs > 0) & Verbose) {
+                # cat("These candidate learners are not included in SuperLearner by default:", 
+                #     NonDefaultLrnrs, "\n")
+            }
+            attr(Model[[Treatment]], "Backend") <- "SuperLearner"
+        } else {
+            Model[[Treatment]] <- c("SL.xgboost", "SL.glmnet")
+            attr(Model[[Treatment]], "Backend") <- "SuperLearner"
+        }
+    } 
     
     
     # Censoring and Events

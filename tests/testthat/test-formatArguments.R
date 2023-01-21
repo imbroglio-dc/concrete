@@ -10,7 +10,7 @@ test_that("formatArguments works for a few sample analyses", {
                                      Treatment = "trt", 
                                      ID = 'id', 
                                      Intervention = 0:1, 
-                                     TargetTime = mean(data[["time"]]), 
+                                     TargetTime = quantile(data[["time"]], probs = seq(.1, .9, .05)), 
                                      TargetEvent = unique(data[["status"]])
     )
     expect_s3_class(concrete.args, class = "ConcreteArgs")
@@ -31,7 +31,23 @@ test_that("Data with missingness or incorrect type throw errors", {
                                  Intervention = 0:1, 
                                  TargetTime = mean(data[["time"]]), 
                                  TargetEvent = unique(data[["status"]])))
-    expect_error(formatArguments(Data = NA, 
+    expect_error(formatArguments(Data = as.data.frame(data), 
+                                 EventTime = "time", 
+                                 EventType = "status", 
+                                 Treatment = "trt", 
+                                 ID = 'id', 
+                                 Intervention = 0:1, 
+                                 TargetTime = mean(data[["time"]]), 
+                                 TargetEvent = unique(data[["status"]])))
+    expect_error(formatArguments(Data = as.numeric(data$time), 
+                                 EventTime = "time", 
+                                 EventType = "status", 
+                                 Treatment = "trt", 
+                                 ID = 'id', 
+                                 Intervention = 0:1, 
+                                 TargetTime = mean(data[["time"]]), 
+                                 TargetEvent = unique(data[["status"]])))
+    expect_error(formatArguments(Data = "blah", 
                                  EventTime = "time", 
                                  EventType = "status", 
                                  Treatment = "trt", 
@@ -74,7 +90,7 @@ test_that("Intervention specifications", {
     
     set.seed(0)
     data[, trt := sample(0:1, length(trt), replace = TRUE)]
-    test_vals <- list(NaN, NA, Inf, TRUE, "a", 1, matrix(1, 3, 3),
+    test_vals <- list(NaN, NA, Inf, TRUE, "a", 1, matrix(1, 3, 3), function(...) return(list(...)),
                       list(function(x) x, function(y) y))
     for (value in test_vals) {
         expect_error(getRegime(value, data = data))
@@ -82,11 +98,19 @@ test_that("Intervention specifications", {
 })
 
 test_that("ID is a vector with non-\'null\'-type values", {
+    require(data.table)
+    data <- as.data.table(survival::pbc)[, c("time", "status", "trt", "id", "age", "sex")]
+    
+    set.seed(0)
+    data[, trt := sample(0:1, length(trt), replace = TRUE)]
+    
+    expect_error(concrete:::getID(NULL, data), regexp = NA)
+    
     test_vals <- list(NaN, NA)
     for (value in test_vals) {
         data <- data.frame("x" = value)
-        expect_error(getID(value, data))
-        expect_error(getID("x", data))
+        expect_error(concrete:::getID(value, data))
+        expect_error(concrete:::getID("x", data))
     }
 })
 
@@ -130,3 +154,4 @@ test_that("RenameCovs = FALSE gets processed correctly", {
                                      RenameCovs = FALSE)
     expect_equal(colnames(concrete.args$DataTable), colnames(data))
 })
+
