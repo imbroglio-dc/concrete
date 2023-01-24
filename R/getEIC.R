@@ -39,49 +39,32 @@ getIC <- function(GStar, Hazards, TotalSurv, NuisanceWeight, TargetEvent, Target
                   T.tilde, Delta, EvalTimes, GComp) {
     Target <- expand.grid("Time" = TargetTime, "Event" = TargetEvent)
     UniqueEvents <- setdiff(sort(unique(Delta)), 0)
-    IC <- F.j.tau <- NULL
-    IC.a <- do.call(rbind, lapply(1:ncol(NuisanceWeight), function(i) {
-        Nuisance.i <- NuisanceWeight[, i]
-        Surv.i <- TotalSurv[, i]
-        Hazards.i <- lapply(Hazards, function(haz) haz[, i])
-        Risks.i <- lapply(Hazards.i, function(haz.i) cumsum(Surv.i * haz.i))
-        
-        if (GStar[i] == 0) # 1(A != a*)
-            return(cbind("ID" = i, Target,  "IC" = 0,
-                         "F.j.tau" = apply(Target,  1, function(target) {
-                             tau <- target[["Time"]]
-                             j <- target[["Event"]]
-                             return(Risks.i[[as.character(j)]][EvalTimes == tau])
-                         })))
-        
-        IC.jk <- t(apply(Target,  1, function(target) {
-            j <- target[["Event"]]
-            tau <- target[["Time"]]
-            t.tilde <- T.tilde[i]
-            TimeIndices.ik <- EvalTimes <= min(tau, t.tilde) ## 1(t \leq tau) * 1(t \leq t.tilde)
-            F.j.tau <- Risks.i[[as.character(j)]][EvalTimes == tau]
-            
-            s.ik <- EvalTimes[TimeIndices.ik]
-            Nuisance.ik <- Nuisance.i[TimeIndices.ik]
-            Surv.ik <- Surv.i[TimeIndices.ik]
-            haz.J.ik <- lapply(Hazards.i, function(r) r[TimeIndices.ik])
-            F.j.t <- Risks.i[[as.character(j)]][TimeIndices.ik]
-            
-            IC.jk <- sum(sapply(UniqueEvents, function(l) {
-                h.jk <- GStar[i] * Nuisance.ik * ((l == j) - (F.j.tau - F.j.t) / Surv.ik)
-                IC.ljk <- sum(h.jk * ((s.ik == t.tilde) * (Delta[i] == l) - haz.J.ik[[as.character(l)]]))
-                ## the second EIC component ( ... + F_j(tau | a, L) - Psi ) is done outside
-                return(IC.ljk)
-            }))
-            return(c("IC" = IC.jk, "F.j.tau" = F.j.tau))
+    
+    IC.a <- do.call(rbind, lapply(TargetEvent, function(j) {
+        F.j.t <- apply(Hazards[[as.character(j)]] * TotalSurv, 2, cumsum)
+        do.call(rbind, lapply(TargetTime, function(tau) {
+            h.FS <- (matrix(F.j.t[EvalTimes == tau, ], ncol = ncol(F.j.t), 
+                            nrow = nrow(F.j.t), byrow = TRUE) - F.j.t) / TotalSurv
+            h.FS <- h.FS[EvalTimes <= tau, ]
+            IC.j.tau <- Reduce("+", x = lapply(names(Hazards), function(l) {
+                ClevCov <- apply(rbind(GStar, NuisanceWeight[EvalTimes <= tau, ]), 
+                                 2, function(hg.i) hg.i[1] * hg.i[2:length(hg.i)]) * ((l == j) - h.FS)
+                
+                NLdS <- matrix(EvalTimes[EvalTimes <= tau], nrow = nrow(ClevCov), 
+                               ncol = ncol(ClevCov), byrow = FALSE)
+                NLdS <- apply(rbind(T.tilde, Delta, NLdS), 2, function(NLdS.i) {
+                    as.numeric(NLdS.i[3:length(NLdS.i)] == NLdS.i[1]) * (NLdS.i[2] == l)
+                })
+                
+                HazLS <- apply(rbind(T.tilde, Hazards[[l]][EvalTimes <= tau, ]), 2, function(HazLS.i) {
+                    HazLS.i[2:length(HazLS.i)] * (EvalTimes[EvalTimes <= tau] <= HazLS.i[1])
+                })
+                return(colSums(ClevCov * (NLdS - HazLS)))
+            })) + F.j.t[EvalTimes == tau, ] - mean(F.j.t[EvalTimes == tau, ])
+            return(data.table("ID" = seq_along(IC.j.tau), "Time" = tau, "Event" = j, "IC" = IC.j.tau))
         }))
-        IC.jk <- cbind("ID" = i, Target,  IC.jk)
-        return(IC.jk)
     }))
-    ## the second EIC component ( ... + F_j(tau | a, L) - Psi )
-    IC.a <- as.data.table(IC.a)
-    IC.a[, IC := IC + F.j.tau - mean(F.j.tau), by = c("Time", "Event")]
-    return(IC.a[, .SD, .SDcols = !"F.j.tau"])
+    return(IC.a)
 }
 
 getGComp <- function(EvalTimes, Hazards, TotalSurv, TargetTime) {

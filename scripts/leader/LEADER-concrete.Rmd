@@ -1,10 +1,122 @@
-```{r packages}
-library(survival)
-library(data.table)
+---
+title: "LEADER - concrete Competing Risks Analysis"
+author: "David Chen"
+date: "2023-01-22"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse); library(concrete); library(data.table)
+```
+
+## Analysis Plan
+
+
+
+
+## Analysis
+
+```{r LEADER data}
+data_dir <- "/Shared/Projects/novo_nordisk/data/"
+source("/Shared/Projects/novo_nordisk/R/functions/LEADER_W_clean_new.R")
+leader <- cleanLEADER(impute = TRUE, add_outcomes = TRUE)
+
+outcomes <- as.data.table(leader[, 1:11])
+outcomes <- outcomes[, list(TIME = min(AVAL_NFMI, AVAL_CVDEATH, AVAL_NFSTROKE, AVAL_NONCVDEATH), 
+                            EVENT = ifelse(EVENT_NONCVDEATH == 1 & AVAL_NONCVDEATH == min(AVAL_NFMI, AVAL_CVDEATH, AVAL_NFSTROKE, AVAL_NONCVDEATH), 4, 
+                                           ifelse(EVENT_CVDEATH == 1 & AVAL_CVDEATH == min(AVAL_NFMI, AVAL_CVDEATH, AVAL_NFSTROKE, AVAL_NONCVDEATH), 1,
+                                                  ifelse(EVENT_NFMI == 1 & AVAL_NFMI == min(AVAL_NFMI, AVAL_CVDEATH, AVAL_NFSTROKE, AVAL_NONCVDEATH), 2,
+                                                         ifelse(EVENT_NFSTROKE == 1 & AVAL_NFSTROKE == min(AVAL_NFMI, AVAL_CVDEATH, AVAL_NFSTROKE, AVAL_NONCVDEATH), 3, 0))))), by = "USUBJID"]
+obs <- full_join(outcomes, leader[, c(1, 12:ncol(leader))])
+```
+
+
+```{r concrete}
+devtools::load_all()
+args <- formatArguments(DataTable = obs, 
+                        EventTime = "TIME", 
+                        EventType = "EVENT", 
+                        Treatment = "ARM", 
+                        ID = "USUBJID", 
+                        Intervention = 0:1, 
+                        TargetTime = (1:4)*12, 
+                        TargetEvent = 1:4, 
+                        MaxUpdateIter = 500, 
+                        Verbose = TRUE)
+
+est <- doConcrete(args)
+
+out <- getOutput(est, "RD")
+plot(out)
+```
+
+## coxnet
+
+```{r coxnet}
+library(glmnet); library(survival)
+Data <- args$DataTable
+CovDT <- Data[, 5:ncol(Data)]
+TimeCol <- attr(Data, "EventTime")
+TypeCol <- attr(Data, "EventType")
+TrtCol <- attr(Data, "Treatment")
+IDCol <- attr(Data, "ID")
+CVFolds <- origami::folds_vfold(n = nrow(Data))
+ModelJ <- list("model1" = "coxnet")
+ReturnModels <- TRUE
+SupLrnLibRisk <- data.table::data.table(matrix(NaN, nrow = nrow(Data), ncol = length(ModelJ)))
+colnames(SupLrnLibRisk) <- names(ModelJ)
+
+for (Fold_v in CVFolds) {
+    TrainIndices <- Fold_v[["training_set"]]
+    ValidIndices <- Fold_v[["validation_set"]]
+    TrainData <- Data[TrainIndices, .SD, .SDcols = setdiff(colnames(Data), IDCol)]
+    ValidData <- Data[ValidIndices, .SD, .SDcols = setdiff(colnames(Data), IDCol)]
+    setorderv(ValidData, cols = TimeCol, order = -1)
+    
+    ModelFits <- list()
+    for (i in seq_along(ModelJ)) {
+        ## train model ----
+        if (ModelJ[[i]] == "coxnet") {
+            ModelFit <- glmnet(x = model.matrix(~ -1 + ., data = CovDT), 
+                               y = Surv(time = obs$TIME, event = (obs$EVENT == 1), type = "right"),
+                               family = "cox")
+            CovCols <- setdiff(colnames(ValidData), c(TimeCol, TypeCol, TrtCol, IDCol))
+            z <- as.matrix(ValidData[, .SD, .SDcols = CovCols])
+        } else {
+            CoxphArgs <- list("formula" = ModelJ[[i]], "data" = TrainData)
+            ModelFit <- do.call(survival::coxph, CoxphArgs)
+        }
+        if (ReturnModels) ModelFits[[i]] <- ModelFit
+        
+        ## validation loss (-log partial likelihood) ----
+        if (ModelJ[[i]] == "coxnet") {
+            for (s in seq_along(ModelFit$lambda)) {
+                ValidData[, FitLP := predict(ModelFit, newx = as.matrix(z), s = ModelFit$lambda[s], type = "link")]
+                ValidData[, AtRisk := cumsum(exp(FitLP))]
+                ValidData[AtRisk == 0, AtRisk := 1]
+                ValidData[, paste0("coxnet.s", s) := (.SD == 1) * (FitLP - log(AtRisk)), .SDcols = "EVENT"]
+            }
+            CoxnetRisk <- -colSums(ValidData[, .SD, .SDcols = grep("coxnet", colnames(ValidData), value = TRUE)])
+            ValidData[, names(ModelJ)[i] := get(names(which.min(CoxnetRisk)))]
+            ValidData <- ValidData[, .SD, .SDcols = !paste0("coxnet.s", seq_along(ModelFit$lambda))]
+        } else {
+            ValidData[, FitLP := stats::predict(ModelFit, type = "lp", newdata = ValidData)]
+            ValidData[, AtRisk := cumsum(exp(FitLP))]
+            ValidData[AtRisk == 0, AtRisk := 1]
+            ValidData[, names(ModelJ)[i] := (.SD == j) * (FitLP - log(AtRisk)), .SDcols = TypeCol]
+        }
+    }
+    SupLrnLibRisk[ValidIndices, (names(ModelJ)) := subset(ValidData, select = names(ModelJ))]
+}
+## metalearner (discrete selector) ----
+SLCVRisk <- -colSums(SupLrnLibRisk)
+SLModel <- ModelJ[[which.min(SLCVRisk)]]
+SLCoef <- as.numeric(SLCVRisk / min(SLCVRisk) == 1)
+names(SLCoef) <- names(SLCVRisk)
+
+
 
 ```
 
-```{r}
-
-```
-
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

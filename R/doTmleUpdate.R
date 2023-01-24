@@ -79,21 +79,23 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, TargetEvent, TargetTime,
                                        NormPnEIC = NormPnEIC, OneStepEps = WorkingEps,
                                        TargetEvent = TargetEvent, TargetTime = TargetTime)
             NewSurv <- apply(Reduce(`+`, NewHazards), 2, function(haz) exp(-cumsum(haz)))
-            NewIC <- summarizeIC(
-                getIC(GStar =  attr(est.a[["PropScore"]], "g.star.obs"),
-                      Hazards = NewHazards, TotalSurv = NewSurv,
-                      NuisanceWeight = est.a[["NuisanceWeight"]],
-                      TargetEvent = TargetEvent, TargetTime = TargetTime,
-                      T.tilde = T.tilde, Delta = Delta,
-                      EvalTimes = EvalTimes, GComp = FALSE)
-            )
-            return(list("Hazards" = NewHazards, "EvntFreeSurv" = NewSurv, "SummEIC" = NewIC))
+            NewSurv[NewSurv < 1e-12] <- 1e-12
+            NewIC <- getIC(GStar =  attr(est.a[["PropScore"]], "g.star.obs"),
+                           Hazards = NewHazards, TotalSurv = NewSurv,
+                           NuisanceWeight = est.a[["NuisanceWeight"]],
+                           TargetEvent = TargetEvent, TargetTime = TargetTime,
+                           T.tilde = T.tilde, Delta = Delta,
+                           EvalTimes = EvalTimes, GComp = FALSE)
+            return(list("Hazards" = NewHazards, "EvntFreeSurv" = NewSurv, 
+                        "SummEIC" = summarizeIC(NewIC)), "IC" = NewIC)
         })
         
         ## Check for improvement
         NewSummEIC <- do.call(rbind, lapply(seq_along(newEsts), function(a) {
             cbind("Trt" = names(newEsts)[a], newEsts[[a]][["SummEIC"]])}))
         NewNormPnEIC <- getNormPnEIC(NewSummEIC[Time %in% TargetTime & Event %in% TargetEvent, PnEIC])
+        
+        if(anyNA(NewNormPnEIC)) browser()
         
         if (NormPnEIC < NewNormPnEIC) {
             if (Verbose)
@@ -136,71 +138,69 @@ updateHazard <- function(GStar, Hazards, TotalSurv, NuisanceWeight, EvalTimes, T
     eps <- Time <- Event <- NULL
     Iterative <- FALSE
     if (min(TotalSurv) == 0)
-        stop("max(TargetTime) when people's survival probabilty -> 0. ",
-             "This makes the clever covariate explode.")
-    lapply(Hazards, function(haz.al) { # loop over L
-        l <- attr(haz.al, "j")
-        update.l <- matrix(0, nrow = nrow(haz.al), ncol = ncol(haz.al))
-        for (j in TargetEvent) {
-            F.j.t <- apply(Hazards[[as.character(j)]] * TotalSurv, 2, cumsum)
-            
-        }
-        lapply(TargetEvent, function(j) {
-            F.j.t <- apply(Hazards[[as.character(j)]] * TotalSurv, 2, cumsum)
-            update.j <- sapply(TargetTime, function(tau) {
-                `F.j.tau` <- `F.j.t`[EvalTimes == tau, ]
-                h.q <- (l == j) - t(apply(`F.j.t`, 1, function(r) `F.j.tau` - r)) / TotalSurv
-                h.q[EvalTimes > tau, ] <- 0
-                update <- h.q * NuisanceWeight %*% diag(GStar) * PnEIC[Time == tau & Event == j, PnEIC]
-                update.l <<- update.l + update
-                return(NULL)
-            })
-            return(NULL)
+        stop("People's survival probabilty -> 0 makes the clever covariate explode.")
+    if (!Iterative) {
+        NewHazards <- lapply(Hazards, function(haz.al) { # loop over L
+            l <- attr(haz.al, "j")
+            update.l <- 
+                Reduce("+", x = lapply(TargetEvent, function(j) {
+                    F.j.t <- apply(Hazards[[as.character(j)]] * TotalSurv, 2, cumsum)
+                    Reduce("+", x = lapply(TargetTime, function(tau) {
+                        h.FS <- (matrix(F.j.t[EvalTimes == tau, ], ncol = ncol(F.j.t), 
+                                        nrow = nrow(F.j.t), byrow = TRUE) - F.j.t) / TotalSurv
+                        h.FS <- h.FS[EvalTimes > tau, ] <- 0
+                        
+                        h.G <- apply(rbind(GStar, NuisanceWeight), 2, function(hg.i) 
+                            hg.i[1] * hg.i[2:length(hg.i)])
+                        h.G[EvalTimes > tau, ] <- 0
+                        
+                        return(h.G * ((l == j) - h.FS) * PnEIC[Time == tau & Event == j, PnEIC])
+                    }))
+                }))
+            newhaz.al <- haz.al * exp(update.l * OneStepEps / NormPnEIC)
+            attr(newhaz.al, "j") <- l
+            return(newhaz.al)
         })
-        newhaz.al <- haz.al * exp(update.l * OneStepEps / NormPnEIC)
-        
-        # if (Iterative) {
-        #     eps.l <- nleqslv(0.01, function(eps) getFluctPnEIC(GStar = GStar, Hazards = Hazards,
-        #                                                        TotalSurv = TotalSurv,
-        #                                                        NuisanceWeight = NuisanceWeight,
-        #                                                        TargetEvent = TargetEvent,
-        #                                                        TargetTime = TargetTime, T.tilde = T.tilde,
-        #                                                        Delta = Delta, EvalTimes = EvalTimes,
-        #                                                        GComp = FALSE, l = attr(haz.al, "j"),
-        #                                                        fluct.eps = eps))$x
-        #     lapply(TargetEvent, function(j) {
-        #         `F.j.t` <- apply(Hazards[[as.character(j)]] * TotalSurv, 2, cumsum)
-        #         eps.lj <- nleqslv(0.01, function(eps) getFluctPnEIC(GStar = GStar, Hazards = Hazards,
-        #                                                             TotalSurv = TotalSurv,
-        #                                                             NuisanceWeight = NuisanceWeight,
-        #                                                             TargetEvent = j,
-        #                                                             TargetTime = TargetTime, T.tilde = T.tilde,
-        #                                                             Delta = Delta, EvalTimes = EvalTimes,
-        #                                                             GComp = FALSE, l = attr(haz.al, "j"),
-        #                                                             fluct.eps = eps))$x
-        #         update.j <- sapply(TargetTime, function(tau) {
-        #             eps.ljk <- nleqslv(0.01, function(eps) getFluctPnEIC(GStar = GStar, Hazards = Hazards,
-        #                                                                  TotalSurv = TotalSurv,
-        #                                                                  NuisanceWeight = NuisanceWeight,
-        #                                                                  TargetEvent = j,
-        #                                                                  TargetTime = tau, T.tilde = T.tilde,
-        #                                                                  Delta = Delta, EvalTimes = EvalTimes,
-        #                                                                  GComp = FALSE, l = attr(haz.al, "j"),
-        #                                                                  fluct.eps = eps))$x
-        #             `F.j.tau` <- `F.j.t`[EvalTimes == tau, ]
-        #             h.q <- (l == j) - t(apply(`F.j.t`, 1, function(r) `F.j.tau` - r)) / TotalSurv
-        #             h.q[EvalTimes > tau, ] <- 0
-        #             update <- h.q * NuisanceWeight %*% diag(GStar) * eps.ljk
-        #             update.l <<- update.l + update
-        #             return(NULL)
-        #         })
-        #         return(NULL)
-        #     })
-        # }
-        
-        attr(newhaz.al, "j") <- l
-        return(newhaz.al)
-    })
+    }
+    
+    #     eps.l <- nleqslv(0.01, function(eps) getFluctPnEIC(GStar = GStar, Hazards = Hazards,
+    #                                                        TotalSurv = TotalSurv,
+    #                                                        NuisanceWeight = NuisanceWeight,
+    #                                                        TargetEvent = TargetEvent,
+    #                                                        TargetTime = TargetTime, T.tilde = T.tilde,
+    #                                                        Delta = Delta, EvalTimes = EvalTimes,
+    #                                                        GComp = FALSE, l = attr(haz.al, "j"),
+    #                                                        fluct.eps = eps))$x
+    #     lapply(TargetEvent, function(j) {
+    #         `F.j.t` <- apply(Hazards[[as.character(j)]] * TotalSurv, 2, cumsum)
+    #         eps.lj <- nleqslv(0.01, function(eps) getFluctPnEIC(GStar = GStar, Hazards = Hazards,
+    #                                                             TotalSurv = TotalSurv,
+    #                                                             NuisanceWeight = NuisanceWeight,
+    #                                                             TargetEvent = j,
+    #                                                             TargetTime = TargetTime, T.tilde = T.tilde,
+    #                                                             Delta = Delta, EvalTimes = EvalTimes,
+    #                                                             GComp = FALSE, l = attr(haz.al, "j"),
+    #                                                             fluct.eps = eps))$x
+    #         update.j <- sapply(TargetTime, function(tau) {
+    #             eps.ljk <- nleqslv(0.01, function(eps) getFluctPnEIC(GStar = GStar, Hazards = Hazards,
+    #                                                                  TotalSurv = TotalSurv,
+    #                                                                  NuisanceWeight = NuisanceWeight,
+    #                                                                  TargetEvent = j,
+    #                                                                  TargetTime = tau, T.tilde = T.tilde,
+    #                                                                  Delta = Delta, EvalTimes = EvalTimes,
+    #                                                                  GComp = FALSE, l = attr(haz.al, "j"),
+    #                                                                  fluct.eps = eps))$x
+    #             `F.j.tau` <- `F.j.t`[EvalTimes == tau, ]
+    #             h.q <- (l == j) - t(apply(`F.j.t`, 1, function(r) `F.j.tau` - r)) / TotalSurv
+    #             h.q[EvalTimes > tau, ] <- 0
+    #             update <- h.q * NuisanceWeight %*% diag(GStar) * eps.ljk
+    #             update.l <<- update.l + update
+    #             return(NULL)
+    #         })
+    #         return(NULL)
+    #     })
+    # }
+    return(NewHazards)
 }
 
 # getFluctPnEIC <- function(GStar, Hazards, TotalSurv, NuisanceWeight, TargetEvent, TargetTime,

@@ -8,15 +8,15 @@ simConCR <- function(interval = 1:2e3,
                      t3_coefs = c(2.4e-5, 1.2),
                      n = 1e3,
                      assign_A = function(W, n) rbinom(n, 1, 0.5),
-                     test_leader.xlsx_path = "./scripts/test_leader.xlsx",
+                     test_leader.xlsx_path = "/Shared/Projects/concrete/scripts/leader/test_leader.xlsx",
                      random_seed = 12345678) {
     library(data.table)
     library(tidyverse)
     base_data <- try(readxl::read_excel(test_leader.xlsx_path))
-
+    
     if (inherits(base_data, "try-error"))
         stop("could not find the 'test_leader.xlsx' document at the specified filepath")
-
+    
     base_data <- base_data %>%
         mutate_if(is_character, as_factor) %>%
         mutate_if(~length(levels(.)) == 2, ~as.logical(as.numeric(.)-1)) %>%
@@ -28,13 +28,13 @@ simConCR <- function(interval = 1:2e3,
                                  T ~ BMIBL)) %>%
         dplyr::select(ARM, TIME, everything(), -subjid, -time_days, -event) %>%
         as.data.table()
-
-
+    
+    
     # 0. parameters -----------------------------------------------------------
     # first two terms in coefs are B and k respectively for weibull hazard = B * k * x^(k - 1)
-
+    
     # 1. Event Process Models ---------------------------------------------------------------------
-
+    
     return_weibull_outputs <- function(phi, B, k, output = c("h.t", "S.t", "F_inv.u"), t, u) {
         out <- list()
         if ("h.t" %in% output)
@@ -45,9 +45,9 @@ simConCR <- function(interval = 1:2e3,
             out[["F_inv.u"]] <- ( -log(1 - u) / (phi * B) )^(1/k)
         return(out)
     }
-
+    
     ## 1.1 Censoring Model ------------------------------------------------------------------------
-
+    
     # lost-to-followup
     ltfu_fn <- function(ARM, AGE, params, output = c("h.t", "S.t", "F_inv.u"), t = NULL, u = NULL) {
         B <- params[1]
@@ -55,10 +55,10 @@ simConCR <- function(interval = 1:2e3,
         b_A <- log(params[3]) * as.numeric(ARM)
         b_AGE <- log(params[4]) * as.numeric(scale(AGE, scale = max(abs(AGE - mean(AGE))) / 3))
         phi <- exp(b_A + b_AGE)
-
+        
         return(return_weibull_outputs(phi, B, k, output, t, u))
     }
-
+    
     # end of study
     eos_fn <- function(params, output = c("S.t", "F_inv.u"), t = NULL, u = NULL) {
         out <- list()
@@ -68,12 +68,12 @@ simConCR <- function(interval = 1:2e3,
             out[["F_inv.u"]] <- params[1] + (1 - u) * diff(params)
         return(out)
     }
-
-
+    
+    
     ## 1.2 Hazard Models --------------------------------------------------------------------------
-
+    
     ### 1.2.1 Event 1 -----------------------------------------------------------------------------
-
+    
     T1_fn <- function(ARM, SMOKER, BMIBL, params,
                       output = c("h.t", "S.t", "F_inv.u"), t = NULL, u = NULL) {
         B <- params[1]
@@ -83,10 +83,10 @@ simConCR <- function(interval = 1:2e3,
         b3 <- log(params[5]) * as.numeric(BMIBL > 30)
         b4 <- log(params[6]) * as.numeric(ARM == 0) * as.numeric(BMIBL > 30)
         phi <- exp(b1 + b2 + b3 + b4)
-
+        
         return(return_weibull_outputs(phi, B, k, output, t, u))
     }
-
+    
     ### 1.2.2 Event 2 -----------------------------------------------------------------------------
     T2_fn <- function(ARM, STROKSFL, MIFL, params,
                       output = c("h.t", "S.t", "F_inv.u"), t = NULL, u = NULL) {
@@ -96,24 +96,24 @@ simConCR <- function(interval = 1:2e3,
         b2 <- log(params[4]) * as.numeric(ARM == 0) * as.numeric(MIFL)
         b3 <- log(params[5]) * as.numeric(STROKSFL) * as.numeric(MIFL)
         phi <- exp(b1 + b2 + b3)
-
+        
         return(return_weibull_outputs(phi, B, k, output, t, u))
     }
-
+    
     ### 1.2.3 Event 3 -----------------------------------------------------------------------------
-
+    
     ## just a Weibull, shape lambda, scale p
     T3_fn <- function(params, output = c("h.t", "S.t", "F_inv.u"), t = NULL, u = NULL) {
         B <- params[1]
         k <- params[2]
         phi <- 1
-
+        
         return(return_weibull_outputs(phi, B, k, output, t, u))
     }
-
-
+    
+    
     # 2. Simulate Data ----------------------------------------------------------------------------
-
+    
     simulate_data <- function(n = 1e3, assign_A = function(W, n) rbinom(n, 1, 0.5), base_data = NULL,
                               random_seed = random_seed) {
         set.seed(random_seed)
@@ -127,14 +127,19 @@ simConCR <- function(interval = 1:2e3,
                                "T2" = T2_fn(A, obs[["STROKSFL"]], obs[["MIFL"]],
                                             t2_coefs, output = "F_inv.u", u = runif(n, 0, 1))$F_inv.u,
                                "T3" = T3_fn(t3_coefs, output = "F_inv.u", u = runif(n, 0, 1))$F_inv.u)
-
-        obs <- cbind(cbind(t(apply(outcomes, 1, function(r)
-            c("TIME" = min(r), "EVENT" = max(0, which(r == min(r, na.rm = T)) - 2)))),
-            "ARM" = A), obs)
+        
+        obs <- 
+            cbind(
+                cbind(
+                    t(apply(outcomes, 1, 
+                            function(r) c("TIME" = min(r), 
+                                          "EVENT" = max(0, which(r == min(r, na.rm = T)) - 2)))),
+                    "ARM" = A), 
+                obs)
         obs <- as.data.table(cbind("id" = 1:nrow(obs), obs))
         return(obs)
     }
-
+    
     return(simulate_data(n = n, assign_A = assign_A, base_data = base_data, random_seed = random_seed))
 }
 

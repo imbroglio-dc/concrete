@@ -25,6 +25,11 @@ test_that("doConcrete() runs with competing risks",
                   plot(concrete.out, "RR", NullLine = TRUE, GComp = FALSE, ask = FALSE)
                   plot(concrete.out, "RR", NullLine = FALSE, GComp = TRUE, ask = FALSE)
                   plot(concrete.out, "RR", NullLine = FALSE, GComp = FALSE, ask = FALSE)
+                  
+                  plot(concrete.out, "RD", NullLine = TRUE, GComp = TRUE, ask = FALSE)
+                  plot(concrete.out, "RD", NullLine = TRUE, GComp = FALSE, ask = FALSE)
+                  plot(concrete.out, "RD", NullLine = FALSE, GComp = TRUE, ask = FALSE)
+                  plot(concrete.out, "RD", NullLine = FALSE, GComp = FALSE, ask = FALSE)
               }, regexp = NA)
               
               # not-converged tmle

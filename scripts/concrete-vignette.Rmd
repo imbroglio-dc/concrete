@@ -4,54 +4,62 @@ author: "David Chen"
 date: "2022-09-08"
 output: pdf_document
 ---
-# concrete
-## What concrete does:
+# What is concrete:
+Package implementing one-step TMLE for survival and competing risks in continuous time.
 - Data Structure
-    - survival time-to-event in continuous time
-    - right-censoring & competing risks
-    - baseline covariate adjustment
-    - binary point treatment (multinomial and continuous to come)
+    - binary treatment given at baseline (support for multinomial and continous to come)
+    - right-censored time-to-event outcomes, possibly with competing risks, in continuous time
+    - covariates measured at baseline
+    - treatment and outcomes cannot have missingness. Missingness in covariates should be pre-imputed.
  
 - Estimands
     - static intervention (dynamic needs testing, stochastic to come)
     - absolute risk-derived parameters, e.g. relative risk, risk difference, event-free survival
-    - can target multiple cause-specific risks at multiple times
-
+    - can target risks at multiple times and multiple cause-specific risks for competing risks
+    
 - Estimation
     - propensity scores: `SuperLearner` or `sl3`-based SuperLearner
-    - hazards: "hacky" (see Anders!) Cox model based discrete SuperLearner
-    - plug-in g-computation estimator of risks using discrete Superlearner hazard
-    - one-step TMLE based on the local PnEIC-clever covariate approximation
+    - hazards: Cox-based discrete SuperLearner (Coxnet and HAL to come)
+    - one-step TMLE based on the local PnEIC approximation
+    - g-formula plug-in estimator using the discrete Superlearner hazards
+    - IC-based inference for TMLE
 
 ## What concrete does not do... yet?: 
  - `formal` survival SuperLearner backend, e.g. `riskRegression` or `survSuperLearner`
- - longitudinal treatment, mediation, time-dependent confounding 
- - imputation?
+ - longitudinal treatment, mediation, time-dependent confounding
  - requests?
 
 ## What concrete will not do:
  - left-censoring (delayed entry)
  - interval censoring
+ - paired or clustered data
  
 # concrete Workflow
-1. Cycle inputs through formatArguments() until it returns no errors
-2. run doConcrete() and wait
-3. get output from getOutput() (pretty printing and plotting not yet implemented)
+1. Cycle inputs through formatArguments() until satisfied with estimation specification
+2. run doConcrete()
+3. run getOutput() for plottable outcome tables
+
+# Usage: pbc minimal example
 
 ```{r setup, include=TRUE}
 # devtools::install_github("imbroglio-dc/concrete")
 library(concrete)
 library(data.table)
+set.seed(0)
+obs <- as.data.table(survival::pbc)
+obs <- obs[,  c("time", "status", "trt", "id", "age", "albumin", "sex", "stage")]
+obs[, stage := as.factor(stage)]
+# treatment cannot have missingness (and currently has to be binary 0,1)
+obs <- obs[!is.na(trt), ][, trt := trt - 1]
+head(obs)
 ```
 
-# formatArguments()
+## formatArguments()
 
 3 major "types" of arguments: 
  - specifying data
  - specifying estimand
  - specifying estimation
-
-(Also a growing collection of miscellaneous arguments)
 
 ## Data Arguments
 ### DataTable
@@ -59,19 +67,10 @@ library(data.table)
  - necessary columns: 
     - EventTime: the time to observed failure (or censoring) event.
     - EventType: the type of event, encoded as integers with 0 being reserved for right-censoring.
-    - Treatment: the intervention variable - binary is fully supported while numeric and multinomial interventions may be supported in the future.
+    - Treatment: the intervention variable - binary is fully supported while continous and multinomial interventions may be supported in the future.
  - optional columns:
     - ID (potentially for stratified cross-validation, etc) 
     - any number of column containing baseline covariates.
-
-```{r DataTable structure}
-set.seed(0)
-obs <- as.data.table(survival::pbc)
-obs <- obs[,  c("time", "status", "trt", "id", "age", "albumin", "sex", "stage")]
-obs <- obs[!is.na(trt), ][, trt := trt - 1]
-obs <- obs[, stage := as.factor(stage)]
-head(obs)
-```
 
 The EventTime column must be positive numeric (e.g. obs\$time), the EventType column must be non-negative integers (e.g. obs\$status), and the Treatment column must be binary (support for multinomial and continuous treatment variables is in the testing stage).
 

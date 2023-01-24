@@ -228,7 +228,7 @@ getSimultaneous <- function(Estimate, Risks, RiskWanted, RDWanted, RRWanted, Int
 #' @param ask logical: to prompt for user input before each plot
 #' @param ... additional arguments to be passed into plot methods
 #' @exportS3Method plot ConcreteOut
-plot.ConcreteOut <- function(x, Estimand = c("rr", "rd", "risk"), NullLine = TRUE, GComp = FALSE, 
+plot.ConcreteOut <- function(x, NullLine = TRUE, GComp = FALSE, 
                              ask = TRUE, ...) {
     Event <- Time <- `Pt Est` <- Estimator <- se <- NULL
     if(!requireNamespace("ggplot2", quietly = TRUE))
@@ -238,10 +238,8 @@ plot.ConcreteOut <- function(x, Estimand = c("rr", "rd", "risk"), NullLine = TRU
         on.exit(devAskNewPage(oask))
     }
     fig <- list()
-    if (any(grepl("risk", tolower(Estimand)))) {
-        message("risk plots not yet implemented")
-    }
-    if (any(tolower(Estimand) == "rr")) {
+    Estimand <- unique(x[["Estimand"]])
+    if (any(Estimand == "Rel Risk")) {
         dev.hold()
         z <- x[Estimand == "Rel Risk", ][, Event := paste0("Event ", Event)]
         if (GComp) {
@@ -264,7 +262,7 @@ plot.ConcreteOut <- function(x, Estimand = c("rr", "rd", "risk"), NullLine = TRU
         plot(fig[["rr"]])
         dev.flush()
     }
-    if (any(tolower(Estimand) == "rd")) {
+    if (any(Estimand == "Risk Diff")) {
         dev.hold()
         z <- x[Estimand == "Risk Diff", ][, Event := paste0("Event ", Event)]
         if (GComp) {
@@ -286,6 +284,9 @@ plot.ConcreteOut <- function(x, Estimand = c("rr", "rd", "risk"), NullLine = TRU
             fig[["rd"]] <- fig[["rd"]] + ggplot2::geom_hline(ggplot2::aes(yintercept = 0), colour = "red", alpha = 0.4)
         plot(fig[["rd"]])
         dev.flush()
+    }
+    if (any(Estimand == "Abs Risk")) {
+        cat("plotting for absolute risks not yet implemented")
     }
     invisible(fig)
 }

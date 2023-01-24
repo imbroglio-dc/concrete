@@ -11,8 +11,7 @@ loadPackages <- function() {
     x <- lapply(contmle.dir, function(dir) lapply(list.files(dir, full.names = TRUE), source))
     
     library(data.table); library(concrete)
-    data.table::setDTthreads(threads = 2)
-    concrete.dir <- c("/Shared/Projects/ConCR-TMLE/", "/Shared/Projects/concrete/")
+    concrete.dir <- c("/Shared/Projects/concrete/")
     x <- lapply(concrete.dir, function(dir) try(source(paste0(dir, "scripts/sim-data/sim_functions.R"))))
     library(tidyverse)
     invisible(NULL)
@@ -24,23 +23,29 @@ loadPackages <- function() {
 loadPackages()
 data.table::setDTthreads(threads = parallel::detectCores(), restore_after_fork = TRUE)
 
-risks1 <- getTrueRisks(n = 5e6, assign_A = function(W, n) return(rep_len(1, n)))
-gc()
-risks0 <- getTrueRisks(n = 5e6, assign_A = function(W, n) return(rep_len(0, n)))
-gc()
 
-risks <- rbind(cbind("trt" = "A=1",
-                     rbind(data.table("Event" = 1, "Time" = 1:nrow(risks1), True = risks1[[1]]),
-                           data.table("Event" = 2, "Time" = 1:nrow(risks1), True = risks1[[2]]),
-                           data.table("Event" = 3, "Time" = 1:nrow(risks1), True = risks1[[3]]))),
-               cbind("trt" = "A=0",
-                     rbind(data.table("Event" = 1, "Time" = 1:nrow(risks1), True = risks0[[1]]),
-                           data.table("Event" = 2, "Time" = 1:nrow(risks1), True = risks0[[2]]),
-                           data.table("Event" = 3, "Time" = 1:nrow(risks1), True = risks0[[3]]))))
+
+if (file.exists("scripts/sim-data/TrueRisks.csv")) {
+    risks <- read.csv("scripts/sim-data/TrueRisks.csv")
+} else {
+    risks1 <- getTrueRisks(n = 5e6, assign_A = function(W, n) return(rep_len(1, n)))
+    gc()
+    risks0 <- getTrueRisks(n = 5e6, assign_A = function(W, n) return(rep_len(0, n)))
+    gc()
+    risks <- rbind(cbind("trt" = "A=1",
+                         rbind(data.table("Event" = 1, "Time" = 1:nrow(risks1), True = risks1[[1]]),
+                               data.table("Event" = 2, "Time" = 1:nrow(risks1), True = risks1[[2]]),
+                               data.table("Event" = 3, "Time" = 1:nrow(risks1), True = risks1[[3]]))),
+                   cbind("trt" = "A=0",
+                         rbind(data.table("Event" = 1, "Time" = 1:nrow(risks1), True = risks0[[1]]),
+                               data.table("Event" = 2, "Time" = 1:nrow(risks1), True = risks0[[2]]),
+                               data.table("Event" = 3, "Time" = 1:nrow(risks1), True = risks0[[3]]))))
+    write.csv(risks, "scripts/sim-data/TrueRisks.csv")
+    rm(list = c("risks0", "risks1"))
+}
 risks %>% mutate(Event = factor(Event)) %>%
     ggplot(aes(x = Time, y = True, colour = Event, linetype = trt)) + geom_line(size = .8) +
     theme_minimal() + labs(title = "True Competing Risks")
-rm(list = c("risks0", "risks1"))
 
 # simulation --------------------------------------------------------------
 library(foreach)
@@ -225,9 +230,9 @@ while(j <= B) {
                         attr(survtmleOut, "time") <- difftime(Stop, Start, units = "mins")
                         if (!is.null(DiagPath)) {
                             readr::write_lines(paste0("Run ", j + i - 1, " ; ", survMonths," ; ",
-                                                  format(unclass(attr(survtmleOut, "time")), digits = 3), " ",
-                                                  attr(attr(survtmleOut, "time"), "units")),
-                                           file = DiagPath, append = TRUE)
+                                                      format(unclass(attr(survtmleOut, "time")), digits = 3), " ",
+                                                      attr(attr(survtmleOut, "time"), "units")),
+                                               file = DiagPath, append = TRUE)
                         }
                         return(survtmleOut)
                     }
