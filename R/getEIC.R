@@ -31,6 +31,7 @@ getEIC <- function(Estimates, Data, Regime, TargetEvent, TargetTime, MinNuisance
             Estimates[[a]][["GCompEst"]] <- getGComp(EvalTimes, Hazards, TotalSurv, TargetTime)
         
         Estimates[[a]][["SummEIC"]] <- summarizeIC(IC.a)
+        Estimates[[a]][["IC"]] <- IC.a
     }
     return(Estimates)
 }

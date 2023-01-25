@@ -13,14 +13,7 @@ doConcrete(ConcreteArgs)
 
 \method{plot}{ConcreteEst}(x, convergence = TRUE, propscores = TRUE, ask = TRUE, ...)
 
-\method{plot}{ConcreteOut}(
-  x,
-  Estimand = c("rr", "rd", "risk"),
-  NullLine = TRUE,
-  GComp = FALSE,
-  ask = TRUE,
-  ...
-)
+\method{plot}{ConcreteOut}(x, Estimand, NullLine = TRUE, GComp = FALSE, ask = TRUE, ...)
 }
 \arguments{
 \item{ConcreteArgs}{"ConcreteArgs" sl3 object : output of formatArguments()}

@@ -162,21 +162,9 @@ getSimultaneous <- function(Estimate, Risks, RiskWanted, RDWanted, RRWanted, Int
         A0 <- names(Estimate)[Intervention[2]]
     }
     
-    ICs <- do.call(rbind, 
-                   lapply(Intervention, function(a) {
-                       est.a <- Estimate[[a]]
-                       IC.a <- getIC(GStar =  attr(est.a[["PropScore"]], "g.star.obs"),
-                                     Hazards = est.a[["Hazards"]], 
-                                     TotalSurv = est.a[["EvntFreeSurv"]],
-                                     NuisanceWeight = est.a[["NuisanceWeight"]],
-                                     TargetEvent = attr(Estimate, "TargetEvent"), 
-                                     TargetTime = attr(Estimate, "TargetTime"),
-                                     T.tilde = attr(Estimate, "T.tilde"), 
-                                     Delta = attr(Estimate, "Delta"),
-                                     EvalTimes = attr(Estimate, "Times"), 
-                                     GComp = FALSE)
-                       return(cbind("Intervention" = names(Estimate)[a], IC.a))
-                   }))
+    ICs <- do.call(rbind, lapply(Intervention, function(a) {
+        cbind("Intervention" = names(Estimate)[a], Estimate[[a]][["IC"]])
+    }))
     
     ICs <- merge(ICs, getRisk(Estimate = Estimate, TargetTime = attr(Estimate, "TargetTime"), 
                               TargetEvent = attr(Estimate, "TargetEvent"), GComp = FALSE), 
@@ -228,7 +216,7 @@ getSimultaneous <- function(Estimate, Risks, RiskWanted, RDWanted, RRWanted, Int
 #' @param ask logical: to prompt for user input before each plot
 #' @param ... additional arguments to be passed into plot methods
 #' @exportS3Method plot ConcreteOut
-plot.ConcreteOut <- function(x, NullLine = TRUE, GComp = FALSE, 
+plot.ConcreteOut <- function(x, Estimand, NullLine = TRUE, GComp = FALSE, 
                              ask = TRUE, ...) {
     Event <- Time <- `Pt Est` <- Estimator <- se <- NULL
     if(!requireNamespace("ggplot2", quietly = TRUE))
@@ -238,7 +226,9 @@ plot.ConcreteOut <- function(x, NullLine = TRUE, GComp = FALSE,
         on.exit(devAskNewPage(oask))
     }
     fig <- list()
-    Estimand <- unique(x[["Estimand"]])
+    if (is.null(Estimand))
+        Estimand <- unique(x[["Estimand"]])
+    
     if (any(Estimand == "Rel Risk")) {
         dev.hold()
         z <- x[Estimand == "Rel Risk", ][, Event := paste0("Event ", Event)]

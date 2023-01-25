@@ -87,7 +87,7 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, TargetEvent, TargetTime,
                            T.tilde = T.tilde, Delta = Delta,
                            EvalTimes = EvalTimes, GComp = FALSE)
             return(list("Hazards" = NewHazards, "EvntFreeSurv" = NewSurv, 
-                        "SummEIC" = summarizeIC(NewIC)), "IC" = NewIC)
+                        "SummEIC" = summarizeIC(NewIC), "IC" = NewIC))
         })
         
         ## Check for improvement
@@ -109,6 +109,7 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, TargetEvent, TargetTime,
             Estimates[[a]][["Hazards"]] <- newEsts[[a]][["Hazards"]]
             Estimates[[a]][["EvntFreeSurv"]] <- newEsts[[a]][["EvntFreeSurv"]]
             Estimates[[a]][["SummEIC"]] <- newEsts[[a]][["SummEIC"]]
+            Estimates[[a]][["IC"]] <- newEsts[[a]][["IC"]]
         }
         
         SummEIC <- NewSummEIC

@@ -447,7 +447,12 @@ getRegime <- function(Intervention, Data) {
     
     if (is.list(Intervention)) {
         Regimes <- lapply(seq_along(Intervention), function(i) {
+            browser()
             Regime <- Intervention[[i]]
+            if (is.function(Regime)) {
+                Regime <- Intervention 
+                Intervention <- list(Regime)
+            }
             if (is.null(names(Intervention))) {
                 RegName <- paste0("intervention", i)
             } else if (names(Intervention)[i] == "") {
@@ -455,7 +460,7 @@ getRegime <- function(Intervention, Data) {
             } else
                 RegName <- names(Intervention)[i]
             
-            # regime ----
+            # intervention fn ----
             if (isTRUE(dim(Regime) == dim(TrtVal)) | 
                 all(is.numeric(TrtVal), isTRUE(length(Regime) == length(TrtVal)))) {
                 RegimeVal <- Regime
@@ -466,12 +471,14 @@ getRegime <- function(Intervention, Data) {
                         RegimeVal[, i] <- Regime[i]
                     }
                 }
-            } else if (is.function(Regime[["intervention"]])) {
+            } else if (is.function(Regime[[1]]) & length(Regime) <= 2) {
+                if (is.null(names(Regime)[1]))  
+                    names(Regime)[1] <- "intervention"
                 RegimeVal <- try(do.call(Regime[["intervention"]], list(TrtVal, CovDT)))
                 if (inherits(RegimeVal, "try-error") | is.null(RegimeVal) |
                     all(dim(RegimeVal) != dim(TrtVal), length(RegimeVal) != length(TrtVal)))
-                    stop("Intervention must be a list of regimes specified as list(intervention",
-                         " = f(A, L), g.star = g(A, L)), and intervention function f(A, L) must ",
+                    stop("Intervention must be a list of regimes specified as list(\"intervention\"",
+                         " = f(A, L), \"g.star\" = g(A, L)), and intervention function f(A, L) must ",
                          "be a function of treatment and covariates that returns numeric desired",
                          " treatment assignments (a*) with the same dimensions as the observed ",
                          "treatment. Amend Intervention[[", RegName, "]] and try again")
@@ -489,13 +496,6 @@ getRegime <- function(Intervention, Data) {
                      "range. If providing intervention values, then the input must have the same ",
                      "dimensions as the observed treatment with values within the observed range.",
                      "Amend Intervention[[", RegName, "]] and try again")
-            
-            # if (mean(unlist(RegimeVal) == unlist(TrtVal)) < 0.05)
-            #     warning("The intervention function f(A, L) specified in Intervention[[", RegName,
-            #             "]] specifies a regime that matches less than 5% of the observed treatments",
-            #             ", likely resulting in practical near-positivity violations that may inflate",
-            #             "variance and perhaps cause estimator instability. Recommend specifying ",
-            #             "an intervention better supported in the observed data.")
             
             # g.star ----
             if (!is.null(attr(Regime, "g.star"))) {
@@ -531,8 +531,7 @@ getRegime <- function(Intervention, Data) {
         } else
             names(Regimes) <- names(Intervention)
     }
-    else if (all(try(as.numeric(Intervention), silent = TRUE) %in% c(0, 1), 
-             try(length(Intervention)) %in% c(1, 2))) {
+    else if (all(Intervention %in% c(0, 1), try(length(Intervention)) %in% c(1, 2))) {
         Regimes <- list()
         if ("1" %in% try(as.character(Intervention))) {
             Regimes[["A=1"]] <- rep_len(1, length(TrtVal))
@@ -543,11 +542,11 @@ getRegime <- function(Intervention, Data) {
             attr(Regimes[["A=0"]], "g.star") <- function(a, L) {as.numeric(a == 0)}
         }
     } else
-        stop("Intervention must be \"0\", \"1\", c(\"0\", \"1\"), or a list of named regimes, ",
-             "each specificed as list(intervention = f(A, L), g.star = g(A, L)). The ",
-             "intervention function f(A, L) must be a function of treatment and covariates that ",
-             "returns numeric desired treatment assignments (a*) with the same dimensions",
-             " as the observed treatment. The g.star function f(A, L) must be a function ",
+        stop("Intervention must be integers corresponding to desired static treatment level(s), ",  
+             "or a list of named regimes, each specificed as list(intervention = f(A, L), ",
+             "g.star = g(A, L)). The intervention function f(A, L) must be a function of treatment ",
+             "and covariates that returns numeric desired treatment assignments (a*) with the same ",
+             "dimensions as the observed treatment. The g.star function f(A, L) must be a function ",
              "of treatment and covariates that returns numeric probabilities bounded in",
              "[0, 1].")
     return(Regimes)
