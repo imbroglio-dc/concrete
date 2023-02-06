@@ -62,6 +62,9 @@ getIC <- function(GStar, Hazards, TotalSurv, NuisanceWeight, TargetEvent, Target
                 })
                 return(colSums(ClevCov * (NLdS - HazLS)))
             })) + F.j.t[EvalTimes == tau, ] - mean(F.j.t[EvalTimes == tau, ])
+            if (anyNA(IC.j.tau))
+                stop("IC overflow: either increase MinNuisance or specify a target estimand ", 
+                     " (Target Event, Target Time, & Intervention) with more support in the data.")
             return(data.table("ID" = seq_along(IC.j.tau), "Time" = tau, "Event" = j, "IC" = IC.j.tau))
         }))
     }))

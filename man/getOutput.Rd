@@ -2,6 +2,7 @@
 % Please edit documentation in R/getOutput.R
 \name{getOutput}
 \alias{getOutput}
+\alias{plot.ConcreteOut}
 \title{getOutput}
 \usage{
 getOutput(
@@ -12,22 +13,40 @@ getOutput(
   Simultaneous = TRUE,
   Signif = 0.05
 )
+
+\method{plot}{ConcreteOut}(
+  x,
+  Estimand = NULL,
+  NullLine = TRUE,
+  GComp = FALSE,
+  Simultaneous = FALSE,
+  ask = TRUE,
+  ...
+)
 }
 \arguments{
 \item{Estimate}{list : a "ConcreteEst" object}
 
-\item{Estimand}{character: a subset of c("RD", "RR", "Risk") specifying the target estimand}
+\item{Estimand}{character: "RR" to plot Relative Risks, "RD" to plot Risk Differences, and "Risk" to plot absolute risks}
 
 \item{Intervention}{numeric (default = seq_along(ConcreteEst)): the ConcreteEst list element
 corresponding to the target intervention. For comparison estimands such as RD and RR,
 Intervention should be a numeric vector with length 2, the first term designating
 "treatment" ConcreteEst list element and the second designating the "control".}
 
-\item{GComp}{logical: to return g-formula point estimates based on initial nuisance parameter estimation}
+\item{GComp}{logical: to plot the g-comp point estimates}
 
 \item{Simultaneous}{logical: to compute simultaneous confidence intervals}
 
 \item{Signif}{numeric (default = 0.05): alpha for 2-tailed hypothesis testing}
+
+\item{x}{a ConcreteOut object}
+
+\item{NullLine}{logical: to add a red line at 1 for RR plots and at 0 for RD plots}
+
+\item{ask}{logical: to prompt for user input before each plot}
+
+\item{...}{additional arguments to be passed into plot methods}
 }
 \value{
 data.table of point estimates and standard deviations
@@ -35,6 +54,11 @@ data.table of point estimates and standard deviations
 \description{
 getOutput
 }
+\section{Functions}{
+\itemize{
+\item \code{plot(ConcreteOut)}: plot.ConcreteOut plot method for "ConcreteOut" class
+
+}}
 \examples{
 # getOutput returns risk difference, relative risk, and treatment-specific risks
 # concrete.out <- getOutput(Estimate = concrete.est, Estimand = "RR", Intervention = 1:2)

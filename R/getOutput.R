@@ -95,9 +95,10 @@ getOutput <- function(Estimate, Estimand = c("RD", "RR", "Risk"), Intervention =
     Output[, `CI Hi` := `Pt Est` + qnorm(1 - Signif/2)*se]
     
     if (Simultaneous)
-        Output <- getSimultaneous(Estimate = Estimate, Risks = Output, RiskWanted = RiskWanted, 
+        Output <- getSimultaneous(Estimate = Estimate, Output = Output, RiskWanted = RiskWanted, 
                                   RDWanted = RDWanted, RRWanted = RRWanted, 
                                   Intervention = Intervention, Signif = Signif)
+    attr(Output, "Signif") <- Signif
     class(Output) <- union("ConcreteOut", class(Output))
     return(Output)
 }
@@ -124,7 +125,7 @@ getRisk <- function(Estimate, TargetTime, TargetEvent, GComp) {
         return(risk.a)
     })
     Risk <- setDT(do.call(rbind, risk))
-    Risk[, Estimand := "Abs. Risk"]
+    Risk[, Estimand := "Abs Risk"]
     setnames(Risk, "Risk", "Pt Est")
     setcolorder(Risk, c("Intervention", "Estimand", "Estimator", "Event", "Time", "Pt Est", "se"))
     return(Risk)
@@ -154,7 +155,7 @@ getRR <- function(Risks, A1, A0, TargetTime, TargetEvent, GComp) {
     return(RR)
 }
 
-getSimultaneous <- function(Estimate, Risks, RiskWanted, RDWanted, RRWanted, Intervention, Signif) {
+getSimultaneous <- function(Estimate, Output, RiskWanted, RDWanted, RRWanted, Intervention, Signif) {
     Estimator <- `Pt Est` <- Event <- Time <- SimQ <- IC <- Risk <- NULL
     
     if (RRWanted | RDWanted) {
@@ -200,7 +201,7 @@ getSimultaneous <- function(Estimate, Risks, RiskWanted, RDWanted, RRWanted, Int
     se[, Estimator := "tmle"][, Event := as.numeric(Event)][, Time := as.numeric(Time)]
     se[Intervention == "Rel Risk", Intervention := paste0("[", A1, "] / [", A0, "]")]
     se[Intervention == "Risk Diff", Intervention := paste0("[", A1, "] - [", A0, "]")]
-    simCI <- merge(Risks, se, c("Intervention", "Estimator", "Event", "Time"), all.x = TRUE)
+    simCI <- merge(Output, se, c("Intervention", "Estimator", "Event", "Time"), all.x = TRUE)
     simCI[, "SimCI Low" := `Pt Est` - se*SimQ][, "SimCI Hi" := `Pt Est` + se*SimQ]
     simCI <- subset(simCI, select = c("Intervention", "Estimand", "Estimator", "Event", "Time", 
                                       "Pt Est", "se","CI Low", "CI Hi", "SimCI Low", "SimCI Hi"))
@@ -208,17 +209,19 @@ getSimultaneous <- function(Estimate, Risks, RiskWanted, RDWanted, RRWanted, Int
 }
 
 
-#' @describeIn doConcrete plot.ConcreteOut plot method for "ConcreteOut" class
+#' @describeIn getOutput plot.ConcreteOut plot method for "ConcreteOut" class
 #' @param x a ConcreteOut object
-#' @param Estimand character: "rr" to plot Relative Risks, "rd" to plot Risk Differences, and "risk" to plot absolute risks
+#' @param Estimand character: "RR" to plot Relative Risks, "RD" to plot Risk Differences, and "Risk" to plot absolute risks
 #' @param NullLine logical: to add a red line at 1 for RR plots and at 0 for RD plots
 #' @param GComp logical: to plot the g-comp point estimates
 #' @param ask logical: to prompt for user input before each plot
 #' @param ... additional arguments to be passed into plot methods
 #' @exportS3Method plot ConcreteOut
-plot.ConcreteOut <- function(x, Estimand, NullLine = TRUE, GComp = FALSE, 
-                             ask = TRUE, ...) {
-    Event <- Time <- `Pt Est` <- Estimator <- se <- NULL
+plot.ConcreteOut <- function(x, Estimand = NULL, NullLine = TRUE, GComp = FALSE, 
+                             Simultaneous = FALSE, ask = TRUE, ...) {
+    `CI Low` <- `CI Hi` <- `SimCI Low` <- `SimCI Hi` <- Intervention <- 
+        Event <- Time <- `Pt Est` <- Estimator <- se <- NULL
+    Signif <- attr(x, "Signif")
     if(!requireNamespace("ggplot2", quietly = TRUE))
         stop("Plotting requires the 'ggplot2' package")
     if (ask) {
@@ -229,54 +232,88 @@ plot.ConcreteOut <- function(x, Estimand, NullLine = TRUE, GComp = FALSE,
     if (is.null(Estimand))
         Estimand <- unique(x[["Estimand"]])
     
-    if (any(Estimand == "Rel Risk")) {
+    if (any(tolower(Estimand) %in% c("rel risk", "rr"))) {
         dev.hold()
         z <- x[Estimand == "Rel Risk", ][, Event := paste0("Event ", Event)]
         if (GComp) {
             fig[["rr"]] <- ggplot2::ggplot(z, ggplot2::aes(x = Time, y = `Pt Est`, shape = Estimator, 
-                                                           ymin = `Pt Est` - 1.96*se, ymax = `Pt Est` + 1.96*se)) + 
+                                                           ymin = `CI Low`, ymax = `CI Hi`)) + 
                 ggplot2::geom_point() + ggplot2::geom_errorbar() + ggplot2::scale_shape_manual(values = c(4, 16))
         } else {
-            fig[["rr"]] <- ggplot2::ggplot(z[Estimator == "tmle", ], ggplot2::aes(x = Time, y = `Pt Est`, 
-                                                                                  ymin = `Pt Est` - 1.96*se, 
-                                                                                  ymax = `Pt Est` + 1.96*se)) + 
+            fig[["rr"]] <- ggplot2::ggplot(z[Estimator == "tmle", ], 
+                                           ggplot2::aes(x = Time, y = `Pt Est`, ymin = `CI Low`, ymax = `CI Hi`)) + 
                 ggplot2::geom_point() + ggplot2::geom_errorbar()
+        }
+        if (Simultaneous) {
+            fig[["rr"]] <- fig[["rr"]] + 
+                ggplot2::geom_ribbon(ggplot2::aes(ymin = `SimCI Low`, ymax = `SimCI Hi`), alpha = 0.06)
         }
         fig[["rr"]] <- fig[["rr"]] + 
             ggplot2::facet_wrap(~Event, scales = "free", ncol = 1) + 
             ggplot2::theme_minimal() +
             ggplot2::labs(y = "Relative Risk", x = "Time", 
-                          title = "Relative Risk Point Estimates with 95% confidence intervals") 
+                          title = paste0("Relative Risk Point Estimates with ", 
+                                         round(100 * (1 - Signif), digits = 0), "% confidence intervals"))
         if (NullLine)
             fig[["rr"]] <- fig[["rr"]] + ggplot2::geom_hline(ggplot2::aes(yintercept = 1), colour = "red", alpha = 0.4)
         plot(fig[["rr"]])
         dev.flush()
     }
-    if (any(Estimand == "Risk Diff")) {
+    if (any(tolower(Estimand) %in% c("risk diff", "rd"))) {
         dev.hold()
         z <- x[Estimand == "Risk Diff", ][, Event := paste0("Event ", Event)]
         if (GComp) {
             fig[["rd"]] <- ggplot2::ggplot(z, ggplot2::aes(x = Time, y = `Pt Est`, shape = Estimator, 
-                                                           ymin = `Pt Est` - 1.96*se, ymax = `Pt Est` + 1.96*se)) + 
+                                                           ymin = `CI Low`, ymax = `CI Hi`)) + 
                 ggplot2::geom_point() + ggplot2::geom_errorbar() + ggplot2::scale_shape_manual(values = c(4, 16))
         } else {
             fig[["rd"]] <- ggplot2::ggplot(z[Estimator == "tmle", ], ggplot2::aes(x = Time, y = `Pt Est`, 
-                                                                                  ymin = `Pt Est` - 1.96*se, 
-                                                                                  ymax = `Pt Est` + 1.96*se)) + 
+                                                                                  ymin = `CI Low`, ymax = `CI Hi`)) + 
                 ggplot2::geom_point() + ggplot2::geom_errorbar()
+        }
+        if (Simultaneous) {
+            fig[["rd"]] <- fig[["rd"]] + 
+                ggplot2::geom_ribbon(ggplot2::aes(ymin = `SimCI Low`, ymax = `SimCI Hi`), alpha = 0.06)
         }
         fig[["rd"]] <- fig[["rd"]] + 
             ggplot2::facet_wrap(~Event, scales = "free", ncol = 1) + 
             ggplot2::theme_minimal() +
             ggplot2::labs(y = "Risk Difference", x = "Time", 
-                          title = "Risk Difference Point Estimates with 95% Confidence Intervals") 
+                          title = paste0("Risk Difference Point Estimates with ", 
+                                         round(100 * (1 - Signif), digits = 0), "% confidence intervals")) 
         if (NullLine)
             fig[["rd"]] <- fig[["rd"]] + ggplot2::geom_hline(ggplot2::aes(yintercept = 0), colour = "red", alpha = 0.4)
         plot(fig[["rd"]])
         dev.flush()
     }
-    if (any(Estimand == "Abs Risk")) {
-        cat("plotting for absolute risks not yet implemented")
+    if (any(tolower(Estimand) %in% c("abs risk", "risk"))) {
+        dev.hold()
+        z <- x[Estimand == "Abs Risk", ][, Event := paste0("Event ", Event)]
+        if (GComp) {
+            fig[["risk"]] <- ggplot2::ggplot(z, ggplot2::aes(x = Time, y = `Pt Est`, shape = Estimator, 
+                                                             colour = Intervention, ymin = `CI Low`, ymax = `CI Hi`)) + 
+                ggplot2::geom_point() + ggplot2::geom_errorbar(alpha = 0.5) + 
+                ggplot2::scale_shape_manual(values = c(4, 16))
+        } else {
+            fig[["risk"]] <- ggplot2::ggplot(z[Estimator == "tmle", ], 
+                                             ggplot2::aes(x = Time, y = `Pt Est`, colour = Intervention, 
+                                                          ymin = `CI Low`, ymax = `CI Hi`)) + 
+                ggplot2::geom_point() + ggplot2::geom_errorbar(alpha = 0.5)
+        }
+        if (Simultaneous) {
+            fig[["risk"]] <- fig[["risk"]] + 
+                ggplot2::geom_ribbon(ggplot2::aes(ymin = `SimCI Low`, ymax = `SimCI Hi`, fill = Intervention), alpha = 0.06)
+        }
+        fig[["risk"]] <- fig[["risk"]] + 
+            ggplot2::facet_wrap(~Event, scales = "free", ncol = 1) + 
+            ggplot2::theme_minimal() +
+            ggplot2::labs(y = "Absolute Risk", x = "Time", 
+                          title = paste0("Absolute Risk Point Estimates with ", 
+                                         round(100 * (1 - Signif), digits = 0), "% confidence intervals")) 
+        if (NullLine)
+            fig[["risk"]] <- fig[["risk"]] + ggplot2::geom_hline(ggplot2::aes(yintercept = 0), colour = "red", alpha = 0.4)
+        plot(fig[["risk"]])
+        dev.flush()
     }
     invisible(fig)
 }

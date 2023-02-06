@@ -8,9 +8,9 @@
 #' the number of observations and d = the number of baseline covariates. DataTable must include
 #' the following columns:
 #' \itemize{
-#'   \item{"EventTime"}{: non-negative real numbers; the observed event or censoring time}
-#'   \item{"EventType"}{: numeric; the observed event type, with 0 indicating censoring. There is
-#'   no separate column for indicating censoring}
+#'   \item{"EventTime"}{: numeric; real numbers > 0, the observed event or censoring time}
+#'   \item{"EventType"}{: numeric; the observed event type, censoring events indicated by integers <= 0}
+#'   \item{"Treatment"}{: numeric; the observed treatment value. Binary treatments must be coded as 0, 1}
 #'   \item{"Treatment"}{: numeric; the observed treatment}
 #' }
 #' May include
@@ -146,15 +146,18 @@ formatArguments <- function(DataTable,
                             EventTime,
                             EventType,
                             Treatment,
-                            Intervention,
+                            ID = NULL,
+                            # LongTime = NULL,
+                            # DataStructure = NULL,
                             TargetTime = NULL,
                             TargetEvent = NULL,
+                            Intervention,
                             # Target = NULL,
                             CVArg = NULL,
                             Model = NULL,
                             PropScoreBackend = "SuperLearner",
                             HazEstBackend = "coxph",
-                            MaxUpdateIter = 100,
+                            MaxUpdateIter = 500,
                             OneStepEps = 0.1,
                             MinNuisance = 5/sqrt(nrow(DataTable))/log(nrow(DataTable)),
                             Verbose = TRUE,
@@ -555,12 +558,12 @@ getRegime <- function(Intervention, Data) {
 getTargetEvent <- function(TargetEvent, Data) {
     UniqueEvents <- sort(unique(Data[[attr(Data, "EventType")]]))
     if (is.null(TargetEvent))
-        cat("No TargetEvent specified; targeting all non-zero event types.\n")
+        TargetEvent <- UniqueEvents[UniqueEvents > 0]
     TargetEvent <- UniqueEvents[UniqueEvents != 0]
     if (any(!is.vector(TargetEvent), !is.numeric(TargetEvent), is.list(TargetEvent),
             length(setdiff(TargetEvent, UniqueEvents)) > 0))
-        stop("TargetEvent must be a numeric vector that is a subset of observed event types,",
-             " DataTable[[EventType]], not including 0 (i.e. censoring)")
+        stop("TargetEvent must be a subset of the observed event types,",
+             " DataTable[[\"", attr(Data, "EventType"), "\"]]): ", 
     return(TargetEvent)
 }
 
@@ -599,7 +602,7 @@ getCVFolds <- function(CVArg, Data, CVSeed = sample(0:1e8, 1)) {
     }
     
     ## cross validation setup ----
-    # may be nice to stratify cv so that folds are balanced for treatment assignment & outcomes
+    # stratified by event type to avoid regressions failing with rare events 
     # theory? but regressions may fail in practice with rare events otherwise 
     ### nice to do: make efficient CV representation
     
@@ -783,21 +786,21 @@ getMinNuisance <- function(MinNuisance = 0.05) {
 
 #' @describeIn formatArguments makeITT ...
 makeITT <- function() {
-    ITT <- list("A=1" = list("intervention" = function(ObservedTreatment, Covariates) {
-        IntervenedAssignment <- rep_len(1, length(ObservedTreatment))
-        return(IntervenedAssignment)
+    ITT <- list("A=1" = list("Value" = function(Treatment, Covariates) {
+        NewTreatment <- rep_len(1, length(Treatment))
+        return(NewTreatment)
     },
-    "g.star" = function(Treatment, Covariates) {
-        IntervenedProbability <- as.numeric(Treatment == 1)
-        return(IntervenedProbability)
+    "Probability" = function(Treatment, Covariates, PropScore) {
+        Probability <- as.numeric(Treatment == 1)
+        return(Probability)
     }),
-    "A=0" = list("intervention" = function(ObservedTreatment, Covariates) {
-        IntervenedAssignment <- rep_len(0, length(ObservedTreatment))
-        return(IntervenedAssignment)
+    "A=0" = list("Value" = function(Treatment, Covariates) {
+        NewTreatment <- rep_len(0, length(Treatment))
+        return(NewTreatment)
     },
-    "g.star" = function(Treatment, Covariates) {
-        IntervenedProbability <- as.numeric(Treatment == 0)
-        return(IntervenedProbability)
+    "Probability" = function(Treatment, Covariates, PropScore) {
+        Probability <- as.numeric(Treatment == 0)
+        return(Probability)
     }))
     return(ITT)
 }

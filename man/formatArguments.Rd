@@ -11,9 +11,10 @@ formatArguments(
   EventTime,
   EventType,
   Treatment,
-  Intervention,
+  ID = NULL,
   TargetTime = NULL,
   TargetEvent = NULL,
+  Intervention,
   CVArg = NULL,
   Model = NULL,
   PropScoreBackend = "SuperLearner",
@@ -25,7 +26,6 @@ formatArguments(
   GComp = TRUE,
   ReturnModels = TRUE,
   ConcreteArgs = NULL,
-  ID = NULL,
   RenameCovs = TRUE,
   ...
 )
@@ -57,18 +57,21 @@ numbers will be used as ID. For longitudinal data, ID must be provided}
 
 \item{Treatment}{character: the column name of the observed treatment assignment}
 
-\item{Intervention}{list: a list of desired interventions on the treatment variable.
-Each intervention must be a list containing two named functions:
-'intervention' = function(treatment vector, covariate data) and
-'gstar' = function(treatment vector, covariate data)
-concrete::makeITT() can be used to specify an intent-to-treat analysis for a
-binary intervention variable}
+\item{ID}{character (default: NULL): the column name of the observed subject id
+longitudinal data structures}
 
 \item{TargetTime}{numeric: vector of target times. If NULL, the last observed non-censoring event
 time will be targeted.}
 
 \item{TargetEvent}{numeric: vector of target events - some subset of unique EventTypes. If NULL,
 all non-censoring observed event types will be targeted.}
+
+\item{Intervention}{list: a list of desired interventions on the treatment variable.
+Each intervention must be a list containing two named functions:
+'intervention' = function(treatment vector, covariate data) and
+'gstar' = function(treatment vector, covariate data)
+concrete::makeITT() can be used to specify an intent-to-treat analysis for a
+binary intervention variable}
 
 \item{CVArg}{list: arguments to be passed into do.call(origami::make_folds). If NULL, the default is
 list(n = nrow(DataTable), fold_fun = folds_vfold, cluster_ids = NULL, strata_ids = NULL)}
@@ -95,9 +98,6 @@ a template will be generated for the user to amend.}
 
 \item{ConcreteArgs}{list (default: NULL, not yet ready) : Use to recheck amended output from previous formatArguments()
 calls. A non-NULL input will cause all other arguments to be ignored.}
-
-\item{ID}{character (default: NULL): the column name of the observed subject id
-longitudinal data structures}
 
 \item{RenameCovs}{boolean (default: TRUE): whether or not to rename covariates}
 

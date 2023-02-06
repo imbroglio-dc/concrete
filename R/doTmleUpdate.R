@@ -78,8 +78,11 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, TargetEvent, TargetTime,
                                        Delta = Delta, PnEIC = est.a[["SummEIC"]],
                                        NormPnEIC = NormPnEIC, OneStepEps = WorkingEps,
                                        TargetEvent = TargetEvent, TargetTime = TargetTime)
+            NewHazards <- lapply(NewHazards, function(hazards) {
+                hazards[is.na(hazards) | is.nan(hazards)] <- 0
+            })
             NewSurv <- apply(Reduce(`+`, NewHazards), 2, function(haz) exp(-cumsum(haz)))
-            NewSurv[NewSurv < 1e-12] <- 1e-12
+            NewSurv[NewSurv < 1e-12 | is.na(NewSurv) | is.nan(NewSurv)] <- 1e-12
             NewIC <- getIC(GStar =  attr(est.a[["PropScore"]], "g.star.obs"),
                            Hazards = NewHazards, TotalSurv = NewSurv,
                            NuisanceWeight = est.a[["NuisanceWeight"]],

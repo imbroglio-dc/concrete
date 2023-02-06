@@ -142,7 +142,7 @@ getHazSurvPred <- function(Data, HazFits, MinNuisance, TargetEvent,
         })
         names(PredHaz) <- names(HazFits)
         
-        CensInd <- which(sapply(PredHaz, function(haz) attr(haz, "j") == 0))
+        CensInd <- which(sapply(PredHaz, function(haz) attr(haz, "j") <= 0))
         HazInd <- setdiff(seq_along(PredHaz), CensInd)
         
         TotalSurv <- apply(Reduce(`+`, PredHaz[HazInd]), 2, function(haz) exp(-cumsum(haz)))
