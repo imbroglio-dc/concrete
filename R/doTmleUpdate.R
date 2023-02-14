@@ -79,7 +79,9 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, TargetEvent, TargetTime,
                                        NormPnEIC = NormPnEIC, OneStepEps = WorkingEps,
                                        TargetEvent = TargetEvent, TargetTime = TargetTime)
             NewHazards <- lapply(NewHazards, function(hazards) {
-                hazards[is.na(hazards) | is.nan(hazards)] <- 0
+                if (anyNA(hazards))
+                    hazards[is.na(hazards) | is.nan(hazards)] <-  0
+                return(hazards)
             })
             NewSurv <- apply(Reduce(`+`, NewHazards), 2, function(haz) exp(-cumsum(haz)))
             NewSurv[NewSurv < 1e-12 | is.na(NewSurv) | is.nan(NewSurv)] <- 1e-12

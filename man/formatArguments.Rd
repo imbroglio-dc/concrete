@@ -19,7 +19,7 @@ formatArguments(
   Model = NULL,
   PropScoreBackend = "SuperLearner",
   HazEstBackend = "coxph",
-  MaxUpdateIter = 100,
+  MaxUpdateIter = 500,
   OneStepEps = 0.1,
   MinNuisance = 5/sqrt(nrow(DataTable))/log(nrow(DataTable)),
   Verbose = TRUE,
@@ -39,9 +39,9 @@ makeITT()
 the number of observations and d = the number of baseline covariates. DataTable must include
 the following columns:
 \itemize{
-\item{"EventTime"}{: non-negative real numbers; the observed event or censoring time}
-\item{"EventType"}{: numeric; the observed event type, with 0 indicating censoring. There is
-no separate column for indicating censoring}
+\item{"EventTime"}{: numeric; real numbers > 0, the observed event or censoring time}
+\item{"EventType"}{: numeric; the observed event type, censoring events indicated by integers <= 0}
+\item{"Treatment"}{: numeric; the observed treatment value. Binary treatments must be coded as 0, 1}
 \item{"Treatment"}{: numeric; the observed treatment}
 }
 May include
@@ -84,7 +84,7 @@ a template will be generated for the user to amend.}
 
 \item{HazEstBackend}{character (default: "coxph"): currently must be "coxph"}
 
-\item{MaxUpdateIter}{numeric (default: 100): the number of one-step update steps}
+\item{MaxUpdateIter}{numeric (default: 500): the number of one-step update steps}
 
 \item{OneStepEps}{numeric (default: 1): the one-step tmle step size}
 

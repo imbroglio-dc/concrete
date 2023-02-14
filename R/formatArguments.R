@@ -46,7 +46,7 @@
 #'                                    a template will be generated for the user to amend.
 #' @param PropScoreBackend character (default: "Superlearner"): currently must be either "sl3" or "Superlearner"
 #' @param HazEstBackend character (default: "coxph"): currently must be "coxph"
-#' @param MaxUpdateIter numeric (default: 100): the number of one-step update steps
+#' @param MaxUpdateIter numeric (default: 500): the number of one-step update steps
 #' @param OneStepEps numeric (default: 1): the one-step tmle step size
 #' @param MinNuisance numeric (default: 5/log(n)/sqrt(n)): value between (0, 1) for truncating the g-related denominator of the clever covariate
 #' @param Verbose boolean
@@ -164,7 +164,6 @@ formatArguments <- function(DataTable,
                             GComp = TRUE,
                             ReturnModels = TRUE,
                             ConcreteArgs = NULL,
-                            ID = NULL,
                             # LongTime = NULL,
                             RenameCovs = TRUE,
                             ...)
@@ -450,7 +449,6 @@ getRegime <- function(Intervention, Data) {
     
     if (is.list(Intervention)) {
         Regimes <- lapply(seq_along(Intervention), function(i) {
-            browser()
             Regime <- Intervention[[i]]
             if (is.function(Regime)) {
                 Regime <- Intervention 
@@ -564,6 +562,7 @@ getTargetEvent <- function(TargetEvent, Data) {
             length(setdiff(TargetEvent, UniqueEvents)) > 0))
         stop("TargetEvent must be a subset of the observed event types,",
              " DataTable[[\"", attr(Data, "EventType"), "\"]]): ", 
+             paste0(UniqueEvents, collapse = ", "))
     return(TargetEvent)
 }
 
@@ -786,19 +785,19 @@ getMinNuisance <- function(MinNuisance = 0.05) {
 
 #' @describeIn formatArguments makeITT ...
 makeITT <- function() {
-    ITT <- list("A=1" = list("Value" = function(Treatment, Covariates) {
+    ITT <- list("A=1" = list("intervention" = function(Treatment, Covariates) {
         NewTreatment <- rep_len(1, length(Treatment))
         return(NewTreatment)
     },
-    "Probability" = function(Treatment, Covariates, PropScore) {
+    "g.star" = function(Treatment, Covariates, PropScore) {
         Probability <- as.numeric(Treatment == 1)
         return(Probability)
     }),
-    "A=0" = list("Value" = function(Treatment, Covariates) {
+    "A=0" = list("intervention" = function(Treatment, Covariates) {
         NewTreatment <- rep_len(0, length(Treatment))
         return(NewTreatment)
     },
-    "Probability" = function(Treatment, Covariates, PropScore) {
+    "g.star" = function(Treatment, Covariates, PropScore) {
         Probability <- as.numeric(Treatment == 0)
         return(Probability)
     }))
