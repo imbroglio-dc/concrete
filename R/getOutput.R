@@ -246,7 +246,8 @@ plot.ConcreteOut <- function(x, Estimand = NULL, NullLine = TRUE, GComp = FALSE,
         }
         if (Simultaneous) {
             fig[["rr"]] <- fig[["rr"]] + 
-                ggplot2::geom_ribbon(ggplot2::aes(ymin = `SimCI Low`, ymax = `SimCI Hi`), alpha = 0.06)
+                ggplot2::geom_ribbon(ggplot2::aes(ymin = `SimCI Low`, ymax = `SimCI Hi`, colour = NA), 
+                                     alpha = 0.06)
         }
         fig[["rr"]] <- fig[["rr"]] + 
             ggplot2::facet_wrap(~Event, scales = "free", ncol = 1) + 
@@ -310,8 +311,6 @@ plot.ConcreteOut <- function(x, Estimand = NULL, NullLine = TRUE, GComp = FALSE,
             ggplot2::labs(y = "Absolute Risk", x = "Time", 
                           title = paste0("Absolute Risk Point Estimates with ", 
                                          round(100 * (1 - Signif), digits = 0), "% confidence intervals")) 
-        if (NullLine)
-            fig[["risk"]] <- fig[["risk"]] + ggplot2::geom_hline(ggplot2::aes(yintercept = 0), colour = "red", alpha = 0.4)
         plot(fig[["risk"]])
         dev.flush()
     }

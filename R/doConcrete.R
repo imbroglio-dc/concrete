@@ -210,6 +210,7 @@ print.ConcreteEst <- function(x, ...) {
 #' @param x a ConcreteEst object
 #' @param convergence logical: plot the PnEIC norms for each TMLE small update step
 #' @param propscores logical: plot the densities of the propensity scores for each intervention
+#' @param ask logical: whether or not to prompt for user input before displaying plots
 #' @param ... additional arguments to be passed into plot methods
 #' @exportS3Method plot ConcreteEst
 

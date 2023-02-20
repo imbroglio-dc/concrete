@@ -22,6 +22,8 @@ doConcrete(ConcreteArgs)
 \item{convergence}{logical: plot the PnEIC norms for each TMLE small update step}
 
 \item{propscores}{logical: plot the densities of the propensity scores for each intervention}
+
+\item{ask}{logical: whether or not to prompt for user input before displaying plots}
 }
 \value{
 object with s3 class "ConcreteEst"
