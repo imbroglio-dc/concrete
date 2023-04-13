@@ -49,18 +49,16 @@ getInitialEstimate <- function(Data, Model, CVFolds, MinNuisance, TargetEvent, T
                                    Regime = Regime, HazEstBackend)
     InitialEstimates <- lapply(seq_along(PropScores), function(a) {
         if (Censored) {
-            NuisanceWeight <- sapply(seq_along(PropScores[[a]]), function(i) {
+            NuisanceDenom <- sapply(seq_along(PropScores[[a]]), function(i) {
                 PropScores[[a]][i] * HazSurvPreds[[a]][["Survival"]][["LaggedCensSurv"]][, i]
             })   
         } else {
-            NuisanceWeight <- matrix(PropScores[[a]], 
-                                     nrow = nrow(HazSurvPreds[[a]][["Survival"]][["TotalSurv"]]), 
-                                     ncol = ncol(HazSurvPreds[[a]][["Survival"]][["TotalSurv"]]), 
-                                     byrow = TRUE) 
+            Srv <- HazSurvPreds[[a]][["Survival"]][["TotalSurv"]]
+            NuisanceDenom <- matrix(PropScores[[a]], nrow = nrow(Srv), ncol = ncol(Srv), byrow = TRUE) 
         }
-        NuisanceWeight <- 1 / truncNuisanceDenom(NuisanceDenom = NuisanceWeight, 
-                                                 MinNuisance = MinNuisance, 
-                                                 RegimeName = names(PropScores)[a])
+        NuisanceWeight <- 1 / truncNuisanceWeight(NuisanceDenom = NuisanceDenom, 
+                                                  MinNuisance = MinNuisance, 
+                                                  RegimeName = names(PropScores)[a])
         return(list("PropScore" = PropScores[[a]],
                     "Hazards" = HazSurvPreds[[a]][["Hazards"]],
                     "EvntFreeSurv" = HazSurvPreds[[a]][["Survival"]][["TotalSurv"]],
@@ -74,7 +72,7 @@ getInitialEstimate <- function(Data, Model, CVFolds, MinNuisance, TargetEvent, T
     return(InitialEstimates)
 }
 
-truncNuisanceDenom <- function(NuisanceDenom, MinNuisance, RegimeName) {
+truncNuisanceWeight <- function(NuisanceDenom, MinNuisance, RegimeName) {
     if (is.function(MinNuisance)) {
         warning("MinNuisance functions are not yet supported.")
         MinNuisance <- 5 / log(ncol(NuisanceDenom)) / sqrt(ncol(NuisanceDenom))
@@ -83,24 +81,29 @@ truncNuisanceDenom <- function(NuisanceDenom, MinNuisance, RegimeName) {
         if (MinNuisance < 1 & MinNuisance > 0) {
             if (min(NuisanceDenom) < MinNuisance) {
                 PositivityWarning <- paste(
-                    "For Intervention \"", RegimeName, "\", ", 
-                    round(mean(NuisanceDenom < MinNuisance), 3) * 100, "% of the G-related ", 
-                    "nuisance weights were bounded", 
-                    # sum(apply(NuisanceDenom, 2, function(subj) any(subj < MinNuisance))), 
-                    # "/", ncol(NuisanceDenom), " subjects", 
-                    " to ", signif(MinNuisance, 3), sep = "")
+                    "For Intervention \"", RegimeName, "\", ",
+                    round(mean(apply(NuisanceDenom, 2, function(subj) any(subj < MinNuisance)), 3) * 100),
+                    "% of subjects had at least one G-related nuisance weight falling below ", 
+                    signif(MinNuisance, 3), ", and ", 
+                    round(mean(NuisanceDenom < MinNuisance), 3) * 100, "% of total G-related ", 
+                    "nuisance weights were bounded to ", signif(MinNuisance, 3), sep = "")
                 attr(NuisanceDenom, "original") <- NuisanceDenom
                 attr(NuisanceDenom, "message") <- PositivityWarning
                 NuisanceDenom[NuisanceDenom < MinNuisance] <- MinNuisance
             } else {
                 attr(NuisanceDenom, "message") <- paste(
                     "For Intervention \"", RegimeName, "\", ", 
-                    "no G-related nuisance weights fell below", 
-                    # sum(apply(NuisanceDenom, 2, function(subj) any(subj < MinNuisance))), 
-                    # "/", ncol(NuisanceDenom), " subjects", 
-                    " to ", signif(MinNuisance, 3), sep = "")
+                    "no subjects had G-related nuisance weights falling below ", 
+                    signif(MinNuisance, 3), sep = "")
             }
             
+        } else {
+            warning("MinNuisance improperly specified. G-related nuisance weights will not be ", 
+                    "bounded away from 0, which can lead to computational instability.")
+            attr(NuisanceDenom, "message") <- paste("MinNuisance improperly specified. G-related ",
+                                                     "nuisance weights will not be bounded away from", 
+                                                     " 0, which can lead to computational instability.", 
+                                                     sep = "")
         }
     }
     return(NuisanceDenom)

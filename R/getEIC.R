@@ -48,8 +48,8 @@ getIC <- function(GStar, Hazards, TotalSurv, NuisanceWeight, TargetEvent, Target
                             nrow = nrow(F.j.t), byrow = TRUE) - F.j.t) / TotalSurv
             h.FS <- h.FS[EvalTimes <= tau, ]
             IC.j.tau <- Reduce("+", x = lapply(names(Hazards), function(l) {
-                ClevCov <- apply(rbind(GStar, NuisanceWeight[EvalTimes <= tau, ]), 
-                                 2, function(hg.i) hg.i[1] * hg.i[2:length(hg.i)]) * ((l == j) - h.FS)
+                ClevCov <- apply(rbind(GStar, NuisanceWeight[EvalTimes <= tau, ]), 2, 
+                                 function(hg.i) hg.i[1] * hg.i[2:length(hg.i)]) * ((l == j) - h.FS)
                 
                 NLdS <- matrix(EvalTimes[EvalTimes <= tau], nrow = nrow(ClevCov), 
                                ncol = ncol(ClevCov), byrow = FALSE)

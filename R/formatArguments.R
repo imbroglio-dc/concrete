@@ -858,14 +858,14 @@ print.ConcreteArgs <- function(x, ...) {
     if (length(TargTimesCapped) > 6) {
         TargTimesCapped <- paste0(
             paste0(sapply(head(TargTimesCapped, 3), function(tm) 
-                paste0(tm, " (", sum(EventTimes[EventTypes > 0] > tm), "/", length(EventTimes), ")")), 
+                paste0(tm, " (", sum(EventTimes > tm), "/", length(EventTimes), ")")), 
                 collapse = ", "), ", ..., ",
             paste0(sapply(tail(TargTimesCapped, 3), function(tm) 
-                paste0(tm, " (", sum(EventTimes[EventTypes > 0] > tm), "/", length(EventTimes), ")")), 
+                paste0(tm, " (", sum(EventTimes > tm), "/", length(EventTimes), ")")), 
                 collapse = ", "))
     } else {
         TargTimesCapped <- paste0(sapply(TargTimesCapped, function(tm) 
-            paste0(tm, " (", sum(EventTimes[EventTypes > 0] > tm), "/", length(EventTimes), ")")), 
+            paste0(tm, " (", sum(EventTimes > tm), "/", length(EventTimes), ")")), 
             collapse = ", ")
     }
     cat("Target Time", ifelse(length(x$TargetTime) == 1, "", "s"),  " (n at risk): ", 

@@ -62,7 +62,7 @@
 #' concrete.est <- doConcrete(concrete.args)
 #' 
 #' # getOutput returns risk difference, relative risk, and treatment-specific risks
-#' concrete.out <- getOutput(Estimate = concrete.est, Estimand = c("rd", "rr", "risk"))
+#' concrete.out <- getOutput(concrete.est, Estimand = c("rd", "rr", "risk"))
 #' concrete.out$RD
 #' concrete.out$RR
 #' concrete.out$Risk
@@ -209,34 +209,54 @@ print.ConcreteEst <- function(x, ...) {
 #' @describeIn doConcrete plot.ConcreteEst plot method for "ConcreteEst" class
 #' @param x a ConcreteEst object
 #' @param convergence logical: plot the PnEIC norms for each TMLE small update step
-#' @param propscores logical: plot the densities of the propensity scores for each intervention
+#' @param gweights logical: plot the densities of the intervention-related nuisance weights for each intervention
 #' @param ask logical: whether or not to prompt for user input before displaying plots
 #' @param ... additional arguments to be passed into plot methods
 #' @exportS3Method plot ConcreteEst
 
-plot.ConcreteEst <- function(x, convergence = TRUE, propscores = TRUE, ask = TRUE, ...) {
+plot.ConcreteEst <- function(x, convergence = FALSE, gweights = TRUE, ask = FALSE, ...) {
+    Intervention <- gDenomWeight <- y <- NULL
+    if(!requireNamespace("ggplot2", quietly = TRUE))
+        stop("Plotting requires the 'ggplot2' package")
     if (ask) {
         oask <- devAskNewPage(TRUE)
         on.exit(devAskNewPage(oask))
     }
+    fig <- list()
     if (convergence) {
         dev.hold()
-        plot(x = seq_along(attr(x, "NormPnEICs")) - 1, y = attr(x, "NormPnEICs"), 
-             xlab = "TMLE step", ylab = "PnEIC Norm", main = "TMLE Convergence", 
-             pch = 20)
+        fig.conv <- ggplot2::ggplot(data.frame(x = seq_along(attr(x, "NormPnEICs")) - 1, 
+                                               y = attr(x, "NormPnEICs"))) +
+            ggplot2::geom_point(ggplot2::aes(x = x, y = y), size = 0) +
+            ggplot2::labs(title = "TMLE Convergence", x = "TMLE step", y = "PnEIC Norm") + 
+            ggplot2::theme_minimal()
+        plot(fig.conv)
+        fig <- c(fig, list("TMLEConvergence" = fig.conv))
         dev.flush()
     }
-    if (propscores) {
-        for (i in seq_along(x)) {
-            propscore <- x[[i]]$NuisanceWeight
-            title = paste0("Distribution of Propensity Weights for Intervention \"",
-                           names(x)[i], "\"")
-            dev.hold()
-            plot(density(1 / propscore), 
-                 xlab = "G-related Nuisance Denominator", 
-                 main = title)
-            abline(v = 5 / sqrt(ncol(propscore)) / log(ncol(propscore)), col = "red")
-            dev.flush()
-        }
+    if (gweights) {
+        dev.hold()
+        n <- ifelse(is.matrix(x[[1]]$NuisanceWeight), 
+                    ncol(x[[1]]$NuisanceWeight), 
+                    length(x[[1]]$NuisanceWeight))
+        ps <- do.call(rbind, 
+                      lapply(seq_along(x), function(a) {
+                          g <- 1 / x[[a]]$NuisanceWeight
+                          if (!is.null(attr(g, "original")))
+                              g <- attr(g, "original")
+                          data.frame("Intervention" = names(x)[a], 
+                                     "gDenomWeight" = as.numeric(g))
+                      }))
+        fig.ps <- ggplot2::ggplot(ps) + ggplot2::lims(x = c(0, NA)) + ggplot2::theme_minimal() + 
+            ggplot2::geom_density(ggplot2::aes(x = gDenomWeight, colour = Intervention), 
+                                  bounds = c(min(ps$gDenomWeight), max(ps$gDenomWeight))) + 
+            ggplot2::geom_vline(ggplot2::aes(xintercept = 5/(sqrt(n)*log(n))), colour = "red") +
+            ggplot2::labs(title = "Distribution of Intervention-Related Nuisance Weights", 
+                          subtitle = "Weights close to 0 warn of possible positivity violations", 
+                          x = expression("1 / ("~pi~S[c]~")"), y = "Density")
+        plot(fig.ps)
+        fig <- c(fig, list("PropScores" = fig.ps))
+        dev.flush()
     }
+    invisible(fig)
 }

@@ -6,43 +6,35 @@
 \title{getOutput}
 \usage{
 getOutput(
-  Estimate,
+  ConcreteEst,
   Estimand = c("RD", "RR", "Risk"),
-  Intervention = seq_along(Estimate),
+  Intervention = seq_along(ConcreteEst),
   GComp = NULL,
   Simultaneous = TRUE,
   Signif = 0.05
 )
 
-\method{plot}{ConcreteOut}(
-  x,
-  Estimand = NULL,
-  NullLine = TRUE,
-  GComp = FALSE,
-  Simultaneous = FALSE,
-  ask = TRUE,
-  ...
-)
+\method{plot}{ConcreteOut}(x, NullLine = TRUE, ask = TRUE, ...)
 }
 \arguments{
-\item{Estimate}{list : a "ConcreteEst" object}
+\item{ConcreteEst}{"ConcreteEst" object}
 
-\item{Estimand}{character: "RR" to plot Relative Risks, "RD" to plot Risk Differences, and "Risk" to plot absolute risks}
+\item{Estimand}{character: "RR" for Relative Risks, "RD" for Risk Differences, and "Risk" for absolute risks}
 
 \item{Intervention}{numeric (default = seq_along(ConcreteEst)): the ConcreteEst list element
 corresponding to the target intervention. For comparison estimands such as RD and RR,
 Intervention should be a numeric vector with length 2, the first term designating
 "treatment" ConcreteEst list element and the second designating the "control".}
 
-\item{GComp}{logical: to plot the g-comp point estimates}
+\item{GComp}{logical: return g-formula point estimates based on initial nuisance parameter estimation}
 
-\item{Simultaneous}{logical: to compute simultaneous confidence intervals}
+\item{Simultaneous}{logical: return simultaneous confidence intervals}
 
 \item{Signif}{numeric (default = 0.05): alpha for 2-tailed hypothesis testing}
 
 \item{x}{a ConcreteOut object}
 
-\item{NullLine}{logical: to add a red line at 1 for RR plots and at 0 for RD plots}
+\item{NullLine}{logical: to plot a red line at y=1 for RR plots and at y=0 for RD plots}
 
 \item{ask}{logical: to prompt for user input before each plot}
 
@@ -61,7 +53,7 @@ getOutput
 }}
 \examples{
 # getOutput returns risk difference, relative risk, and treatment-specific risks
-# concrete.out <- getOutput(Estimate = concrete.est, Estimand = "RR", Intervention = 1:2)
+# concrete.out <- getOutput(ConcreteEst = concrete.est, Estimand = "RR", Intervention = 1:2)
 # concrete.out$RD
 # concrete.out$RR
 # concrete.out$Risk
