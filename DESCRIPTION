@@ -1,6 +1,6 @@
 Package: concrete
 Type: Package
-Title: Continuous-Time Competing Risks Estimation using TMLE
+Title: Continuous-Time Competing Risks Estimated using Targeted Minimum Loss-Based Estimation (TMLE)
 Version: 0.0.0.9
 Date: 2022-08-01
 Author: David Chen [aut, cre] (<https://orcid.org/0000-0002-9413-8152>)
@@ -11,7 +11,7 @@ Authors@R:
            email = "david.chen49@berkeley.edu",
            comment = c(ORCID = "0000-0002-9413-8152"))
 Maintainer: David Chen <david.chen49@berkeley.edu>
-Description: Continuous-time estimation of survival estimands using targeted maximumum likelihood estimation methodology described by Helene Rytgaard, Thomas Gerds, and Mark van der Laan 2021. Currently supported - Estimation of cause-specific hazards using Cox models, binary treatments, and simultaneously targeting survival estimands at multiple time points. 
+Description: Continuous-time estimation of survival estimands using targeted maximumum likelihood estimation methodology described in Rytgaard et al. (2023) <DOI: 10.1111/biom.13856> and in Rytgaard and van der Laan (2023) <DOI: 10.1007/s10985-022-09576-2>. 
 License: 
     GPL (>= 3) + file LICENSE
 Imports: 
