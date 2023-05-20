@@ -13,7 +13,7 @@ Authors@R:
 Maintainer: David Chen <david.chen49@berkeley.edu>
 Description: 'concrete' is an R package designed to use a one-step continuous-time Targeted Minimum Loss-Based Estimator (TMLE) to estimate outcome-specific absolute risk estimands in right-censored survival settings with or without competing risks. This package implements the methodology described in Rytgaard et al. (2023) <DOI: 10.1111/biom.13856> and in Rytgaard and van der Laan (2023) <DOI: 10.1007/s10985-022-09576-2>. Flexible, cross-validated initial estimation of treatment propensitiy is done using the 'SuperLearner' or 'sl3' packages while intial estimation of conditional hazards is done using ensembles of Cox regressions from the 'survival' package. Currently 'concrete' can be used to estimate the effects of static or dynamic interventions on binary treatments given at baseline.
 License: 
-    GPL (>= 3)
+    GPL (>= 3) + file LICENSE
 Imports: 
     survival,
     zoo,
@@ -29,6 +29,7 @@ Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.2.3
+Additional_repositories: https://github.com/tlverse/sl3
 Suggests: 
 	nnls,
     xgboost,
@@ -39,6 +40,5 @@ Config/testthat/edition: 3
 Enhances: 
     sl3, 
     Rsolnp
-Additional_repositories: https://github.com/tlverse/sl3
 URL: https://github.com/imbroglio-dc/concrete
 BugReports: https://github.com/imbroglio-dc/concrete/issues
