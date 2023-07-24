@@ -191,7 +191,7 @@ print.ConcreteEst <- function(x, ...) {
         cat("Treatment: \n")
         if (is.matrix(TrtFit)) {
             names(TrtFit) <- sub(pattern = "Coef", replacement = "SL Weight", x = names(TrtFit))
-            print(tmp)
+            print(TrtFit)
         } else {
             print(cbind(Risk = TrtFit$cvRisk, "SL Weight" = TrtFit$coef))
         }
