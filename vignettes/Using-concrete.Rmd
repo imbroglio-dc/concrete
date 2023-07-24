@@ -1,0 +1,46 @@
+---
+title: "Using-concrete"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Using-concrete}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(concrete)
+library(data.table)
+set.seed(12345)
+data <- as.data.table(survival::pbc)
+data <- data[!is.na(trt), ][, trt := trt - 1]
+data <- data[, c("time", "status", "trt", "age", "sex", "albumin")]
+```
+
+```{r formatArguments}
+
+ConcreteArgs <- formatArguments(DataTable = data,
+                                EventTime = "time",
+                                EventType = "status",
+                                Treatment = "trt",
+                                Intervention = 0:1,
+                                TargetTime = 90 * (15:20),
+                                TargetEvent = 1:2,
+                                MaxUpdateIter = 250,
+                                Verbose = FALSE)
+```
+
+```{r doConcrete}
+ConcreteEst <- doConcrete(ConcreteArgs)
+```
+
+```{r getOutput}
+ConcreteOut <- getOutput(ConcreteEst, A1 = 1, A0 = 2)
+```
+

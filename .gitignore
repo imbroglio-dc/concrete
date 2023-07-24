@@ -52,3 +52,4 @@ scripts/sim-data/sim-diag/diagnostic.txt
 .covrignore
 .coveralls_github_token
 
+inst/doc
