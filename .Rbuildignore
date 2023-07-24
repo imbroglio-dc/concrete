@@ -1,7 +1,6 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
 ^scripts$
-^inst$
 ^output$
 ^concrete$
 ^obsolete-concrete$
@@ -10,3 +9,4 @@
 .coveralls_github_token
 .covrignore
 .travis.yml
+..Rcheck

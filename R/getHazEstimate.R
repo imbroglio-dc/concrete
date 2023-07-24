@@ -200,9 +200,9 @@ getHazSurvPred <- function(Data, HazFits, MinNuisance, TargetEvent,
 }
 
 SLCoxnet <- function(FitData, PredData, CovCols, TimeCol, TypeCol, j, alpha = 1, ...) {
-    require(data.table)
-    require(glmnet)
-    require(survival)
+    if (!requireNamespace("glmnet", quietly = TRUE)) {
+        stop("SLCoxnet requires the 'glmnet' package")
+    }
     FitLP <- AtRisk <- NULL
     
     ModelFit <- glmnet::glmnet(x = as.matrix(FitData)[, CovCols], 

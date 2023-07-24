@@ -1,4 +1,4 @@
-#' Title
+#' getInitialEstimate
 #'
 #' @param Data data.table
 #' @param Model list
@@ -112,8 +112,9 @@ truncNuisanceWeight <- function(NuisanceDenom, MinNuisance, RegimeName) {
 screenCovRanger <- function(Data, j, nVar =  10, min.node.size = 3, mtry = floor(sqrt(ncol(Data))), 
                             write.forest = FALSE, oob.error = FALSE, importance = "impurity", ...) 
 {
-    require("ranger")
-    require("survival")
+    if (!requireNamespace("ranger", quietly = TRUE)) {
+        stop("screenCovRanger requires the 'ranger' package")
+    }
     IDCol <- attr(Data, "ID")
     TrtCol <- attr(Data, "Treatment")
     TimeCol <- attr(Data, "EventTime")

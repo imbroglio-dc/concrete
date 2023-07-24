@@ -30,7 +30,7 @@ ConcreteArgs <- formatArguments(DataTable = data,
                                 EventType = "status",
                                 Treatment = "trt",
                                 Intervention = 0:1,
-                                TargetTime = 90 * (15:20),
+                                TargetTime = 1500,
                                 TargetEvent = 1:2,
                                 MaxUpdateIter = 250,
                                 Verbose = FALSE)
@@ -41,6 +41,6 @@ ConcreteEst <- doConcrete(ConcreteArgs)
 ```
 
 ```{r getOutput}
-ConcreteOut <- getOutput(ConcreteEst, A1 = 1, A0 = 2)
+ConcreteOut <- getOutput(ConcreteEst)
 ```
 
