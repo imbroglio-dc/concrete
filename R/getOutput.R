@@ -262,7 +262,8 @@ plot.ConcreteOut <- function(x, NullLine = TRUE, ask = TRUE, ...) {
         }
         if (Simultaneous) {
             fig[["rr"]] <- fig[["rr"]] + 
-                ggplot2::geom_ribbon(ggplot2::aes(ymin = `SimCI Low`, ymax = `SimCI Hi`), alpha = 0.06)
+                ggplot2::geom_ribbon(data = z[Estimator == "tmle", ], 
+                                     ggplot2::aes(ymin = `SimCI Low`, ymax = `SimCI Hi`), alpha = 0.06)
         }
         fig[["rr"]] <- fig[["rr"]] + 
             ggplot2::facet_wrap(~Event, scales = "free", nrow = 1) + 
@@ -289,7 +290,8 @@ plot.ConcreteOut <- function(x, NullLine = TRUE, ask = TRUE, ...) {
         }
         if (Simultaneous) {
             fig[["rd"]] <- fig[["rd"]] + 
-                ggplot2::geom_ribbon(ggplot2::aes(ymin = `SimCI Low`, ymax = `SimCI Hi`), alpha = 0.06)
+                ggplot2::geom_ribbon(data = z[Estimator == "tmle", ], 
+                                     ggplot2::aes(ymin = `SimCI Low`, ymax = `SimCI Hi`), alpha = 0.06)
         }
         fig[["rd"]] <- fig[["rd"]] + 
             ggplot2::facet_wrap(~Event, scales = "free", nrow = 1) + 

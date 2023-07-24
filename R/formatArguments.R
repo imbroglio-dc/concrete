@@ -592,19 +592,33 @@ getTargetTime <- function(TargetTime, TargetEvent, Data) {
 }
 
 getCVFolds <- function(CVArg, Data, CVSeed = sample(0:1e8, 1)) {
-    if (is.null(CVArg)) {
-        nEff <- attr(Data, "nEff")
-        V <- (nEff <= 30)*(nEff - 20) + (nEff <= 500)*10 + (nEff <= 5e3)*5 + (nEff <= 1e4)*2 + 3
-        CVArg <- list(n = nrow(Data), V = V, fold_fun = origami::folds_vfold, 
-                      cluster_ids = Data[[attr(Data, "ID")]], 
-                      strata_ids = Data[[attr(Data, "EventType")]])
-    }
-    
     ## cross validation setup ----
     # stratified by event type to avoid regressions failing with rare events 
     # theory? but regressions may fail in practice with rare events otherwise 
     ### nice to do: make efficient CV representation
+    nEff <- attr(Data, "nEff")
+    V <- (nEff <= 30)*(nEff - 20) + (nEff <= 500)*10 + (nEff <= 5e3)*5 + (nEff <= 1e4)*2 + 3
     
+    if (is.null(CVArg)) {
+        CVArg <- list(n = nrow(Data), V = V, fold_fun = origami::folds_vfold, 
+                      cluster_ids = Data[[attr(Data, "ID")]], 
+                      strata_ids = Data[[attr(Data, "EventType")]])
+    } else {
+        if (is.list(CVArg)) {
+            if (is.null(CVArg[["n"]]))
+                CVArg[["n"]] <- nrow(Data)
+            if (is.null(CVArg[["V"]]))
+                CVArg[["V"]] <- V
+            if (is.null(CVArg[["fold_fun"]]))
+                CVArg[["fold_fun"]] <- origami::folds_vfold
+            if (is.null(CVArg[["cluster_ids"]]))
+                CVArg[["cluster_ids"]] <- Data[[attr(Data, "ID")]]
+            if (is.null(CVArg[["strata_ids"]]))
+                CVArg[["strata_ids"]] <- Data[[attr(Data, "EventType")]]
+        } else {
+            warning("CVArg input is not correctly formatted; default CVFolds have been generated.")
+        }
+    }
     set.seed(CVSeed)
     CVFolds <- try(do.call(origami::make_folds, CVArg))
     if (inherits(CVFolds, "try-error") | is.null(CVFolds))
@@ -634,7 +648,6 @@ getModel <- function(Model, Data, HazEstBackend, PropScoreBackend, Verbose) {
                            Verbose = Verbose)
     
     ## check trt model fits with backend
-    
     if (tolower(attr(Model[[Treatment]], "Backend")) == "sl3") {
         # if (Verbose)
         # cat("For PropScoreBackend = `sl3`, the model(s) for Treatment must be R6 objects ",
@@ -661,8 +674,8 @@ getModel <- function(Model, Data, HazEstBackend, PropScoreBackend, Verbose) {
                     attr(Model[[FitVar]], "Backend") <- HazEstBackend
                 if (attr(Model[[FitVar]], "Backend") != "coxph") {
                     attr(Model[[FitVar]], "Backend") <- "coxph"
-                    cat("Only cox-based estimation of censoring and event hazards is supported ", 
-                        "so the backend for Model[['", FitVar,"']] has been changed to 'coxph\n")
+                    cat("Currently only cox-based estimation of censoring and event hazards is ", 
+                        "supported so the backend for Model[['", FitVar,"']] has been set to 'coxph\n")
                 }
                 JBackend <- attr(Model[[FitVar]], "Backend")
                 
@@ -681,6 +694,14 @@ getModel <- function(Model, Data, HazEstBackend, PropScoreBackend, Verbose) {
                 CoxLeftRegex <- paste0("^Surv\\(\\s*", EventTime, "\\s*,\\s*", EventType,
                                        "\\s*==\\s*", FitVar, "\\s*\\)\\s*~\\s*")
                 for (j in seq_along(Model[[FitVar]])) {
+                    # coxnet 
+                    if (inherits(Model[[FitVar]][j], "SL.coxnet")) {
+                        
+                    } else if (inherits(Model[[FitVar]][j], "SL.cox")) {
+                        # cox
+                        
+                    }
+                    
                     Formula <- as.character(Model[[FitVar]][j])
                     CoxRight <- paste0(" ", sub("^.*~", "", Formula), " ")
                     
@@ -733,8 +754,7 @@ makeModelList <- function(Treatment, EventTime, EventType, UniqueEvents, Model, 
             Model[[Treatment]] <- c("SL.xgboost", "SL.glmnet")
             attr(Model[[Treatment]], "Backend") <- "SuperLearner"
         }
-    } 
-    
+    }
     
     # Censoring and Events
     for (j in UniqueEvents) {
@@ -785,19 +805,19 @@ getMinNuisance <- function(MinNuisance = 0.05) {
 
 #' @describeIn formatArguments makeITT ...
 makeITT <- function() {
-    ITT <- list("A=1" = list("intervention" = function(Treatment, Covariates) {
-        NewTreatment <- rep_len(1, length(Treatment))
-        return(NewTreatment)
+    ITT <- list("A=1" = list("intervention" = function(ObservedTreatment, Covariates) {
+        IntervenedTreatment <- rep_len(1, length(ObservedTreatment))
+        return(IntervenedTreatment)
     },
-    "g.star" = function(Treatment, Covariates, PropScore) {
+    "g.star" = function(Treatment, Covariates, PropScore, TargetTreatment = NULL) {
         Probability <- as.numeric(Treatment == 1)
         return(Probability)
     }),
-    "A=0" = list("intervention" = function(Treatment, Covariates) {
-        NewTreatment <- rep_len(0, length(Treatment))
-        return(NewTreatment)
+    "A=0" = list("intervention" = function(ObservedTreatment, Covariates) {
+        IntervenedTreatment <- rep_len(0, length(ObservedTreatment))
+        return(IntervenedTreatment)
     },
-    "g.star" = function(Treatment, Covariates, PropScore) {
+    "g.star" = function(Treatment, Covariates, PropScore, TargetTreatment = NULL) {
         Probability <- as.numeric(Treatment == 0)
         return(Probability)
     }))

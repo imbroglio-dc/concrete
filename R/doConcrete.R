@@ -190,9 +190,10 @@ print.ConcreteEst <- function(x, ...) {
     if (inherits(TrtFit, "SuperLearner")) {
         cat("Treatment: \n")
         if (is.matrix(TrtFit)) {
-            print(TrtFit)
+            names(TrtFit) <- sub(pattern = "Coef", replacement = "SL Weight", x = names(TrtFit))
+            print(tmp)
         } else {
-            print(cbind(Risk = TrtFit$cvRisk, Coef = TrtFit$coef))
+            print(cbind(Risk = TrtFit$cvRisk, "SL Weight" = TrtFit$coef))
         }
     } else {
         cat("Treatment: \nPrinting for 'sl3' backend not yet enabled\n")
@@ -248,12 +249,12 @@ plot.ConcreteEst <- function(x, convergence = FALSE, gweights = TRUE, ask = FALS
                                      "gDenomWeight" = as.numeric(g))
                       }))
         fig.ps <- ggplot2::ggplot(ps) + ggplot2::lims(x = c(0, NA)) + ggplot2::theme_minimal() + 
-            ggplot2::geom_density(ggplot2::aes(x = gDenomWeight, colour = Intervention), 
-                                  bounds = c(min(ps$gDenomWeight), max(ps$gDenomWeight))) + 
+            ggplot2::geom_line(mapping = ggplot2::aes(x = gDenomWeight, colour = Intervention), 
+                               stat = "density", trim = TRUE) + 
             ggplot2::geom_vline(ggplot2::aes(xintercept = 5/(sqrt(n)*log(n))), colour = "red") +
             ggplot2::labs(title = "Distribution of Intervention-Related Nuisance Weights", 
                           subtitle = "Weights close to 0 warn of possible positivity violations", 
-                          x = expression("1 / ("~pi~S[c]~")"), y = "Density")
+                          x = expression(~pi*"(a|w) "*S[c]*"(t|a,w)"), y = "Density")
         plot(fig.ps)
         fig <- c(fig, list("PropScores" = fig.ps))
         dev.flush()

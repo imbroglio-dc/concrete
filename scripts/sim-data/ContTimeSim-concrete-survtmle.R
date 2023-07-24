@@ -23,8 +23,6 @@ loadPackages <- function() {
 loadPackages()
 data.table::setDTthreads(threads = parallel::detectCores(), restore_after_fork = TRUE)
 
-
-
 if (file.exists("scripts/sim-data/TrueRisks.csv")) {
     risks <- read.csv("scripts/sim-data/TrueRisks.csv")
 } else {
