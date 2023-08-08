@@ -14,7 +14,7 @@
 getInitialEstimate <- function(Data, Model, CVFolds, MinNuisance, TargetEvent, TargetTime, 
                                Regime, PropScoreBackend, HazEstBackend, ReturnModels) {
     Time <- NULL
-    TrtVal <- Data[[attr(Data, "Treatment")]]
+    TrtVal <- Data[, .SD, .SDcols = attr(Data, "Treatment")]
     TimeVal <- Data[[attr(Data, "EventTime")]]
     Censored <- any(Data[[attr(Data, "EventType")]] <= 0)
     CovDT <- subset(Data, select = attr(Data, "CovNames")[["ColName"]])

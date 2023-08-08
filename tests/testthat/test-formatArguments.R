@@ -1,9 +1,8 @@
-test_that("formatArguments works for a few sample analyses", {
-    require(data.table)
-    data <- as.data.table(survival::pbc)[, c("time", "status", "trt", "id", "age", "sex")]
-    
-    set.seed(0)
-    data[, trt := sample(0:1, length(trt), replace = TRUE)]
+set.seed(0)
+data <- data.table::as.data.table(survival::pbc)[, c("time", "status", "trt", "id", "age", "sex")]
+data[, trt := sample(0:1, length(trt), replace = TRUE)]
+
+test_that("formatArguments works ", {
     concrete.args <- formatArguments(Data = data, 
                                      EventTime = "time", 
                                      EventType = "status", 
@@ -15,6 +14,7 @@ test_that("formatArguments works for a few sample analyses", {
     )
     expect_s3_class(concrete.args, class = "ConcreteArgs")
     expect_s3_class(formatArguments(concrete.args), class = "ConcreteArgs")
+    expect_s3_class(formatArguments(ConcreteArgs = concrete.args), class = "ConcreteArgs")
     expect_error(formatArguments(ConcreteArgs = data))
     # data[, status := as.numeric(status >= 1)] # to make simple right-censored survival
     # data[status == 0, status := sample(1:2, sum(status == 0), replace = TRUE)]
@@ -22,8 +22,8 @@ test_that("formatArguments works for a few sample analyses", {
 
 test_that("Data with missingness or incorrect type throw errors", {
     require(data.table)
-    data <- as.data.table(survival::pbc)[, c("time", "status", "trt", "id", "age", "sex")]
-    expect_error(formatArguments(Data = data, 
+    DataWithMissing <- as.data.table(survival::pbc)[, c("time", "status", "trt", "id", "age", "sex")]
+    expect_error(formatArguments(Data = DataWithMissing, 
                                  EventTime = "time", 
                                  EventType = "status", 
                                  Treatment = "trt", 
@@ -31,7 +31,7 @@ test_that("Data with missingness or incorrect type throw errors", {
                                  Intervention = 0:1, 
                                  TargetTime = mean(data[["time"]]), 
                                  TargetEvent = unique(data[["status"]])))
-    expect_error(formatArguments(Data = as.data.frame(data), 
+    expect_error(formatArguments(Data = as.data.frame(DataWithMissing), 
                                  EventTime = "time", 
                                  EventType = "status", 
                                  Treatment = "trt", 
@@ -47,7 +47,7 @@ test_that("Data with missingness or incorrect type throw errors", {
                                  Intervention = 0:1, 
                                  TargetTime = mean(data[["time"]]), 
                                  TargetEvent = unique(data[["status"]])))
-    expect_error(formatArguments(Data = "blah", 
+    expect_error(formatArguments(Data = "foo", 
                                  EventTime = "time", 
                                  EventType = "status", 
                                  Treatment = "trt", 
@@ -60,36 +60,28 @@ test_that("Data with missingness or incorrect type throw errors", {
 test_that("EventTime is a positive, finite numeric vector", {
     test_vals <- list(NaN, NA, Inf, TRUE, "a", 0, -1)
     for (value in test_vals) {
-        data <- data.frame("x" = value)
-        expect_error(checkEventTime(value, data))
-        expect_error(checkEventTime("x", data))
+        expect_error(concrete:::checkEventTime(value, data.frame("x" = value)))
+        expect_error(concrete:::checkEventTime("x", data.frame("x" = value)))
     }
 })
 
 test_that("EventType is a non-negative numeric vector", {
     test_vals <- list(NaN, NA, TRUE, "a", -1)
     for (value in test_vals) {
-        data <- data.frame("x" = value)
-        expect_error(checkEventType(value, data))
-        expect_error(checkEventType("x", data))
+        expect_error(concrete:::checkEventType(value, data.frame("x" = value)))
+        expect_error(concrete:::checkEventType("x", data.frame("x" = value)))
     }
 })
 
 test_that("Treatment is a numeric vector", {
     test_vals <- list(NaN, NA, Inf, TRUE, "a")
     for (value in test_vals) {
-        data <- data.frame("x" = value)
-        expect_error(checkTreatment(value, data))
-        expect_error(checkTreatment("x", data))
+        expect_error(concrete:::checkTreatment(value, data.frame("x" = value)))
+        expect_error(concrete:::checkTreatment("x", data.frame("x" = value)))
     }
 })
 
 test_that("Intervention specifications", {
-    require(data.table)
-    data <- as.data.table(survival::pbc)[, c("time", "status", "trt", "id", "age", "sex")]
-    
-    set.seed(0)
-    data[, trt := sample(0:1, length(trt), replace = TRUE)]
     test_vals <- list(NaN, NA, Inf, "a", matrix(1, 3, 3), 
                       function(...) return(list(...)),
                       list(function(x) x, function(y) 1))
@@ -157,4 +149,3 @@ test_that("RenameCovs = FALSE gets processed correctly", {
                                      RenameCovs = FALSE)
     expect_equal(colnames(concrete.args$DataTable), colnames(data))
 })
-

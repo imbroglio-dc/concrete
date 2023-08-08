@@ -319,7 +319,8 @@ formatDataTable <- function(DT, EventTime, EventType, Treatment, ID, LongTime, V
                     LongTime = LongTime,
                     ID = ID, 
                     nEff = nEff,
-                    RenameCovs = RenameCovs)
+                    RenameCovs = RenameCovs, 
+                    OrigCovDT = attr(CovDT, "OrigCovDT"))
     setcolorder(DT, SpecialCols)
     return(DT)
 }
@@ -353,7 +354,7 @@ checkEventType <- function(EventType, DataTable = NULL) {
 
 checkTreatment <- function(Treatment, DataTable = NULL) {
     if (is.character(Treatment)) {
-        tmp <- try(subset(DataTable, select = Treatment))
+        tmp <- try(DataTable[, .SD , .SDcols = Treatment])
         if (inherits(tmp, "try-error") | is.null(tmp))
             stop("Column", ifelse(length(Treatment) > 1, "s", ""), " '", paste0(Treatment, collapse = ", "), 
                  "' ", ifelse(length(Treatment) > 1, "were", "was"), " not found in the supplied data.",  
@@ -366,7 +367,7 @@ checkTreatment <- function(Treatment, DataTable = NULL) {
         })
         
     } else
-        stop("`Treatment` must be the name of the column containing the intervention variable.")
+        stop("The `Treatment` argument input must be a character vector containing the column name(s) corresponding to the intervention variable(s).")
     invisible(NULL)
 }
 
@@ -434,26 +435,22 @@ getCovDataTable <- function(DataTable, EventTime, EventType, Treatment, ID, Long
     # if (Verbose) try(superheat::superheat(cov(scale(model.matrix(~., CovDT1Hot)))))
     
     attr(CovDT1Hot, "CovNames") <- CovNames1Hot
+    attr(CovDT1Hot, "OrigCovDT") <- CovDT
     return(CovDT1Hot)
 }
 
 getRegime <- function(Intervention, Data) {
-    if (length(attr(Data, "Treatment")) == 1) {
-        TrtVal <- Data[[attr(Data, "Treatment")]]
-    } else
-        TrtVal <- subset(Data, select = attr(Data, "Treatment"))
-    CovDT <- Data[, .SD, .SDcols = attr(Data, "CovNames")[["ColName"]]]
-    CovDT <- structure(CovDT,
-                       CovNames = attr(Data, "CovNames"),
-                       RenameCovs = attr(Data, "RenameCovs"))
+    TrtVal <- Data[, .SD, .SDcols = attr(Data, "Treatment")]
+    CovDT <- attr(Data, "OrigCovDT")
     
     if (is.list(Intervention)) {
         Regimes <- lapply(seq_along(Intervention), function(i) {
-            Regime <- Intervention[[i]]
-            if (is.function(Regime)) {
-                Regime <- Intervention 
-                Intervention <- list(Regime)
+            if (inherits(Intervention, "concreteIntervention") | 
+                all(length(Intervention) %in% c(1, 2), lapply(Intervention, is.function))) {
+                Intervention <- list(Intervention)
             }
+            Regime <- Intervention[[i]]
+            
             if (is.null(names(Intervention))) {
                 RegName <- paste0("intervention", i)
             } else if (names(Intervention)[i] == "") {
@@ -462,35 +459,58 @@ getRegime <- function(Intervention, Data) {
                 RegName <- names(Intervention)[i]
             
             # intervention fn ----
-            if (isTRUE(dim(Regime) == dim(TrtVal)) | 
-                all(is.numeric(TrtVal), isTRUE(length(Regime) == length(TrtVal)))) {
-                RegimeVal <- Regime
-            } else if (is.numeric(Regime) & inherits(TrtVal, "data.frame")) {
-                if (isTRUE(length(Regime) == ncol(TrtVal))) {
-                    RegimeVal <- data.table::copy(TrtVal)
-                    for (i in 1:ncol(RegimeVal)) {
-                        RegimeVal[, i] <- Regime[i]
+            # Regime input as function, dataframe, vector of individual trt values, single value
+            if (is.list(Regime)) {
+                if (is.function(Regime[[1]]) & length(Regime) <= 2) {
+                    # check intervention function
+                    if (is.null(names(Regime)[1]))  
+                        names(Regime)[1] <- "intervention"
+                    RegimeVal <- try(do.call(Regime[["intervention"]], list(TrtVal, CovDT)))
+                    if (inherits(RegimeVal, "try-error") & ncol(TrtVal) == 1)
+                        RegimeVal <- try(do.call(Regime[["intervention"]], list(unlist(TrtVal), CovDT)))
+                    if (any(inherits(RegimeVal, "try-error"), 
+                            is.null(RegimeVal), 
+                            dim(RegimeVal) != dim(TrtVal), 
+                            length(RegimeVal) != nrow(TrtVal), na.rm = TRUE))
+                        stop("Intervention must be a list of regimes specified as list(\"intervention\"",
+                             " = f(A, L), \"g.star\" = g(A, L)), and intervention function f(A, L) must ",
+                             "be a function of treatment and covariates that returns numeric desired",
+                             " treatment assignments (a*) with the same dimensions as the observed ",
+                             "treatment. Amend Intervention[[", RegName, "]] and try again") 
+                    # g.star function checked in the last section of getRegime()
+                    if (!inherits(RegimeVal, "data.table")) {
+                        RegimeVal <- data.table::as.data.table(RegimeVal)
+                        data.table::setnames(RegimeVal, new = colnames(TrtVal))
                     }
+                } else {
+                    stop("List inputs into the Intervention argument must be a list of length ",  
+                         "<= 2, containing a treatment assignment function and an optional", 
+                         "propensity score function. See concrete::makeITT() for an example. ")
+                } 
+            } else if (all(inherits(Regime, c("data.frame", "data.table", "matrix")), 
+                           isTRUE(dim(Regime) == dim(TrtVal)))) {
+                if (!all(apply(Regime, 2, typeof) == apply(TrtVal, 2, typeof))) {
+                    stop("Regime value types mismatched with Treatment")
+                } else {
+                    RegimeVal <- Regime
                 }
-            } else if (is.function(Regime[[1]]) & length(Regime) <= 2) {
-                if (is.null(names(Regime)[1]))  
-                    names(Regime)[1] <- "intervention"
-                RegimeVal <- try(do.call(Regime[["intervention"]], list(TrtVal, CovDT)))
-                if (inherits(RegimeVal, "try-error") | is.null(RegimeVal) |
-                    all(dim(RegimeVal) != dim(TrtVal), length(RegimeVal) != length(TrtVal)))
-                    stop("Intervention must be a list of regimes specified as list(\"intervention\"",
-                         " = f(A, L), \"g.star\" = g(A, L)), and intervention function f(A, L) must ",
-                         "be a function of treatment and covariates that returns numeric desired",
-                         " treatment assignments (a*) with the same dimensions as the observed ",
-                         "treatment. Amend Intervention[[", RegName, "]] and try again")
-            } else {
+            } else if (isTRUE(length(Regime) == nrow(TrtVal) & is.numeric(Regime))) {
+                RegimeVal <- data.table::copy(TrtVal)
+                for (i in 1:ncol(RegimeVal)) {
+                    RegimeVal[, i] <- Regime
+                }
+            } else if (isTRUE(length(Regime) == 1) & is.numeric(Regime)) {
+                RegimeVal <- data.table::copy(TrtVal)
+                for (i in 1:ncol(RegimeVal)) {
+                    RegimeVal[, i] <- rep_len(Regime, nrow(RegimeVal))
+                }
+            } else
                 stop("Something has gone wrong with Intervention specification. ", 
                      "Check 'Intervention=' argument input or debug concrete:::getRegime()")
-            }
             
-            if (!all(length(unlist(RegimeVal)) == length(unlist(TrtVal)),
+            if (!all(dim(RegimeVal) == dim(TrtVal),
                      min(unlist(RegimeVal)) >= min(unlist(TrtVal)),
-                     max(unlist(RegimeVal)) <= max(unlist(TrtVal))))
+                     max(unlist(RegimeVal)) <= max(unlist(TrtVal)), na.rm = TRUE))
                 stop("If providing an intervention function, the function output must return a ",
                      "numeric vector of desired treatment assignments (a*) with the same ",
                      "dimensions as the observed treatment and with values within the observed ",
@@ -498,7 +518,7 @@ getRegime <- function(Intervention, Data) {
                      "dimensions as the observed treatment with values within the observed range.",
                      "Amend Intervention[[", RegName, "]] and try again")
             
-            # g.star ----
+            # check g.star ----
             if (!is.null(attr(Regime, "g.star"))) {
                 attr(RegimeVal, "g.star") <- attr(Regime, "g.star")
             } else if (is.list(Regime)) {
@@ -531,8 +551,7 @@ getRegime <- function(Intervention, Data) {
             names(Regimes) <- paste0("Regime", seq_along(Intervention))
         } else
             names(Regimes) <- names(Intervention)
-    }
-    else if (all(Intervention %in% c(0, 1), try(length(Intervention)) %in% c(1, 2))) {
+    } else if (all(Intervention %in% c(0, 1), try(length(Intervention)) %in% c(1, 2))) {
         Regimes <- list()
         if ("1" %in% try(as.character(Intervention))) {
             Regimes[["A=1"]] <- rep_len(1, length(TrtVal))
@@ -549,8 +568,8 @@ getRegime <- function(Intervention, Data) {
              "and covariates that returns numeric desired treatment assignments (a*) with the same ",
              "dimensions as the observed treatment. The g.star function f(A, L) must be a function ",
              "of treatment and covariates that returns numeric probabilities bounded in",
-             "[0, 1].")
-    return(Regimes)
+             "[0, 1]. See concrete::makeITT() for an example.")
+    return(Regimes) 
 }
 
 getTargetEvent <- function(TargetEvent, Data) {
@@ -805,22 +824,27 @@ getMinNuisance <- function(MinNuisance = 0.05) {
 
 #' @describeIn formatArguments makeITT ...
 makeITT <- function() {
-    ITT <- list("A=1" = list("intervention" = function(ObservedTreatment, Covariates) {
-        IntervenedTreatment <- rep_len(1, length(ObservedTreatment))
-        return(IntervenedTreatment)
-    },
-    "g.star" = function(Treatment, Covariates, PropScore, TargetTreatment = NULL) {
-        Probability <- as.numeric(Treatment == 1)
-        return(Probability)
-    }),
-    "A=0" = list("intervention" = function(ObservedTreatment, Covariates) {
-        IntervenedTreatment <- rep_len(0, length(ObservedTreatment))
-        return(IntervenedTreatment)
-    },
-    "g.star" = function(Treatment, Covariates, PropScore, TargetTreatment = NULL) {
-        Probability <- as.numeric(Treatment == 0)
-        return(Probability)
-    }))
+    ITT <- list("A=1" = 
+                    list("intervention" = function(ObservedTreatment, Covariates, PropScore) {
+                        IntervenedTreatment <- rep_len(1, length(ObservedTreatment))
+                        return(IntervenedTreatment)
+                    },
+                    "g.star" = function(Treatment, Covariates, PropScore, TargetTreatment = NULL) {
+                        Probability <- as.numeric(Treatment == 1)
+                        return(Probability)
+                    }),
+                "A=0" = 
+                    list("intervention" = function(ObservedTreatment, Covariates, PropScore) {
+                        IntervenedTreatment <- rep_len(0, length(ObservedTreatment))
+                        return(IntervenedTreatment)
+                    },
+                    "g.star" = function(Treatment, Covariates, PropScore, TargetTreatment = NULL) {
+                        Probability <- as.numeric(Treatment == 0)
+                        return(Probability)
+                    }))
+    
+    class(ITT[["A=1"]]) <- union("concreteIntervention", class(ITT[["A=1"]]))
+    class(ITT[["A=0"]]) <- union("concreteIntervention", class(ITT[["A=0"]]))
     return(ITT)
 }
 
