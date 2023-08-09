@@ -535,12 +535,22 @@ getRegime <- function(Intervention, Data) {
     else if (all(Intervention %in% c(0, 1), try(length(Intervention)) %in% c(1, 2))) {
         Regimes <- list()
         if ("1" %in% try(as.character(Intervention))) {
-            Regimes[["A=1"]] <- rep_len(1, length(TrtVal))
-            attr(Regimes[["A=1"]], "g.star") <- function(a, L) {as.numeric(a == 1)}
+            TrtNames <- colnames(TrtVal)
+            Regimes[["A=1"]] <- data.table::copy(TrtVal)
+            Regimes[["A=1"]][, (TrtNames) := lapply(.SD, 1), .SDcols = TrtNames]
+            attr(Regimes[["A=1"]], "g.star") <- function(Treatment, Covariates, PropScore, Intervened) {
+                Probability <- as.data.table(1 * (Treatment == Intervened))
+                return(Probability)
+            }
         }
         if ("0" %in% try(as.character(Intervention))) {
-            Regimes[["A=0"]] <- rep_len(0, length(TrtVal))
-            attr(Regimes[["A=0"]], "g.star") <- function(a, L) {as.numeric(a == 0)}
+            TrtNames <- colnames(TrtVal)
+            Regimes[["A=0"]] <- data.table::copy(TrtVal)
+            Regimes[["A=0"]][, (TrtNames) := lapply(.SD, 0), .SDcols = TrtNames]
+            attr(Regimes[["A=0"]], "g.star") <- function(Treatment, Covariates, PropScore, Intervened) {
+                Probability <- as.data.table(1 * (Treatment == Intervened))
+                return(Probability)
+            }
         }
     } else
         stop("Intervention must be integers corresponding to desired static treatment level(s), ",  
@@ -805,22 +815,27 @@ getMinNuisance <- function(MinNuisance = 0.05) {
 
 #' @describeIn formatArguments makeITT ...
 makeITT <- function() {
-    ITT <- list("A=1" = list("intervention" = function(ObservedTreatment, Covariates) {
-        IntervenedTreatment <- rep_len(1, length(ObservedTreatment))
-        return(IntervenedTreatment)
+    ITT <- list("A=1" = list("intervention" = function(ObservedTrt, Covariates, PropScore) {
+        TrtNames <- colnames(ObservedTrt)
+        Intervened <- data.table::copy(ObservedTrt)
+        Intervened[, (TrtNames) := lapply(.SD, function(a) 1), .SDcols = TrtNames]
+        return(Intervened)
     },
-    "g.star" = function(Treatment, Covariates, PropScore, TargetTreatment = NULL) {
-        Probability <- as.numeric(Treatment == 1)
+    "g.star" = function(Treatment, Covariates, PropScore, Intervened) {
+        Probability <- as.data.table(1 * (Treatment == Intervened))
         return(Probability)
     }),
-    "A=0" = list("intervention" = function(ObservedTreatment, Covariates) {
-        IntervenedTreatment <- rep_len(0, length(ObservedTreatment))
-        return(IntervenedTreatment)
+    "A=0" = list("intervention" = function(ObservedTrt, Covariates) {
+        TrtNames <- colnames(ObservedTrt)
+        Intervened <- data.table::copy(ObservedTrt)
+        Intervened[, (TrtNames) := lapply(.SD, function(a) 0), .SDcols = TrtNames]
+        return(Intervened)
     },
-    "g.star" = function(Treatment, Covariates, PropScore, TargetTreatment = NULL) {
-        Probability <- as.numeric(Treatment == 0)
+    "g.star" = function(Treatment, Covariates, PropScore, Intervened) {
+        Probability <- as.data.table(1 * (Treatment == Intervened))
         return(Probability)
     }))
+    class(ITT) <- union("ConcreteIntervention", class(ITT))
     return(ITT)
 }
 
