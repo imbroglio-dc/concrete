@@ -24,7 +24,6 @@ data <- data[, c("time", "status", "trt", "age", "sex", "albumin")]
 ```
 
 ```{r formatArguments}
-
 ConcreteArgs <- formatArguments(DataTable = data,
                                 EventTime = "time",
                                 EventType = "status",

@@ -533,17 +533,21 @@ getRegime <- function(Intervention, Data) {
             PropScoreDummy <- as.data.table(matrix(ncol = ncol(TrtVal)))
             TrtNames <- colnames(TrtVal)
             setnames(PropScoreDummy, TrtNames)
-            PropScoreDummy[, (TrtNames) := lapply(.SD, function(ps) 0.5), .SDcols = TrtNames]
+            PropScoreDummy[, (TrtNames) := lapply(.SD, function(ps) rep_len(0.5, nrow(TrtVal))), 
+                           .SDcols = TrtNames]
             GStarOK <- try(do.call(attr(RegimeVal, "g.star"), 
                                    list(TrtVal, CovDT, PropScoreDummy, RegimeVal)))
-            if (inherits(GStarOK, "try-error") | !is.numeric(GStarOK) | is.null(GStarOK)) {
+            
+            if (any(inherits(GStarOK, "try-error"), 
+                    inherits(try(as.numeric(unlist(GStarOK))), "try-error"), 
+                    is.null(GStarOK))) {
                 stop("Intervention must be a list of regimes specificed as list(intervention",
                      " = f(A, L), g.star = g(A, L)), and the g.star function f(A, L) must ",
                      "be a function of treatment and covariates that returns numeric ",
                      "probabilities bounded in [0, 1]. Amend Intervention[[", RegName,
                      "]] and try again")
             } else {
-                if (min(unlist(GStarOK)) < 0 | max(unlist(GStarOK)) > 1)
+                if (min(as.numeric(unlist(GStarOK))) < 0 | max(as.numeric(unlist(GStarOK))) > 1)
                     stop("Intervention must be a list of regimes specificed as list(intervention",
                          " = f(A, L), g.star = g(A, L)), and the g.star function f(A, L) must ",
                          "be a function of treatment and covariates that returns numeric ",
@@ -552,21 +556,21 @@ getRegime <- function(Intervention, Data) {
             }
             class(RegimeVal) <- union("concreteIntervention", class(RegimeVal))
             return(RegimeVal)
-        })
-        if (is.null(names(Intervention))) {
-            names(Regimes) <- paste0("Regime", seq_along(Intervention))
-        } else
-            names(Regimes) <- names(Intervention)
-    } else
-        stop("Intervention must be integers corresponding to desired static treatment level(s), ",  
-             "or a list of named regimes, each specificed as list(intervention = f(A, L), ",
-             "g.star = g(A, L)). The intervention function f(A, L) must be a function of treatment ",
-             "and covariates that returns numeric desired treatment assignments (a*) with the same ",
-             "dimensions as the observed treatment. The g.star function f(A, L) must be a function ",
-             "of treatment and covariates that returns numeric probabilities bounded in",
-             "[0, 1]. See concrete::makeITT() for an example.")
+            })
+            if (is.null(names(Intervention))) {
+                names(Regimes) <- paste0("Regime", seq_along(Intervention))
+            } else
+                names(Regimes) <- names(Intervention)
+            } else
+                stop("Intervention must be integers corresponding to desired static treatment level(s), ",  
+                     "or a list of named regimes, each specificed as list(intervention = f(A, L), ",
+                     "g.star = g(A, L)). The intervention function f(A, L) must be a function of treatment ",
+                     "and covariates that returns numeric desired treatment assignments (a*) with the same ",
+                     "dimensions as the observed treatment. The g.star function f(A, L) must be a function ",
+                     "of treatment and covariates that returns numeric probabilities bounded in",
+                     "[0, 1]. See concrete::makeITT() for an example.")
     return(Regimes) 
-}
+    }
 
 getTargetEvent <- function(TargetEvent, Data) {
     UniqueEvents <- sort(unique(Data[[attr(Data, "EventType")]]))
