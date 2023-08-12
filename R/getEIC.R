@@ -40,6 +40,7 @@ getIC <- function(GStar, Hazards, TotalSurv, NuisanceWeight, TargetEvent, Target
                   T.tilde, Delta, EvalTimes, GComp) {
     Target <- expand.grid("Time" = TargetTime, "Event" = TargetEvent)
     UniqueEvents <- setdiff(sort(unique(Delta)), 0)
+    GStar <- as.numeric(unlist(GStar))
     
     IC.a <- do.call(rbind, lapply(TargetEvent, function(j) {
         F.j.t <- apply(Hazards[[as.character(j)]] * TotalSurv, 2, cumsum)

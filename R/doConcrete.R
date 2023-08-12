@@ -186,18 +186,21 @@ print.ConcreteEst <- function(x, ...) {
     cat("\n")
     
     cat("Initial Estimators:\n")
-    TrtFit <- attr(x, "InitFits")[[1]]
-    if (inherits(TrtFit, "SuperLearner")) {
-        cat("Treatment: \n")
-        if (is.matrix(TrtFit)) {
-            names(TrtFit) <- sub(pattern = "Coef", replacement = "SL Weight", x = names(TrtFit))
-            print(TrtFit)
+    cat("Treatment: \n")
+    TrtFits <- attr(x, "InitFits")[[1]]
+    for (TrtFit in TrtFits) {
+        if (inherits(TrtFit, "SuperLearner")) {
+            if (is.matrix(TrtFit)) {
+                names(TrtFit) <- sub(pattern = "Coef", replacement = "SL Weight", x = names(TrtFit))
+                print(TrtFit)
+            } else {
+                print(cbind(Risk = TrtFit$cvRisk, "SL Weight" = TrtFit$coef))
+            }
         } else {
-            print(cbind(Risk = TrtFit$cvRisk, "SL Weight" = TrtFit$coef))
+            cat("Treatment: \nPrinting for non-'SuperLearner' backends not yet enabled\n")
         }
-    } else {
-        cat("Treatment: \nPrinting for 'sl3' backend not yet enabled\n")
     }
+    
     cat("\n")
     for (Delta in sort(unique(attr(x, "Delta")))) {
         JFit <- attr(x, "InitFits")[[as.character(Delta)]]

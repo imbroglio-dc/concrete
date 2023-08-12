@@ -2,7 +2,6 @@ test_that("doConcrete() runs with competing risks",
           code = {
               # competing risk
               PnEIC <- NULL
-              require(data.table)
               data <- as.data.table(survival::pbc)[, c("time", "status", "trt", "id", "age", "sex")]
               set.seed(0)
               data[, trt := sample(0:1, length(trt), replace = TRUE)]
@@ -69,7 +68,6 @@ test_that("doConcrete() runs right-censored survival",
           code = {
               # competing risk
               expect_error(object = {
-                  require(data.table)
                   data <- as.data.table(survival::pbc)[, c("time", "status", "trt", "id", "age", "sex")]
                   set.seed(0)
                   data[, trt := sample(0:1, length(trt), replace = TRUE)]
@@ -108,7 +106,6 @@ test_that("doConcrete() throws an error if input is not a ConcreteArgs object",
           code = {
               # competing risk
               expect_error(object = {
-                  require(data.table)
                   data <- as.data.table(survival::pbc)[, c("time", "status", "trt", "id", "age", "sex")]
                   set.seed(0)
                   data[, trt := sample(0:1, length(trt), replace = TRUE)]
