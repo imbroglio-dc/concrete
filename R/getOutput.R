@@ -260,7 +260,7 @@ plot.ConcreteOut <- function(x, NullLine = TRUE, ask = TRUE, ...) {
                                            ggplot2::aes(x = Time, y = `Pt Est`, ymin = `CI Low`, ymax = `CI Hi`)) + 
                 ggplot2::geom_point() + ggplot2::geom_errorbar()
         }
-        if (Simultaneous) {
+        if (Simultaneous & length(unique(z[["Time"]])) > 1) {
             fig[["rr"]] <- fig[["rr"]] + 
                 ggplot2::geom_ribbon(data = z[Estimator == "tmle", ], 
                                      ggplot2::aes(ymin = `SimCI Low`, ymax = `SimCI Hi`), alpha = 0.06)
@@ -288,7 +288,7 @@ plot.ConcreteOut <- function(x, NullLine = TRUE, ask = TRUE, ...) {
                                                                                   ymin = `CI Low`, ymax = `CI Hi`)) + 
                 ggplot2::geom_point() + ggplot2::geom_errorbar()
         }
-        if (Simultaneous) {
+        if (Simultaneous & length(unique(z[["Time"]])) > 1) {
             fig[["rd"]] <- fig[["rd"]] + 
                 ggplot2::geom_ribbon(data = z[Estimator == "tmle", ], 
                                      ggplot2::aes(ymin = `SimCI Low`, ymax = `SimCI Hi`), alpha = 0.06)
@@ -318,9 +318,10 @@ plot.ConcreteOut <- function(x, NullLine = TRUE, ask = TRUE, ...) {
                                                           ymin = `CI Low`, ymax = `CI Hi`)) + 
                 ggplot2::geom_point() + ggplot2::geom_errorbar(alpha = 0.5)
         }
-        if (Simultaneous) {
+        if (Simultaneous & length(unique(z[["Time"]])) > 1) {
             fig[["risk"]] <- fig[["risk"]] + 
-                ggplot2::geom_ribbon(ggplot2::aes(ymin = `SimCI Low`, ymax = `SimCI Hi`, fill = Intervention), alpha = 0.06)
+                ggplot2::geom_ribbon(ggplot2::aes(ymin = `SimCI Low`, ymax = `SimCI Hi`, fill = Intervention), 
+                                     data = z[Estimator == "tmle", ], alpha = 0.06)
         }
         fig[["risk"]] <- fig[["risk"]] + 
             ggplot2::facet_wrap(~Event, scales = "free", nrow = 1) + 
