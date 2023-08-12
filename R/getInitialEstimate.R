@@ -14,7 +14,7 @@
 getInitialEstimate <- function(Data, Model, CVFolds, MinNuisance, TargetEvent, TargetTime, 
                                Regime, PropScoreBackend, HazEstBackend, ReturnModels) {
     Time <- NULL
-    TrtVal <- Data[[attr(Data, "Treatment")]]
+    TrtVal <- Data[, .SD, .SDcols = attr(Data, "Treatment")]
     TimeVal <- Data[[attr(Data, "EventTime")]]
     Censored <- any(Data[[attr(Data, "EventType")]] <= 0)
     CovDT <- subset(Data, select = attr(Data, "CovNames")[["ColName"]])
@@ -109,24 +109,24 @@ truncNuisanceWeight <- function(NuisanceDenom, MinNuisance, RegimeName) {
     return(NuisanceDenom)
 }
 
-screenCovRanger <- function(Data, j, nVar =  10, min.node.size = 3, mtry = floor(sqrt(ncol(Data))), 
-                            write.forest = FALSE, oob.error = FALSE, importance = "impurity", ...) 
-{
-    if (!requireNamespace("ranger", quietly = TRUE)) {
-        stop("screenCovRanger requires the 'ranger' package")
-    }
-    IDCol <- attr(Data, "ID")
-    TrtCol <- attr(Data, "Treatment")
-    TimeCol <- attr(Data, "EventTime")
-    TypeCol <- attr(Data, "EventType")
-    
-    SurvFormula <- paste0("Surv(time=", TimeCol, ", event=", TypeCol, "==", j, ")~.")
-    FitRanger <- ranger::ranger(formula = as.formula(SurvFormula), 
-                                data = Data[, .SD, .SDcols = setdiff(colnames(Data), c(TrtCol, IDCol))], 
-                                min.node.size = min.node.size, write.forest = write.forest, 
-                                mtry = mtry, oob.error = oob.error, importance = importance)
-    
-    CovSelected <- rank(-FitRanger$variable.importance, na.last = NA, ties.method = "first") <= nVar
-    return(CovSelected)
-}
+# screenCovRanger <- function(Data, j, nVar =  10, min.node.size = 3, mtry = floor(sqrt(ncol(Data))), 
+#                             write.forest = FALSE, oob.error = FALSE, importance = "impurity", ...) 
+# {
+#     if (!requireNamespace("ranger", quietly = TRUE)) {
+#         stop("screenCovRanger requires the 'ranger' package")
+#     }
+#     IDCol <- attr(Data, "ID")
+#     TrtCol <- attr(Data, "Treatment")
+#     TimeCol <- attr(Data, "EventTime")
+#     TypeCol <- attr(Data, "EventType")
+#     
+#     SurvFormula <- paste0("Surv(time=", TimeCol, ", event=", TypeCol, "==", j, ")~.")
+#     FitRanger <- ranger::ranger(formula = as.formula(SurvFormula), 
+#                                 data = Data[, .SD, .SDcols = setdiff(colnames(Data), c(TrtCol, IDCol))], 
+#                                 min.node.size = min.node.size, write.forest = write.forest, 
+#                                 mtry = mtry, oob.error = oob.error, importance = importance)
+#     
+#     CovSelected <- rank(-FitRanger$variable.importance, na.last = NA, ties.method = "first") <= nVar
+#     return(CovSelected)
+# }
 

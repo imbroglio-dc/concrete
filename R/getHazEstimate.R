@@ -163,7 +163,8 @@ getHazSurvPred <- function(Data, HazFits, MinNuisance, TargetEvent,
         PredData <- as.data.table(Data)[, .SD, .SDcols = CovCols]
         setcolorder(PredData, neworder = CovCols)
         # PredData <- as.data.table(scale(PredData, center = TRUE, scale = FALSE))
-        PredData[[attr(Data, "Treatment")]] <- Reg
+        TrtNames <- colnames(Reg)
+        PredData[, (TrtNames) := Reg[, .SD, .SDcols = TrtNames]]
         
         PredHaz <- lapply(HazFits, function(HazFit) {
             if (inherits(HazFit$HazFit, "cv.glmnet")) {
@@ -199,32 +200,32 @@ getHazSurvPred <- function(Data, HazFits, MinNuisance, TargetEvent,
     return(PredHazSurv)
 }
 
-SLCoxnet <- function(FitData, PredData, CovCols, TimeCol, TypeCol, j, alpha = 1, ...) {
-    if (!requireNamespace("glmnet", quietly = TRUE)) {
-        stop("SLCoxnet requires the 'glmnet' package")
-    }
-    FitLP <- AtRisk <- NULL
-    
-    ModelFit <- glmnet::glmnet(x = as.matrix(FitData)[, CovCols], 
-                               y = Surv(time = FitData[[TimeCol]], 
-                                        event = (FitData[[TypeCol]] == j), 
-                                        type = "right"),
-                               family = "cox", alpha = alpha, 
-                               penalty.factor = c(0, rep(1, length(CovCols) - 1)))
-    
-    for (s in seq_along(ModelFit$lambda)) {
-        PredTbl <- data.table()
-        PredTbl[, FitLP := stats::predict(object = ModelFit, s = ModelFit$lambda[s], type = "link", 
-                                          newx = as.matrix(PredData[, .SD, .SDcols = CovCols]))]
-        PredTbl[, AtRisk := cumsum(exp(FitLP))]
-        PredTbl[AtRisk == 0, AtRisk := 1]
-        PredTbl[, as.character(s) := (PredData[[TypeCol]] == j) * (FitLP - log(AtRisk))]
-    }
-    CoxnetRisk <- -colSums(PredTbl[, .SD, .SDcols = grep("coxnet", colnames(PredData), value = TRUE)])
-    LambdaMin <- ModelFit$lambda[as.numeric(names(which.min(CoxnetRisk)))]
-    
-    PredTbl[, names(ModelJ)[i] := get()]
-    PredTbl <- PredTbl[, .SD, .SDcols = !paste0("coxnet.s", seq_along(ModelFit$lambda))]
-    
-    return(list("CVRisk" = PredTbl, "ModelFit" = ModelFit))
-}
+# SLCoxnet <- function(FitData, PredData, CovCols, TimeCol, TypeCol, j, alpha = 1, ...) {
+#     if (!requireNamespace("glmnet", quietly = TRUE)) {
+#         stop("SLCoxnet requires the 'glmnet' package")
+#     }
+#     FitLP <- AtRisk <- NULL
+#     
+#     ModelFit <- glmnet::glmnet(x = as.matrix(FitData)[, CovCols], 
+#                                y = Surv(time = FitData[[TimeCol]], 
+#                                         event = (FitData[[TypeCol]] == j), 
+#                                         type = "right"),
+#                                family = "cox", alpha = alpha, 
+#                                penalty.factor = c(0, rep(1, length(CovCols) - 1)))
+#     
+#     for (s in seq_along(ModelFit$lambda)) {
+#         PredTbl <- data.table()
+#         PredTbl[, FitLP := stats::predict(object = ModelFit, s = ModelFit$lambda[s], type = "link", 
+#                                           newx = as.matrix(PredData[, .SD, .SDcols = CovCols]))]
+#         PredTbl[, AtRisk := cumsum(exp(FitLP))]
+#         PredTbl[AtRisk == 0, AtRisk := 1]
+#         PredTbl[, as.character(s) := (PredData[[TypeCol]] == j) * (FitLP - log(AtRisk))]
+#     }
+#     CoxnetRisk <- -colSums(PredTbl[, .SD, .SDcols = grep("coxnet", colnames(PredData), value = TRUE)])
+#     LambdaMin <- ModelFit$lambda[as.numeric(names(which.min(CoxnetRisk)))]
+#     
+#     PredTbl[, names(ModelJ)[i] := get()]
+#     PredTbl <- PredTbl[, .SD, .SDcols = !paste0("coxnet.s", seq_along(ModelFit$lambda))]
+#     
+#     return(list("CVRisk" = PredTbl, "ModelFit" = ModelFit))
+# }
