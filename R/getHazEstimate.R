@@ -4,7 +4,6 @@
 #' @param Model list
 #' @param CVFolds list
 #' @param Hazards list
-#' @param HazEstBackend : character
 #' @param ReturnModels boolean
 # #' @param HazFits list
 # #' @param MinNuisance numeric (in the future a function)
@@ -16,7 +15,7 @@
 #' @importFrom stats predict
 #'
 
-getHazFit <- function(Data, Model, CVFolds, Hazards, HazEstBackend, ReturnModels) {
+getHazFit <- function(Data, Model, CVFolds, Hazards, ReturnModels) {
     Time <- Event <- FitLP <- AtRisk <- basehaz <- BaseHaz <- glmnet <- NULL
     
     IDCol <- attr(Data, "ID")
@@ -24,120 +23,110 @@ getHazFit <- function(Data, Model, CVFolds, Hazards, HazEstBackend, ReturnModels
     TimeCol <- attr(Data, "EventTime")
     TypeCol <- attr(Data, "EventType")
     CovDT <- subset(Data, select = attr(Data, "CovNames")[["ColName"]])
+    HazModel <- Model[which(names(Model) %in% unique(Data[[TypeCol]]))]
     
-    HazModel <- Model[grep("\\d+", names(Model))]
-    HazModel <- lapply(seq_along(HazModel), function(j) {
-        HazModelJ <- HazModel[[j]]
-        attr(HazModelJ, "j") <- as.numeric(gsub(".*(\\d+).*", "\\1", names(HazModel[j])))
-        return(HazModelJ)
-    })
-    if (grepl("cox", tolower(HazEstBackend))) {
-        SupLrnModel <- lapply(HazModel, function(ModelJ) {
-            SupLrnLibRisk <- data.table::data.table(matrix(NaN, nrow = nrow(Data), ncol = length(ModelJ)))
-            colnames(SupLrnLibRisk) <- names(ModelJ)
-            j <- attr(ModelJ, "j")
+    SupLrnModel <- lapply(HazModel, function(ModelJ) {
+        SupLrnLibRisk <- data.table::data.table(matrix(NaN, nrow = nrow(Data), ncol = length(ModelJ)))
+        colnames(SupLrnLibRisk) <- names(ModelJ)
+        j <- attr(ModelJ, "j")
+        
+        for (Fold_v in CVFolds) {
+            TrainIndices <- Fold_v[["training_set"]]
+            ValidIndices <- Fold_v[["validation_set"]]
+            TrainData <- Data[TrainIndices, .SD, .SDcols = setdiff(colnames(Data), IDCol)]
+            ValidData <- Data[ValidIndices, .SD, .SDcols = setdiff(colnames(Data), IDCol)]
+            setorderv(ValidData, cols = TimeCol, order = -1)
             
-            for (Fold_v in CVFolds) {
-                TrainIndices <- Fold_v[["training_set"]]
-                ValidIndices <- Fold_v[["validation_set"]]
-                TrainData <- Data[TrainIndices, .SD, .SDcols = setdiff(colnames(Data), IDCol)]
-                ValidData <- Data[ValidIndices, .SD, .SDcols = setdiff(colnames(Data), IDCol)]
-                setorderv(ValidData, cols = TimeCol, order = -1)
-                
-                ModelFits <- list()
-                for (i in seq_along(ModelJ)) {
-                    if (!is.null(ModelJ[["screener"]])) {
-                        if (ModelJ[["screener"]] == "ranger") {
+            ModelFits <- list()
+            for (i in seq_along(ModelJ)) {
+                if (!is.null(ModelJ[["screener"]])) {
+                    if (ModelJ[["screener"]] == "ranger") {
+                        message("screening not yet implemented")
+                    } else 
+                        if (is.function(ModelJ[["screener"]])) {
                             message("screening not yet implemented")
-                        } else 
-                            if (is.function(ModelJ[["screener"]])) {
-                                message("screening not yet implemented")
-                            } else {
-                                message("screening not yet implemented")
-                            }
-                    }
-                    ## train model ----
-                    if (ModelJ[[i]] == "coxnet") {
-                        CovCols <- c(TrtCol, setdiff(colnames(TrainData), c(TimeCol, TypeCol, TrtCol, IDCol)))
-                        ModelFit <- glmnet::glmnet(x = as.matrix(TrainData)[, CovCols], 
-                                                   y = Surv(time = TrainData[[TimeCol]], 
-                                                            event = (TrainData[[TypeCol]] == j), 
-                                                            type = "right"),
-                                                   family = "cox", 
-                                                   penalty.factor = c(0, rep(1, length(CovCols) - 1)))
-                        z <- as.matrix(ValidData[, .SD, .SDcols = CovCols])
-                    } else {
-                        CoxphArgs <- list("formula" = ModelJ[[i]], "data" = TrainData)
-                        ModelFit <- do.call(survival::coxph, CoxphArgs)
-                    }
-                    if (ReturnModels) ModelFits[[i]] <- ModelFit
-                    
-                    ## validation loss (-log partial likelihood) ----
-                    if (ModelJ[[i]] == "coxnet") {
-                        for (s in seq_along(ModelFit$lambda)) {
-                            ValidData[, FitLP := stats::predict(ModelFit, newx = z, s = ModelFit$lambda[s], type = "link")]
-                            ValidData[, AtRisk := cumsum(exp(FitLP))]
-                            ValidData[AtRisk == 0, AtRisk := 1]
-                            ValidData[, paste0("coxnet.s", s) := (.SD == j) * (FitLP - log(AtRisk)), .SDcols = TypeCol]
+                        } else {
+                            message("screening not yet implemented")
                         }
-                        CoxnetRisk <- -colSums(ValidData[, .SD, .SDcols = grep("coxnet", colnames(ValidData), value = TRUE)])
-                        ValidData[, names(ModelJ)[i] := get(names(which.min(CoxnetRisk)))]
-                        ValidData <- ValidData[, .SD, .SDcols = !paste0("coxnet.s", seq_along(ModelFit$lambda))]
-                    } else {
-                        ValidData[, FitLP := stats::predict(ModelFit, type = "lp", newdata = ValidData)]
+                }
+                ## train model ----
+                if (ModelJ[[i]] == "coxnet") {
+                    CovCols <- c(TrtCol, setdiff(colnames(TrainData), c(TimeCol, TypeCol, TrtCol, IDCol)))
+                    ModelFit <- glmnet::glmnet(x = as.matrix(TrainData)[, CovCols], 
+                                               y = Surv(time = TrainData[[TimeCol]], 
+                                                        event = (TrainData[[TypeCol]] == j), 
+                                                        type = "right"),
+                                               family = "cox", 
+                                               penalty.factor = c(0, rep(1, length(CovCols) - 1)))
+                    z <- as.matrix(ValidData[, .SD, .SDcols = CovCols])
+                } else { # Backend == "coxph"
+                    CoxphArgs <- list("formula" = ModelJ[[i]], "data" = TrainData)
+                    ModelFit <- do.call(survival::coxph, CoxphArgs)
+                }
+                if (ReturnModels) ModelFits[[i]] <- ModelFit
+                
+                ## validation loss (-log partial likelihood) ----
+                if (ModelJ[[i]] == "coxnet") {
+                    for (s in seq_along(ModelFit$lambda)) {
+                        ValidData[, FitLP := stats::predict(ModelFit, newx = z, s = ModelFit$lambda[s], type = "link")]
                         ValidData[, AtRisk := cumsum(exp(FitLP))]
                         ValidData[AtRisk == 0, AtRisk := 1]
-                        ValidData[, names(ModelJ)[i] := (.SD == j) * (FitLP - log(AtRisk)), .SDcols = TypeCol]
+                        ValidData[, paste0("coxnet.s", s) := (.SD == j) * (FitLP - log(AtRisk)), .SDcols = TypeCol]
                     }
+                    CoxnetRisk <- -colSums(ValidData[, .SD, .SDcols = grep("coxnet", colnames(ValidData), value = TRUE)])
+                    ValidData[, names(ModelJ)[i] := get(names(which.min(CoxnetRisk)))]
+                    ValidData <- ValidData[, .SD, .SDcols = !paste0("coxnet.s", seq_along(ModelFit$lambda))]
+                } else {
+                    ValidData[, FitLP := stats::predict(ModelFit, type = "lp", newdata = ValidData)]
+                    ValidData[, AtRisk := cumsum(exp(FitLP))]
+                    ValidData[AtRisk == 0, AtRisk := 1]
+                    ValidData[, names(ModelJ)[i] := (.SD == j) * (FitLP - log(AtRisk)), .SDcols = TypeCol]
                 }
-                SupLrnLibRisk[ValidIndices, names(ModelJ) := subset(ValidData, select = names(ModelJ))]
             }
-            ## metalearner (discrete selector) ----
-            SLCVRisk <- -colSums(SupLrnLibRisk)
-            SLModel <- ModelJ[[which.min(SLCVRisk)]]
-            SLCoef <- as.numeric(SLCVRisk / min(SLCVRisk) == 1)
-            names(SLCoef) <- names(SLCVRisk)
-            
-            if (ReturnModels) {
-                return(list("SupLrnCVRisks" = SLCVRisk, "SupLrnModel" = SLModel, "j" = j, 
-                            "SLCoef" = SLCoef, "ModelFits" = ModelFits))
-            } else 
-                return(list("SupLrnCVRisks" = SLCVRisk, "SupLrnModel" = SLModel, "j" = j, 
-                            "SLCoef" = SLCoef))
-        })
-        names(SupLrnModel) <- sapply(SupLrnModel, function(sl) sl[["j"]])
-    } else {
-        stop("Other hazard estimation methods not yet implemented")
-    }
+            SupLrnLibRisk[ValidIndices, names(ModelJ) := subset(ValidData, select = names(ModelJ))]
+        }
+        ## metalearner (discrete selector) ----
+        SLCVRisk <- -colSums(SupLrnLibRisk)
+        SLModel <- ModelJ[[which.min(SLCVRisk)]]
+        SLCoef <- as.numeric(SLCVRisk / min(SLCVRisk) == 1)
+        names(SLCoef) <- names(SLCVRisk)
+        
+        if (ReturnModels) {
+            return(list("SupLrnCVRisks" = SLCVRisk, "SupLrnModel" = SLModel, "j" = j, 
+                        "SLCoef" = SLCoef, "ModelFits" = ModelFits))
+        } else 
+            return(list("SupLrnCVRisks" = SLCVRisk, "SupLrnModel" = SLModel, "j" = j, 
+                        "SLCoef" = SLCoef))
+    })
+    names(SupLrnModel) <- sapply(SupLrnModel, function(sl) sl[["j"]])
     
     
     ## fit sl selection on full data ----
     HazFits <- lapply(SupLrnModel, function(SLMod) {
-        if (grepl("cox", tolower(HazEstBackend))) {
-            ## fit sl model ----
-            if (SLMod$SupLrnModel == "coxnet") {
-                CovCols <- c(TrtCol, setdiff(colnames(Data), c(TimeCol, TypeCol, TrtCol, IDCol)))
-                ModelFit <- glmnet::cv.glmnet(x = as.matrix(Data)[, CovCols], 
-                                              y = Surv(time = Data[[TimeCol]], 
-                                                       event = (Data[[TypeCol]] == SLMod[["j"]]), 
-                                                       type = "right"),
-                                              family = "cox",
-                                              penalty.factor = c(0, rep(1, length(CovCols) - 1)))
-            } else {
-                ## selected model must not contain interactions without including the separate terms also, e.g.
-                #   we can't have ~ trt:sex without trt + sex. easiest way is to force e.g. trt*sex
-                ModelFit <- do.call(survival::coxph, list("formula" = SLMod$SupLrnModel, 
-                                                          "data" = Data[, .SD, .SDcols = !attr(Data, "ID")]))
-            }
-            BaseHazCox <- paste0("Surv(time=", TimeCol, ", event=", TypeCol, "==", SLMod[["j"]], ")~", TrtCol)
-            BaseHazCox <- survival::coxph(as.formula(BaseHazCox), 
-                                          data = Data[, .SD, .SDcols = !attr(Data, "ID")])
-            BaseHazJ <- rbind(data.table(time = 0, hazard = 0),
-                              suppressWarnings(setDT(basehaz(BaseHazCox, centered = TRUE))))
-            colnames(BaseHazJ) <- c("Time", "BaseHaz")
-            BaseHazJ <- merge(Hazards, BaseHazJ, by = "Time", all.x = T)
-            BaseHazJ[, BaseHaz := c(0, diff(zoo::na.locf(BaseHaz)))]
+        ## fit sl model ----
+        if (SLMod$SupLrnModel == "coxnet") {
+            CovCols <- c(TrtCol, setdiff(colnames(Data), c(TimeCol, TypeCol, TrtCol, IDCol)))
+            ModelFit <- glmnet::cv.glmnet(x = as.matrix(Data)[, CovCols], 
+                                          y = Surv(time = Data[[TimeCol]], 
+                                                   event = (Data[[TypeCol]] == SLMod[["j"]]), 
+                                                   type = "right"),
+                                          family = "cox",
+                                          penalty.factor = c(0, rep(1, length(CovCols) - 1)))
+        } else {
+            ## selected model must not contain interactions without including the separate terms also, e.g.
+            #   we can't have ~ trt:sex without trt + sex. easiest way is to force e.g. trt*sex
+            ModelFit <- do.call(survival::coxph, list("formula" = SLMod$SupLrnModel, 
+                                                      "data" = Data[, .SD, .SDcols = !attr(Data, "ID")]))
         }
+        BaseHazCox <- paste0("Surv(time=", TimeCol, ", event=", TypeCol, "==", SLMod[["j"]], ")~", 
+                             paste0(TrtCol, collapse = "+"))
+        BaseHazCox <- survival::coxph(as.formula(BaseHazCox), 
+                                      data = Data[, .SD, .SDcols = !attr(Data, "ID")])
+        BaseHazJ <- rbind(data.table(time = 0, hazard = 0),
+                          suppressWarnings(setDT(basehaz(BaseHazCox, centered = TRUE))))
+        colnames(BaseHazJ) <- c("Time", "BaseHaz")
+        BaseHazJ <- merge(Hazards, BaseHazJ, by = "Time", all.x = T)
+        BaseHazJ[, BaseHaz := c(0, diff(zoo::na.locf(BaseHaz)))]
         
         HazFitOut <- list("HazFit" = ModelFit, "BaseHaz" = BaseHazJ)
         attr(HazFitOut, "j") <- SLMod[["j"]]
@@ -145,12 +134,11 @@ getHazFit <- function(Data, Model, CVFolds, Hazards, HazEstBackend, ReturnModels
         attr(HazFitOut, "HazSL") <- SLMod
         return(HazFitOut)
     })
-    names(HazFits) <- grep("\\d+", names(Model), value = TRUE)
+    names(HazFits) <- names(SupLrnModel)
     return(HazFits)
 }
 
-getHazSurvPred <- function(Data, HazFits, MinNuisance, TargetEvent,
-                           TargetTime, Regime, HazEstBackend) {
+getHazSurvPred <- function(Data, HazFits, MinNuisance, TargetEvent, TargetTime, Regime) {
     Censored <- any(Data[[attr(Data, "EventType")]] <= 0)
     Target <- expand.grid("Time" = TargetTime, "Event" = TargetEvent)
     IDCol <- attr(Data, "ID")

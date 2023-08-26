@@ -13,8 +13,6 @@
 # #' @param Regime : list
 # #' @param CVFolds : list
 # #' @param Model : list of functions (length = L)
-# #' @param PropScoreBackend : character
-# #' @param HazEstBackend : character
 # #' @param MaxUpdateIter : numeric
 # #' @param OneStepEps : numeric
 # #' @param MinNuisance : numeric
@@ -59,13 +57,13 @@
 #'                                  Verbose = FALSE)
 #' 
 #' # doConcrete() returns tmle (and g-comp plug-in) estimates of targeted risks
-#' concrete.est <- doConcrete(concrete.args)
+#' # concrete.est <- doConcrete(concrete.args)
 #' 
 #' # getOutput returns risk difference, relative risk, and treatment-specific risks
-#' concrete.out <- getOutput(concrete.est, Estimand = c("rd", "rr", "risk"))
-#' concrete.out$RD
-#' concrete.out$RR
-#' concrete.out$Risk
+#' # concrete.out <- getOutput(concrete.est, Estimand = c("rd", "rr", "risk"))
+#' # concrete.out$RD
+#' # concrete.out$RR
+#' # concrete.out$Risk
 
 doConcrete <- function(ConcreteArgs) {
     if (!inherits(ConcreteArgs, "ConcreteArgs")) {
@@ -78,17 +76,16 @@ doConcrete <- function(ConcreteArgs) {
     return(do.call(doConCRTmle, ArgList))
 }
 
-doConCRTmle <- function(DataTable, TargetTime, TargetEvent, Regime, CVFolds, Model, PropScoreBackend, 
-                        HazEstBackend, MaxUpdateIter, OneStepEps, MinNuisance, Verbose, GComp, 
-                        ReturnModels, ...)
+doConCRTmle <- function(DataTable, TargetTime, TargetEvent, Regime, CVFolds, Model, MaxUpdateIter, 
+                        OneStepEps, MinNuisance, Verbose, GComp, ReturnModels, ...)
 {
     ratio <- Time <- Event <- PnEIC <- `seEIC/(sqrt(n)log(n))` <- NULL # for data.table compatibility w/ global var binding check
     
     # initial estimation ------------------------------------------------------------------------
     cat("Getting Initial Estimates:\n")
-    Estimates <- getInitialEstimate(Data = DataTable, Model = Model, CVFolds = CVFolds, MinNuisance = MinNuisance,
-                                    TargetEvent = TargetEvent, TargetTime = TargetTime, Regime = Regime,
-                                    PropScoreBackend = PropScoreBackend, HazEstBackend = HazEstBackend, 
+    Estimates <- getInitialEstimate(Data = DataTable, Model = Model, CVFolds = CVFolds, 
+                                    MinNuisance = MinNuisance, TargetEvent = TargetEvent, 
+                                    TargetTime = TargetTime, Regime = Regime, 
                                     ReturnModels = ReturnModels)
     
     # get initial EIC (possibly with GComp plug-in estimate) ---------------------------------------------
@@ -149,7 +146,7 @@ getNormPnEIC <- function(PnEIC, Sigma = NULL) {
 #' @param ... additional arguments to be passed into print methods
 #' @exportS3Method print ConcreteEst
 print.ConcreteEst <- function(x, ...) {
-    `Pt Est` <- se <- PnEIC <- `abs(PnEIC / Stop Criteria)` <- `seEIC/(sqrt(n)log(n))` <- NULL
+    `.` <- `..a` <- `Pt Est` <- se <- PnEIC <- `abs(PnEIC / Stop Criteria)` <- `seEIC/(sqrt(n)log(n))` <- NULL
     cat("Continuous-Time One-Step TMLE targeting the Cause-Specific Absolute Risks for:\n")
     cat("Intervention", ifelse(length(x) > 1, "s", ""), ": ", 
         paste0("\"", names(x), "\"", collapse = ", "), "  |  ", sep = "")
@@ -186,18 +183,20 @@ print.ConcreteEst <- function(x, ...) {
     cat("\n")
     
     cat("Initial Estimators:\n")
-    cat("Treatment: \n")
-    TrtFits <- attr(x, "InitFits")[[1]]
-    for (TrtFit in TrtFits) {
-        if (inherits(TrtFit, "SuperLearner")) {
-            if (is.matrix(TrtFit)) {
-                names(TrtFit) <- sub(pattern = "Coef", replacement = "SL Weight", x = names(TrtFit))
-                print(TrtFit)
+    for (a in setdiff(names(attr(x, "InitFits")), unique(attr(x, "Delta")))) {
+        cat("Treatment \"", a, "\" :\n", sep = "")
+        if (inherits(attr(x, "InitFits")[[a]], "SuperLearner")) {
+            if (is.matrix(attr(x, "InitFits")[[a]])) {
+                names(attr(x, "InitFits")[[a]]) <- sub(pattern = "Coef", replacement = "SL Weight", 
+                                                       x = names(attr(x, "InitFits")[[a]]))
+                print(attr(x, "InitFits")[[a]])
             } else {
-                print(cbind(Risk = TrtFit$cvRisk, "SL Weight" = TrtFit$coef))
+                print(cbind(Risk = attr(x, "InitFits")[[a]]$cvRisk, 
+                            "SL Weight" = attr(x, "InitFits")[[a]]$coef))
             }
+            cat("\n")
         } else {
-            cat("Treatment: \nPrinting for non-'SuperLearner' backends not yet enabled\n")
+            cat("Treatment \"", a, "\": Printing for non-'SuperLearner' backends not yet enabled\n")
         }
     }
     

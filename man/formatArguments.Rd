@@ -17,8 +17,6 @@ formatArguments(
   Intervention,
   CVArg = NULL,
   Model = NULL,
-  PropScoreBackend = "SuperLearner",
-  HazEstBackend = "coxph",
   MaxUpdateIter = 500,
   OneStepEps = 0.1,
   MinNuisance = 5/sqrt(nrow(DataTable))/log(nrow(DataTable)),
@@ -30,7 +28,7 @@ formatArguments(
   ...
 )
 
-makeITT()
+makeITT(...)
 
 \method{print}{ConcreteArgs}(x, ...)
 }
@@ -80,10 +78,6 @@ list(n = nrow(DataTable), fold_fun = folds_vfold, cluster_ids = NULL, strata_ids
 and one for the 'Treatment' variable. If Model = NULL, then
 a template will be generated for the user to amend.}
 
-\item{PropScoreBackend}{character (default: "Superlearner"): currently must be either "sl3" or "Superlearner"}
-
-\item{HazEstBackend}{character (default: "coxph"): currently must be "coxph"}
-
 \item{MaxUpdateIter}{numeric (default: 500): the number of one-step update steps}
 
 \item{OneStepEps}{numeric (default: 1): the one-step tmle step size}
@@ -125,8 +119,6 @@ a list of class "ConcreteArgs"
 }
 \item{CVFolds}{: list of cross-validation fold assignments in the structure as output by origami::make_folds()}
 \item{Model}{: named list of model specifications, one for each unique 'EventType' and one for the 'Treatment' variable.}
-\item{PropScoreBackend}{: either "sl3" or "Superlearner"}
-\item{HazEstBackend}{: "coxph"}
 \item{MaxUpdateIter}{: the number of one-step update steps}
 \item{OneStepEps}{: list of cross-validation fold assignments in the structure as output by origami::make_folds()}
 \item{MinNuisance}{: numeric lower bound for the propensity score denominator in the efficient influence function}

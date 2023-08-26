@@ -10,7 +10,6 @@ getPropScore(
   TrtModel,
   MinNuisance,
   Regime,
-  PropScoreBackend,
   CVFolds,
   TrtLoss = NULL,
   ReturnModels
@@ -26,8 +25,6 @@ getPropScore(
 \item{MinNuisance}{numeric}
 
 \item{Regime}{list}
-
-\item{PropScoreBackend}{character}
 
 \item{CVFolds}{list}
 

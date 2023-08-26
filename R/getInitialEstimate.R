@@ -7,31 +7,22 @@
 #' @param TargetEvent numeric vector
 #' @param TargetTime numeric vector
 #' @param Regime list
-#' @param PropScoreBackend character
-#' @param HazEstBackend character
 #' @param ReturnModels boolean
 
 getInitialEstimate <- function(Data, Model, CVFolds, MinNuisance, TargetEvent, TargetTime, 
-                               Regime, PropScoreBackend, HazEstBackend, ReturnModels) {
+                               Regime, ReturnModels) {
     Time <- NULL
-    TrtVal <- Data[, .SD, .SDcols = attr(Data, "Treatment")]
     TimeVal <- Data[[attr(Data, "EventTime")]]
     Censored <- any(Data[[attr(Data, "EventType")]] <= 0)
-    CovDT <- subset(Data, select = attr(Data, "CovNames")[["ColName"]])
-    TrtModel <- try(Model[[attr(Data, "Treatment")]])
-    options(warn = 0)
-    if (inherits(TrtModel, "try-error"))
-        stop("TrtModel must currently be specified in the Model argument as a list named ", 
-             "as the Treatment variable, ", attr(Data, "Treatment"))
     
     ## Propensity Scores for Regimes of Interest ----
     cat("Trt: ")
-    PropScores <- getPropScore(TrtVal = TrtVal, CovDT = CovDT, TrtModel = TrtModel,
-                               MinNuisance = MinNuisance, Regime = Regime,
-                               PropScoreBackend = PropScoreBackend, CVFolds = CVFolds, TrtLoss = NULL, 
-                               ReturnModels = ReturnModels)
-    InitFits <- list(attr(PropScores, "TrtFit"))
-    names(InitFits)[1] <- attr(Data, "Treatment")
+    PropScores <- getPropScore(TrtVal = Data[, .SD, .SDcols = attr(Data, "Treatment")], 
+                               CovDT = subset(Data, select = attr(Data, "CovNames")[["ColName"]]), 
+                               TrtModel = Model[which(names(Model) %in% attr(Data, "Treatment"))],
+                               MinNuisance = MinNuisance, Regime = Regime, CVFolds = CVFolds, 
+                               TrtLoss = NULL, ReturnModels = ReturnModels)
+    InitFits <- attr(PropScores, "TrtFit")
     cat("Done\n")
     
     ## hazards: Events & censoring ----
@@ -42,11 +33,11 @@ getInitialEstimate <- function(Data, Model, CVFolds, MinNuisance, TargetEvent, T
     
     cat("Hazards: ")
     HazFits <- getHazFit(Data = Data, Model = Model, CVFolds = CVFolds, Hazards = Hazards, 
-                         HazEstBackend = HazEstBackend, ReturnModels = ReturnModels)
+                         ReturnModels = ReturnModels)
     InitFits <- c(InitFits, lapply(HazFits, function(HF) return(attr(HF, "HazSL"))))
     HazSurvPreds <- getHazSurvPred(Data = Data, HazFits = HazFits, MinNuisance = MinNuisance,
                                    TargetEvent = TargetEvent, TargetTime = TargetTime,
-                                   Regime = Regime, HazEstBackend)
+                                   Regime = Regime)
     InitialEstimates <- lapply(seq_along(PropScores), function(a) {
         if (Censored) {
             NuisanceDenom <- sapply(seq_along(PropScores[[a]]), function(i) {

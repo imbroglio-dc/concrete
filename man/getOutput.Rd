@@ -7,7 +7,7 @@
 \usage{
 getOutput(
   ConcreteEst,
-  Estimand = c("RD", "RR", "Risk"),
+  Estimand = c("Risk"),
   Intervention = seq_along(ConcreteEst),
   GComp = NULL,
   Simultaneous = TRUE,

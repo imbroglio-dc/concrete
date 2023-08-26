@@ -20,7 +20,6 @@
 #                   
 #                   concrete.args.sl3 <- concrete.args.SL
 #                   concrete.args.sl3[["Model"]][["trt"]] <- a_lrnrs
-#                   concrete.args.sl3[["PropScoreBackend"]] <- "sl3"
 #                   
 #                   concrete.ests <- list("SL" = try(doConcrete(ConcreteArgs = concrete.args.SL)), 
 #                                         "sl3" = try(doConcrete(ConcreteArgs = concrete.args.sl3)))

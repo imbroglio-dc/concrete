@@ -2,7 +2,7 @@
 % Please edit documentation in R/getInitialEstimate.R
 \name{getInitialEstimate}
 \alias{getInitialEstimate}
-\title{Title}
+\title{getInitialEstimate}
 \usage{
 getInitialEstimate(
   Data,
@@ -12,8 +12,6 @@ getInitialEstimate(
   TargetEvent,
   TargetTime,
   Regime,
-  PropScoreBackend,
-  HazEstBackend,
   ReturnModels
 )
 }
@@ -32,12 +30,8 @@ getInitialEstimate(
 
 \item{Regime}{list}
 
-\item{PropScoreBackend}{character}
-
-\item{HazEstBackend}{character}
-
 \item{ReturnModels}{boolean}
 }
 \description{
-Title
+getInitialEstimate
 }

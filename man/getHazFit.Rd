@@ -4,7 +4,7 @@
 \alias{getHazFit}
 \title{Title}
 \usage{
-getHazFit(Data, Model, CVFolds, Hazards, HazEstBackend, ReturnModels)
+getHazFit(Data, Model, CVFolds, Hazards, ReturnModels)
 }
 \arguments{
 \item{Data}{data.table}
@@ -14,8 +14,6 @@ getHazFit(Data, Model, CVFolds, Hazards, HazEstBackend, ReturnModels)
 \item{CVFolds}{list}
 
 \item{Hazards}{list}
-
-\item{HazEstBackend}{: character}
 
 \item{ReturnModels}{boolean}
 }

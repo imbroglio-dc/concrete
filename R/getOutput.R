@@ -24,7 +24,7 @@
 #' @importFrom stats cor cov
 #' 
 
-getOutput <- function(ConcreteEst, Estimand = c("RD", "RR", "Risk"), Intervention = seq_along(ConcreteEst), 
+getOutput <- function(ConcreteEst, Estimand = c("Risk"), Intervention = seq_along(ConcreteEst), 
                       GComp = NULL, Simultaneous = TRUE, Signif = 0.05) {
     `CI Low` <- `CI Hi` <- `Pt Est` <- `se` <- NULL
     if (!inherits(ConcreteEst, "ConcreteEst")) 
