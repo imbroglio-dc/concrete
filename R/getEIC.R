@@ -8,7 +8,9 @@
 #' @param MinNuisance numeric
 #' @param GComp boolean
 #'
-#'
+#' @useDynLib concrete
+#' @importFrom Rcpp evalCpp
+#' @exportPattern "ˆ[[:alpha:]]+"
 
 getEIC <- function(Estimates, Data, Regime, TargetEvent, TargetTime, MinNuisance, GComp = FALSE) {
     EvalTimes <- attr(Estimates, "Times")
@@ -43,24 +45,34 @@ getIC <- function(GStar, Hazards, TotalSurv, NuisanceWeight, TargetEvent, Target
     GStar <- as.numeric(unlist(GStar))
     
     IC.a <- do.call(rbind, lapply(TargetEvent, function(j) {
+        # Cumulative Incidence Function
         F.j.t <- apply(Hazards[[as.character(j)]] * TotalSurv, 2, cumsum)
         do.call(rbind, lapply(TargetTime, function(tau) {
-            h.FS <- (matrix(F.j.t[EvalTimes == tau, ], ncol = ncol(F.j.t), 
-                            nrow = nrow(F.j.t), byrow = TRUE) - F.j.t) / TotalSurv
-            h.FS <- h.FS[EvalTimes <= tau, ]
+            # The event-related (F(t) and S(t)) contributions to the clever covariate (h)  
+            h.FS <- matrix(F.j.t[EvalTimes == tau, ], 
+                           ncol = ncol(F.j.t), 
+                           nrow = nrow(F.j.t[EvalTimes <= tau, ]), 
+                           byrow = TRUE)
+            h.FS <- (h.FS - F.j.t[EvalTimes <= tau, ]) / TotalSurv[EvalTimes <= tau, ]
+            
             IC.j.tau <- Reduce("+", x = lapply(names(Hazards), function(l) {
-                ClevCov <- apply(rbind(GStar, NuisanceWeight[EvalTimes <= tau, ]), 2, 
-                                 function(hg.i) hg.i[1] * hg.i[2:length(hg.i)]) * ((l == j) - h.FS)
+                ClevCov <- getCleverCovariate(GStar = GStar, 
+                                              NuisanceWeight = NuisanceWeight[EvalTimes <= tau, ], 
+                                              hFS = h.FS, 
+                                              LeqJ = as.integer(l == j))
                 
-                NLdS <- matrix(EvalTimes[EvalTimes <= tau], nrow = nrow(ClevCov), 
-                               ncol = ncol(ClevCov), byrow = FALSE)
-                NLdS <- apply(rbind(T.tilde, Delta, NLdS), 2, function(NLdS.i) {
-                    as.numeric(NLdS.i[3:length(NLdS.i)] == NLdS.i[1]) * (NLdS.i[2] == l)
-                })
+                NLdS <- matrix(data = 0, nrow = nrow(h.FS), ncol = ncol(h.FS))
+                for (i in 1:length(T.tilde)) {
+                    if (Delta[i] != l) {next}
+                    ind <- which(T.tilde[i] == EvalTimes)
+                    if (length(ind) == 0) {next}
+                    NLdS[ind, i] <- 1
+                }
                 
-                HazLS <- apply(rbind(T.tilde, Hazards[[l]][EvalTimes <= tau, ]), 2, function(HazLS.i) {
-                    HazLS.i[2:length(HazLS.i)] * (EvalTimes[EvalTimes <= tau] <= HazLS.i[1])
-                })
+                HazLS <- getHazLS(T_Tilde = T.tilde, 
+                                  EvalTimes = EvalTimes[EvalTimes <= tau], 
+                                  HazL = Hazards[[l]][EvalTimes <= tau, ])
+                
                 return(colSums(ClevCov * (NLdS - HazLS)))
             })) + F.j.t[EvalTimes == tau, ] - mean(F.j.t[EvalTimes == tau, ])
             if (anyNA(IC.j.tau))

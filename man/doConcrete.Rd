@@ -73,11 +73,11 @@ concrete.args <- formatArguments(Data = data,
                                  Verbose = FALSE)
 
 # doConcrete() returns tmle (and g-comp plug-in) estimates of targeted risks
-concrete.est <- doConcrete(concrete.args)
+# concrete.est <- doConcrete(concrete.args)
 
 # getOutput returns risk difference, relative risk, and treatment-specific risks
-concrete.out <- getOutput(concrete.est, Estimand = c("rd", "rr", "risk"))
-concrete.out$RD
-concrete.out$RR
-concrete.out$Risk
+# concrete.out <- getOutput(concrete.est, Estimand = c("rd", "rr", "risk"))
+# concrete.out$RD
+# concrete.out$RR
+# concrete.out$Risk
 }

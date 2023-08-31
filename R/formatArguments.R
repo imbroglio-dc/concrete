@@ -931,8 +931,8 @@ print.ConcreteArgs <- function(x, ...) {
     for (d in seq_along(Regimes)) {
         cat('  ', names(Regimes)[d], ': (', sep = "")
         for (a in 1:ncol(Regimes[[d]])) {
-            cat("\"", colnames(Regimes[[d]])[a], "\" = (", 
-                paste0(unlist(head(Regimes[[d]][, ..a], 10)), collapse = ','), ",...)", 
+            cat("\"", colnames(Regimes[[d]])[a], "\" = [", 
+                paste0(unlist(head(subset(Regimes[[d]], select = a), 10)), collapse = ','), ",...]", 
                 ifelse(a == ncol(Regimes[[d]]), ")  -  ", ", "), sep = "")
         }
         cat("Observed Prevalence = ", 
