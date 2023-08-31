@@ -687,10 +687,10 @@ getModel <- function(Model, Data, Verbose) {
                 for (j in seq_along(Model[[FitVar]])) {
                     # coxnet 
                     if (inherits(Model[[FitVar]][j], "SL.coxnet")) {
-                        
+                        warning("SL.coxnet model checking not yet implemented")
                     } else if (inherits(Model[[FitVar]][j], "SL.cox")) {
                         # cox
-                        
+                        warning("SL.cox model checking not yet implemented")
                     }
                     
                     Formula <- as.character(Model[[FitVar]][j])
@@ -725,7 +725,9 @@ makeModelList <- function(Treatment, EventTime, EventType, UniqueEvents, Model, 
     
     # Propensity Score Estimators
     for (Trt in Treatment) {
-        if (isTRUE(all(inherits(Model[[Trt]], "R6"), inherits(Model[[Trt]], "Lrnr_base")))) {
+        if (isTRUE(all(inherits(Model[[Trt]], "R6"), 
+                       inherits(Model[[Trt]], "Lrnr_base"), 
+                       requireNamespace("sl3", quietly = TRUE)))) {
             attr(Model[[Trt]], "Backend") <- "sl3"
         } else if (isTRUE(inherits(Model[[Trt]], "SuperLearner"))) {
             attr(Model[[Trt]], "Backend") <- "SuperLearner"
