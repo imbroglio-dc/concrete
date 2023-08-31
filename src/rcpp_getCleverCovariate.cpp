@@ -15,7 +15,7 @@ arma::dmat getCleverCovariate(arma::dvec GStar,
                               arma::dmat NuisanceWeight, 
                               arma::dmat hFS, 
                               int LeqJ) {
-    for (arma::uword i = 0; i < NuisanceWeight.n_cols; i++) {
+    for (arma::uword i = 0; i < NuisanceWeight.n_cols; ++i) {
         NuisanceWeight.col(i) = GStar(i) * NuisanceWeight.col(i);
     }
     return NuisanceWeight % (LeqJ - hFS);
@@ -25,7 +25,7 @@ arma::dmat getCleverCovariate(arma::dvec GStar,
 arma::dmat getHazLS(arma::dvec T_Tilde,
                     arma::dvec EvalTimes,
                     arma::dmat HazL) {
-    for (arma::uword i = 0; i < HazL.n_cols; i++) {
+    for (arma::uword i = 0; i < HazL.n_cols; ++i) {
         HazL.col(i) = (EvalTimes <= T_Tilde(i)) % HazL.col(i);
     }
     return HazL;

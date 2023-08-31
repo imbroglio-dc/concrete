@@ -62,11 +62,8 @@ getIC <- function(GStar, Hazards, TotalSurv, NuisanceWeight, TargetEvent, Target
                                               LeqJ = as.integer(l == j))
                 
                 NLdS <- matrix(data = 0, nrow = nrow(h.FS), ncol = ncol(h.FS))
-                for (i in 1:length(T.tilde)) {
-                    if (Delta[i] != l) {next}
-                    ind <- which(T.tilde[i] == EvalTimes)
-                    if (length(ind) == 0) {next}
-                    NLdS[ind, i] <- 1
+                for (i in which(Delta == l)) {
+                    NLdS[which(EvalTimes == T.tilde[i]), i] <- 1
                 }
                 
                 HazLS <- getHazLS(T_Tilde = T.tilde, 

@@ -163,31 +163,36 @@ updateHazard <- function(GStar, Hazards, TotalSurv, NuisanceWeight, EvalTimes, T
     #                                    StepSize = OneStepEps / NormPnEIC)
     #         NewHaz <- lapply(seq(dim(NewHaz)[3]), function(l) NewHaz[, , l])}, 
     #     "apply" = {
-            NewHazards <- lapply(Hazards, function(haz.al) { # loop over L
-                l <- attr(haz.al, "j")
-                
-                update.l <- 
-                    Reduce("+", x = lapply(TargetEvent, function(j) {
-                        F.j.t <- apply(Hazards[[as.character(j)]] * TotalSurv, 2, cumsum)
-                        Reduce("+", x = lapply(TargetTime, function(tau) {
-                            h.FS <- (matrix(F.j.t[EvalTimes == tau, ], 
-                                            ncol = ncol(F.j.t), 
-                                            nrow = nrow(F.j.t), 
-                                            byrow = TRUE) - F.j.t) / TotalSurv
-                            h.FS <- h.FS[EvalTimes > tau, ] <- 0
-                            
-                            h.G <- apply(rbind(GStar, NuisanceWeight), 2, function(hg.i) 
-                                hg.i[1] * hg.i[2:length(hg.i)])
-                            h.G[EvalTimes > tau, ] <- 0
-                            
-                            return(h.G * ((l == j) - h.FS) * PnEIC[Time == tau & Event == j, PnEIC])
-                        }))
-                    }))
-                newhaz.al <- haz.al * exp(update.l * OneStepEps / NormPnEIC)
-                attr(newhaz.al, "j") <- l
-                return(newhaz.al)
-            })
-        # })
+    NewHazards <- lapply(Hazards, function(haz.al) { # loop over L
+        l <- attr(haz.al, "j")
+        
+        update.l <- 
+            Reduce("+", x = lapply(TargetEvent, function(j) {
+                F.j.t <- apply(Hazards[[as.character(j)]] * TotalSurv, 2, cumsum)
+                Reduce("+", x = lapply(TargetTime, function(tau) {
+                    ClevCov <- h.FS <- matrix(0, nrow = nrow(F.j.t), ncol = ncol(F.j.t))
+                    h.FS[EvalTimes <= tau, ] <- 
+                        (matrix(F.j.t[EvalTimes == tau, ], 
+                                ncol = ncol(F.j.t), 
+                                nrow = nrow(F.j.t[EvalTimes <= tau, ]), 
+                                byrow = TRUE) - 
+                             F.j.t[EvalTimes <= tau, ]) / 
+                        TotalSurv[EvalTimes <= tau, ]
+                    
+                    ClevCov[EvalTimes <= tau, ] <- 
+                        getCleverCovariate(GStar = GStar, 
+                                           NuisanceWeight = NuisanceWeight[EvalTimes <= tau, ], 
+                                           hFS = h.FS, 
+                                           LeqJ = as.integer(l == j))
+                    
+                    return(ClevCov * PnEIC[Time == tau & Event == j, PnEIC])
+                }))
+            }))
+        newhaz.al <- haz.al * exp(update.l * OneStepEps / NormPnEIC)
+        attr(newhaz.al, "j") <- l
+        return(newhaz.al)
+    })
+    # })
     
     #     eps.l <- nleqslv(0.01, function(eps) getFluctPnEIC(GStar = GStar, Hazards = Hazards,
     #                                                        TotalSurv = TotalSurv,
