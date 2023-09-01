@@ -8,7 +8,7 @@ simConCR <- function(interval = 1:2e3,
                      t3_coefs = c(2.4e-5, 1.2),
                      n = 1e3,
                      assign_A = function(W, n) rbinom(n, 1, 0.5),
-                     test_leader.xlsx_path = "/Shared/Projects/concrete/scripts/leader/test_leader.xlsx",
+                     test_leader.xlsx_path = "/Shared/Projects/concrete/scripts/sim-data/test_leader.xlsx",
                      random_seed = 12345678) {
     library(data.table)
     library(tidyverse)

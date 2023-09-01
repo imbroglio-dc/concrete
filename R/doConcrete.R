@@ -196,7 +196,7 @@ print.ConcreteEst <- function(x, ...) {
             }
             cat("\n")
         } else {
-            cat("Treatment \"", a, "\": Printing for non-'SuperLearner' backends not yet enabled\n")
+            cat("Treatment \"", a, "\": Printing for non-'SuperLearner' learners not yet enabled\n")
         }
     }
     

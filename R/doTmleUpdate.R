@@ -62,7 +62,9 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, TargetEvent, TargetTime,
         if (Verbose) {
             cat("Starting step", StepNum, "with update epsilon =", WorkingEps, "\n")
         } else {
-            if (Q < max(floor(MaxUpdateIter / StepNum), floor(MaxUpdateIter * 2 / IterNum))) {
+            # add progress toward PnEIC cutoff ?
+            MaxUpdateIterQuantile <- floor(quantile(1:MaxUpdateIter, probs = .2*(1:5)))
+            if (StepNum %in% MaxUpdateIterQuantile) {
                 Q <- Q + 1
                 utils::setTxtProgressBar(Progress, value = Q)
             }
@@ -182,7 +184,7 @@ updateHazard <- function(GStar, Hazards, TotalSurv, NuisanceWeight, EvalTimes, T
                     ClevCov[EvalTimes <= tau, ] <- 
                         getCleverCovariate(GStar = GStar, 
                                            NuisanceWeight = NuisanceWeight[EvalTimes <= tau, ], 
-                                           hFS = h.FS, 
+                                           hFS = h.FS[EvalTimes <= tau, ], 
                                            LeqJ = as.integer(l == j))
                     
                     return(ClevCov * PnEIC[Time == tau & Event == j, PnEIC])

@@ -50,7 +50,7 @@ getHazFit <- function(Data, Model, CVFolds, Hazards, ReturnModels) {
                         }
                 }
                 ## train model ----
-                if (ModelJ[[i]] == "coxnet") {
+                if (inherits(ModelJ[[i]], "Lrnr.Coxnet")) {
                     CovCols <- c(TrtCol, setdiff(colnames(TrainData), c(TimeCol, TypeCol, TrtCol, IDCol)))
                     ModelFit <- glmnet::glmnet(x = as.matrix(TrainData)[, CovCols], 
                                                y = Surv(time = TrainData[[TimeCol]], 
@@ -66,7 +66,7 @@ getHazFit <- function(Data, Model, CVFolds, Hazards, ReturnModels) {
                 if (ReturnModels) ModelFits[[i]] <- ModelFit
                 
                 ## validation loss (-log partial likelihood) ----
-                if (ModelJ[[i]] == "coxnet") {
+                if (inherits(ModelJ[[i]], "Lrnr.Coxnet")) {
                     for (s in seq_along(ModelFit$lambda)) {
                         ValidData[, FitLP := stats::predict(ModelFit, newx = z, s = ModelFit$lambda[s], type = "link")]
                         ValidData[, AtRisk := cumsum(exp(FitLP))]
@@ -104,7 +104,7 @@ getHazFit <- function(Data, Model, CVFolds, Hazards, ReturnModels) {
     ## fit sl selection on full data ----
     HazFits <- lapply(SupLrnModel, function(SLMod) {
         ## fit sl model ----
-        if (SLMod$SupLrnModel == "coxnet") {
+        if (inherits(SLMod$SupLrnModel, "Lrnr.Coxnet")) {
             CovCols <- c(TrtCol, setdiff(colnames(Data), c(TimeCol, TypeCol, TrtCol, IDCol)))
             ModelFit <- glmnet::cv.glmnet(x = as.matrix(Data)[, CovCols], 
                                           y = Surv(time = Data[[TimeCol]], 
@@ -156,9 +156,9 @@ getHazSurvPred <- function(Data, HazFits, MinNuisance, TargetEvent, TargetTime, 
         
         PredHaz <- lapply(HazFits, function(HazFit) {
             if (inherits(HazFit$HazFit, "cv.glmnet")) {
-                PredData <- scale(as.matrix(PredData), center = TRUE, scale = FALSE)
-                PredData[, attr(Data, "Treatment")] <- Reg
-                exp.coef <- predict(HazFit$HazFit, newx = PredData, 
+                PredData <- data.table::data.table(scale(PredData, center = TRUE, scale = FALSE))
+                PredData[, (TrtNames) := Reg[, .SD, .SDcols = TrtNames]]
+                exp.coef <- predict(HazFit$HazFit, newx = as.matrix(PredData), 
                                     s = HazFit$HazFit$lambda.min, type = "response")
                 haz <- sapply(exp.coef, function(expLP) HazFit[["BaseHaz"]][["BaseHaz"]] * expLP)
             } else if (inherits(HazFit$HazFit, "coxph")) {

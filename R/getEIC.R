@@ -62,7 +62,7 @@ getIC <- function(GStar, Hazards, TotalSurv, NuisanceWeight, TargetEvent, Target
                                               LeqJ = as.integer(l == j))
                 
                 NLdS <- matrix(data = 0, nrow = nrow(h.FS), ncol = ncol(h.FS))
-                for (i in which(Delta == l)) {
+                for (i in which(Delta == l & T.tilde <= tau)) {
                     NLdS[which(EvalTimes == T.tilde[i]), i] <- 1
                 }
                 

@@ -26,6 +26,7 @@ data.table::setDTthreads(threads = parallel::detectCores(), restore_after_fork =
 if (file.exists("scripts/sim-data/TrueRisks.csv")) {
     risks <- read.csv("scripts/sim-data/TrueRisks.csv")
 } else {
+    set.seed(123456789)
     risks1 <- getTrueRisks(n = 5e6, assign_A = function(W, n) return(rep_len(1, n)))
     gc()
     risks0 <- getTrueRisks(n = 5e6, assign_A = function(W, n) return(rep_len(0, n)))
@@ -51,11 +52,13 @@ library(doParallel)
 n_cores <- min(parallel::detectCores(), 12)
 B <- 500
 j <- 0
-OutputPath <- "/Shared/Projects/ConCR-TMLE/scripts/sim-data/sim-out/"
+OutputPath <- "/Shared/Projects/concrete/scripts/sim-data/sim-out/"
 set.seed(0)
 seeds <- sample(0:12345678, size = B)
 Start <- Sys.time()
-while(j <= B) {
+if (length(list.files(OutputPath, full.names = TRUE)) >= B) { 
+    next
+} else while(j <= B) {
     cl <- makeCluster(n_cores, type = "FORK")
     registerDoParallel(cl)
     sim.result <- try({
@@ -69,7 +72,7 @@ while(j <= B) {
                     out <- list()
                     estimators <- c(
                         "concrete",
-                        "contmle",
+                        # "contmle",
                         "survtmle-6mo",
                         "survtmle-3mo")
                     out$estimates <- data.table()
@@ -96,6 +99,12 @@ while(j <= B) {
                                                         TargetTime = TargetTime,
                                                         MaxUpdateIter = MaxIter,
                                                         Verbose = FALSE)
+                        for (VarName in names(concreteArgs$Model)) {
+                            if (VarName %in% unique(Data[["EVENT"]])) {
+                                concreteArgs[["Model"]][[as.character(VarName)]][["Coxnet"]] <- "coxnet"
+                            }
+                        }
+                        concreteArgs <- formatArguments(concreteArgs)
                         Start <- Sys.time()
                         concreteEst <- doConcrete(concreteArgs)
                         concreteOut <- getOutput(concreteEst)$Risk

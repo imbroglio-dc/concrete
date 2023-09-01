@@ -665,10 +665,9 @@ getModel <- function(Model, Data, Verbose) {
                 "numeric value representing a censoring or event type\n")
         } else {
             if (FitVar %in% UniqueEvents) {
-                if (any(is.null(attr(Model[[FitVar]], "Backend")), 
-                        attr(Model[[FitVar]], "Backend") != "coxph"))
-                    attr(Model[[FitVar]], "Backend") <- "coxph"
-                JBackend <- attr(Model[[FitVar]], "Backend")
+                CoxLeft <- paste0("Surv(", EventTime, ", ", EventType, " == ", FitVar, ") ~ ")
+                CoxLeftRegex <- paste0("^Surv\\(\\s*", EventTime, "\\s*,\\s*", EventType,
+                                       "\\s*==\\s*", FitVar, "\\s*\\)\\s*~\\s*")
                 
                 if (is.list(Model[[FitVar]])) {
                     if (is.null(names(Model[[FitVar]]))) {
@@ -681,37 +680,32 @@ getModel <- function(Model, Data, Verbose) {
                     Model[[FitVar]] <- list("model1" = Model[[FitVar]])
                 }
                 
-                CoxLeft <- paste0("Surv(", EventTime, ", ", EventType, " == ", FitVar, ") ~ ")
-                CoxLeftRegex <- paste0("^Surv\\(\\s*", EventTime, "\\s*,\\s*", EventType,
-                                       "\\s*==\\s*", FitVar, "\\s*\\)\\s*~\\s*")
-                for (j in seq_along(Model[[FitVar]])) {
-                    # coxnet 
-                    if (inherits(Model[[FitVar]][j], "SL.coxnet")) {
-                        warning("SL.coxnet model checking not yet implemented")
-                    } else if (inherits(Model[[FitVar]][j], "SL.cox")) {
-                        # cox
-                        warning("SL.cox model checking not yet implemented")
-                    }
-                    
-                    Formula <- as.character(Model[[FitVar]][j])
-                    CoxRight <- paste0(" ", sub("^.*~", "", Formula), " ")
-                    
-                    # rename covariates ----
-                    
-                    if (!isTRUE(attr(Model[[FitVar]][[j]], "NameChecked")) & RenameCovs) {
-                        for (covar in unique(CovNames[["CovName"]])) {
-                            OldColRegex <- paste0("([\\W\\D]|\\s){1}", covar, "([\\W\\D]|\\s){1}")
-                            NewCol <- CovNames[CovName == covar, ][["ColName"]]
-                            if (length(NewCol) > 1)
-                                NewCol <- paste0(NewCol, collapse = "+")
-                            CoxRight <- gsub(OldColRegex, paste0("\\1(", NewCol, ")\\2"), CoxRight)
-                            CovNamesChanged <- TRUE
+                for (i in seq_along(Model[[FitVar]])) {
+                    # temporary coxnet / cox Lrnr class assignment
+                    if (tolower(Model[[FitVar]][i]) == "coxnet") {
+                        class(Model[[FitVar]][[i]]) <- union("Lrnr.Coxnet", class(Model[[FitVar]][[i]]))
+                        next
+                    } else {
+                        Formula <- as.character(Model[[FitVar]][i])
+                        CoxRight <- paste0(" ", sub("^.*~", "", Formula), " ")
+                        
+                        # rename covariates ----
+                        
+                        if (!isTRUE(attr(Model[[FitVar]][[i]], "NameChecked")) & RenameCovs) {
+                            for (covar in unique(CovNames[["CovName"]])) {
+                                OldColRegex <- paste0("([\\W\\D]|\\s){1}", covar, "([\\W\\D]|\\s){1}")
+                                NewCol <- CovNames[CovName == covar, ][["ColName"]]
+                                if (length(NewCol) > 1)
+                                    NewCol <- paste0(NewCol, collapse = "+")
+                                CoxRight <- gsub(OldColRegex, paste0("\\1(", NewCol, ")\\2"), CoxRight)
+                                CovNamesChanged <- TRUE
+                            }
                         }
+                        Model[[FitVar]][[i]] <- as.formula(paste0(CoxLeft, CoxRight))
+                        class(Model[[FitVar]][[i]]) <- union("Lrnr.Cox", class(Model[[FitVar]][[i]]))
+                        attr(Model[[FitVar]][[i]], "NameChecked") <- TRUE
                     }
-                    Model[[FitVar]][[j]] <- as.formula(paste0(CoxLeft, CoxRight))
-                    attr(Model[[FitVar]][[j]], "NameChecked") <- TRUE
                 }
-                attr(Model[[FitVar]], "Backend") <- JBackend
             }
         }
     }
@@ -727,10 +721,12 @@ makeModelList <- function(Treatment, EventTime, EventType, UniqueEvents, Model, 
     for (Trt in Treatment) {
         if (isTRUE(all(inherits(Model[[Trt]], "R6"), 
                        inherits(Model[[Trt]], "Lrnr_base"), 
-                       requireNamespace("sl3", quietly = TRUE)))) {
+                       requireNamespace("sl3", quietly = TRUE), 
+                       requireNamespace("Rsolnp", quietly = TRUE)))) {
             attr(Model[[Trt]], "Backend") <- "sl3"
         } else if (isTRUE(inherits(Model[[Trt]], "SuperLearner"))) {
             attr(Model[[Trt]], "Backend") <- "SuperLearner"
+            next
         } else {
             SLSpecOK <- as.logical(all(sapply(Model[[Trt]], is.character)) * 
                                        (length(sapply(Model[[Trt]], is.character)) > 0))
@@ -760,10 +756,11 @@ makeModelList <- function(Treatment, EventTime, EventType, UniqueEvents, Model, 
                                                            EventType, " == ", j, ") ~ ", Trt)),
                              "MainTerms" = as.formula(paste0("Surv(", EventTime, ", ",
                                                              EventType, " == ", j, ") ~ .")))
-            attr(HazModel[[1]], "NameChecked") <- TRUE
-            attr(HazModel[[2]], "NameChecked") <- TRUE
-            Model[[as.character(j)]] <- HazModel
-            attr(Model[[as.character(j)]], "Backend") <- "CoxPH"
+            Model[[as.character(j)]] <- lapply(HazModel, function(hazmodel) {
+                attr(hazmodel, "NameChecked") <- TRUE
+                class(hazmodel) <- union("Lrnr.Cox", class(hazmodel))
+                return(hazmodel)
+            })
         }
         attr(Model[[as.character(j)]], "j") <- j
     }
@@ -948,7 +945,6 @@ print.ConcreteArgs <- function(x, ...) {
         length(x$CVFolds), "-Fold Cross Validation \n", sep = "")
     ## SL spec
     for (Trt in attr(x$DataTable, "Treatment")) {
-        
         TrtMod <- x$Model[[Trt]]
         PSBackend <- attr(TrtMod, "Backend")
         if (PSBackend == "SuperLearner") {
@@ -975,12 +971,9 @@ print.ConcreteArgs <- function(x, ...) {
         JMod <- x$Model[[as.character(j)]]
         cat(ifelse(as.numeric(j) <= 0, "Cens. ", "Event "), j, 
             " Estimation (coxph): Discrete SL Selector, Log Partial-LL Loss, ", 
-            length(JMod), " candidate", ifelse(length(JMod) > 1, "s", ""), sep = "")
-        if (attr(JMod, "Backend") == "coxph"){
-            cat(" - ", paste0(head(names(JMod), 5), collapse = ", "), 
-                ifelse(length(JMod) > 5, ", ...", ""), sep = "")
-        }
-        cat("\n")
+            length(JMod), " candidate", ifelse(length(JMod) > 1, "s", ""), 
+            " - ", paste0(head(names(JMod), 5), collapse = ", "), 
+                ifelse(length(JMod) > 5, ", ...", ""), "\n", sep = "")
     }
     cat("\n")
     

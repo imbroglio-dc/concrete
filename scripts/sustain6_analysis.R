@@ -169,9 +169,10 @@ doSus6Demo <- function(W, outcomes, targets = 365.25*seq(0.5, 2, 0.5),
         
         survtmle_cr <- lapply(binwidth, function(bin) {
             tmle_sl <- try(try-error)
+            errors <- 0
             while(inherits(tmle_sl, "try-error")) {
                 window <- 365.25 / 12 * bin
-                tmle_sl <- surv_tmle(
+                tmle_sl <- try(surv_tmle(
                     ftime = ceiling(smallobs$time/window),
                     ftype = smallobs$status,
                     targets = ceiling(targets/window),
@@ -187,16 +188,20 @@ doSus6Demo <- function(W, outcomes, targets = 365.25*seq(0.5, 2, 0.5),
                     trtOfInterest = c(1, 0),
                     maxIter = 500,
                     method = "hazard",
-                    verbose = TRUE)
+                    verbose = TRUE))
+                if (inherits(tmle_sl, "try-error"))
+                    errors <- errors + 1
             }
+            attr(tmle_sl, "errors") <- errors
             return(tmle_sl)
         })
         
         survtmle_j1 <- lapply(binwidth, function(bin) {
             tmle_sl <- try(try-error)
+            errors <- 0
             while(inherits(tmle_sl, "try-error")) {
                 window <- 365.25 / 12 * bin
-                tmle_sl <- surv_tmle(
+                tmle_sl <- try(surv_tmle(
                     ftime = ceiling(smallobs$time/window),
                     ftype = smallobs$event1,
                     targets = ceiling(targets/window),
@@ -212,16 +217,20 @@ doSus6Demo <- function(W, outcomes, targets = 365.25*seq(0.5, 2, 0.5),
                     trtOfInterest = c(1, 0),
                     maxIter = 500,
                     method = "hazard",
-                    verbose = TRUE)
+                    verbose = TRUE))
+                if (inherits(tmle_sl, "try-error"))
+                    errors <- errors + 1
             }
+            attr(tmle_sl, "errors") <- errors
             return(tmle_sl)
         })
         
         survtmle_j2 <- lapply(binwidth, function(bin) {
             tmle_sl <- try(try-error)
+            errors <- 0
             while(inherits(tmle_sl, "try-error")) {
                 window <- 365.25 / 12 * bin
-                tmle_sl <- surv_tmle(
+                tmle_sl <- try(surv_tmle(
                     ftime = ceiling(smallobs$time/window),
                     ftype = smallobs$event2,
                     targets = ceiling(targets/window),
@@ -237,8 +246,11 @@ doSus6Demo <- function(W, outcomes, targets = 365.25*seq(0.5, 2, 0.5),
                     trtOfInterest = c(1, 0),
                     maxIter = 500,
                     method = "hazard",
-                    verbose = TRUE)
+                    verbose = TRUE))
+                if (inherits(tmle_sl, "try-error"))
+                    errors <- errors + 1
             }
+            attr(tmle_sl, "errors") <- errors
             return(tmle_sl)
         })
         
