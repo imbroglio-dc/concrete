@@ -16,8 +16,6 @@ test_that("formatArguments works ", {
     expect_s3_class(formatArguments(concrete.args), class = "ConcreteArgs")
     expect_s3_class(formatArguments(ConcreteArgs = concrete.args), class = "ConcreteArgs")
     expect_error(formatArguments(ConcreteArgs = data))
-    # data[, status := as.numeric(status >= 1)] # to make simple right-censored survival
-    # data[status == 0, status := sample(1:2, sum(status == 0), replace = TRUE)]
 })
 
 test_that("Data with missingness or incorrect type throw errors", {

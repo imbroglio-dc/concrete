@@ -62,7 +62,9 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, TargetEvent, TargetTime,
         if (Verbose) {
             cat("Starting step", StepNum, "with update epsilon =", WorkingEps, "\n")
         } else {
-            if (any(IterNum %in% ((1:4) * ceiling(2 * MaxUpdateIter / 5)))) {
+            # add progress toward PnEIC cutoff ?
+            MaxUpdateIterQuantile <- floor(quantile(1:MaxUpdateIter, probs = .2*(1:5)))
+            if (StepNum %in% MaxUpdateIterQuantile) {
                 Q <- Q + 1
                 utils::setTxtProgressBar(Progress, value = Q)
             }
@@ -149,27 +151,50 @@ updateHazard <- function(GStar, Hazards, TotalSurv, NuisanceWeight, EvalTimes, T
     if (Iterative) {
         warning("Iterative TMLE not yet implemented. Performing one-step TMLE instead.")
     } 
+    # tmp <- microbenchmark(
+    #     "cpp" = {
+    #         NewHaz <- updateHazardsCpp(J = TargetEvent,
+    #                                    TargetTimes = TargetTime, 
+    #                                    L = as.numeric(names(Hazards)), 
+    #                                    Hazards = array(unlist(Hazards), dim = c(dim(Hazards[[1]]), length(Hazards))), 
+    #                                    TotalSurv = TotalSurv, 
+    #                                    EvalTimes = EvalTimes, 
+    #                                    GStar = GStar, 
+    #                                    NuisanceWeight = NuisanceWeight, 
+    #                                    PnEIC = unlist(PnEIC[Event > 0, ][order(Event, Time), PnEIC]), 
+    #                                    StepSize = OneStepEps / NormPnEIC)
+    #         NewHaz <- lapply(seq(dim(NewHaz)[3]), function(l) NewHaz[, , l])}, 
+    #     "apply" = {
     NewHazards <- lapply(Hazards, function(haz.al) { # loop over L
         l <- attr(haz.al, "j")
+        
         update.l <- 
             Reduce("+", x = lapply(TargetEvent, function(j) {
                 F.j.t <- apply(Hazards[[as.character(j)]] * TotalSurv, 2, cumsum)
                 Reduce("+", x = lapply(TargetTime, function(tau) {
-                    h.FS <- (matrix(F.j.t[EvalTimes == tau, ], ncol = ncol(F.j.t), 
-                                    nrow = nrow(F.j.t), byrow = TRUE) - F.j.t) / TotalSurv
-                    h.FS <- h.FS[EvalTimes > tau, ] <- 0
+                    ClevCov <- h.FS <- matrix(0, nrow = nrow(F.j.t), ncol = ncol(F.j.t))
+                    h.FS[EvalTimes <= tau, ] <- 
+                        (matrix(F.j.t[EvalTimes == tau, ], 
+                                ncol = ncol(F.j.t), 
+                                nrow = nrow(F.j.t[EvalTimes <= tau, ]), 
+                                byrow = TRUE) - 
+                             F.j.t[EvalTimes <= tau, ]) / 
+                        TotalSurv[EvalTimes <= tau, ]
                     
-                    h.G <- apply(rbind(GStar, NuisanceWeight), 2, function(hg.i) 
-                        hg.i[1] * hg.i[2:length(hg.i)])
-                    h.G[EvalTimes > tau, ] <- 0
+                    ClevCov[EvalTimes <= tau, ] <- 
+                        getCleverCovariate(GStar = GStar, 
+                                           NuisanceWeight = NuisanceWeight[EvalTimes <= tau, ], 
+                                           hFS = h.FS[EvalTimes <= tau, ], 
+                                           LeqJ = as.integer(l == j))
                     
-                    return(h.G * ((l == j) - h.FS) * PnEIC[Time == tau & Event == j, PnEIC])
+                    return(ClevCov * PnEIC[Time == tau & Event == j, PnEIC])
                 }))
             }))
         newhaz.al <- haz.al * exp(update.l * OneStepEps / NormPnEIC)
         attr(newhaz.al, "j") <- l
         return(newhaz.al)
     })
+    # })
     
     #     eps.l <- nleqslv(0.01, function(eps) getFluctPnEIC(GStar = GStar, Hazards = Hazards,
     #                                                        TotalSurv = TotalSurv,
