@@ -2,7 +2,7 @@ setwd(dir = "/Shared/Projects/novo_nordisk/")
 library(tidyverse); library(mice); library(data.table); library(survival); library(concrete)
 library(SuperLearner); library(survtmle)
 
-surv_tmle.dir <- c("/Shared/Projects/Roadmap_CVOT/R/functions/")
+surv_tmle.dir <- c("/Shared/Projects/novo_nordisk/R/functions/")
 x <- lapply(surv_tmle.dir, function(dir) lapply(list.files(dir, full.names = TRUE),
                                                 function(x) try(source(x), silent = TRUE)))
 
@@ -170,8 +170,11 @@ doSus6Demo <- function(W, outcomes, targets = 365.25*seq(0.5, 2, 0.5),
         survtmle_cr <- lapply(binwidth, function(bin) {
             tmle_sl <- try(try-error)
             errors <- 0
+            tmp <- smallobs
+            smallobs <- smallobs[1:300, ]
             while(inherits(tmle_sl, "try-error")) {
                 window <- 365.25 / 12 * bin
+                debugonce(stats::optim)
                 tmle_sl <- try(surv_tmle(
                     ftime = ceiling(smallobs$time/window),
                     ftype = smallobs$status,

@@ -1,11 +1,11 @@
 # all models are simulated from underlying Weibull distribution
 
 simConCR <- function(interval = 1:2e3,
-                     ltfu_coefs = c(1.5e-4, 1, 1.5, 1.1),
+                     ltfu_coefs = c(1.5e-4, 1, 2, 2),
                      eos_coefs = c("eos_start_time" = 1460, "eos_end_time" = 2000),
-                     t1_coefs = c(1.2e-4, 1, 1.2, 1.3, 1.2, 1.2),
-                     t2_coefs = c(1.8e-5, 1.3, 1.5, 1.5, 1.2),
-                     t3_coefs = c(2.4e-5, 1.2),
+                     t1_coefs = c(7.5e-5, 1, 2, 1.2, 2, 1.2),
+                     t2_coefs = c(1.5e-5, 1.3, 2.75, 1.75, 2),
+                     t3_coefs = c(0, 1),
                      n = 1e3,
                      assign_A = function(W, n) rbinom(n, 1, 0.5),
                      test_leader.xlsx_path = "/Shared/Projects/concrete/scripts/sim-data/test_leader.xlsx",
@@ -49,12 +49,12 @@ simConCR <- function(interval = 1:2e3,
     ## 1.1 Censoring Model ------------------------------------------------------------------------
     
     # lost-to-followup
-    ltfu_fn <- function(ARM, AGE, params, output = c("h.t", "S.t", "F_inv.u"), t = NULL, u = NULL) {
+    ltfu_fn <- function(ARM, BMIBL, MIFL, params, output = c("h.t", "S.t", "F_inv.u"), t = NULL, u = NULL) {
         B <- params[1]
         k <- params[2]
-        b_A <- log(params[3]) * as.numeric(ARM)
-        b_AGE <- log(params[4]) * as.numeric(scale(AGE, scale = max(abs(AGE - mean(AGE))) / 3))
-        phi <- exp(b_A + b_AGE)
+        b_1 <- log(params[3]) * as.numeric(ARM == 0) * as.numeric(BMIBL > 30)
+        b_2 <- log(params[4]) * as.numeric(ARM == 1) * as.numeric(MIFL)
+        phi <- exp(b_1 + b_2)
         
         return(return_weibull_outputs(phi, B, k, output, t, u))
     }
@@ -93,7 +93,7 @@ simConCR <- function(interval = 1:2e3,
         B <- params[1]
         k <- params[2]
         b1 <- log(params[3]) * as.numeric(ARM == 0) * as.numeric(STROKSFL)
-        b2 <- log(params[4]) * as.numeric(ARM == 0) * as.numeric(MIFL)
+        b2 <- log(params[4]) * as.numeric(ARM == 1) * as.numeric(MIFL)
         b3 <- log(params[5]) * as.numeric(STROKSFL) * as.numeric(MIFL)
         phi <- exp(b1 + b2 + b3)
         
@@ -119,7 +119,7 @@ simConCR <- function(interval = 1:2e3,
         set.seed(random_seed)
         obs <- dplyr::select(sample_n(base_data, size = n, replace = T), -ARM, -TIME, -EVENT)
         A <- assign_A(obs, n)
-        outcomes <- data.table("C_ltfu" = ltfu_fn(A, obs[["AGE"]], ltfu_coefs,
+        outcomes <- data.table("C_ltfu" = ltfu_fn(A, obs[["BMIBL"]], obs[["MIFL"]], ltfu_coefs,
                                                   output = "F_inv.u", u = runif(n, 0, 1))$F_inv.u,
                                "C_eos" = eos_fn(eos_coefs, "F_inv.u", u = runif(n, 0, 1))$F_inv.u,
                                "T1" = T1_fn(A, obs[["SMOKER"]], obs[["BMIBL"]],
@@ -143,22 +143,61 @@ simConCR <- function(interval = 1:2e3,
     return(simulate_data(n = n, assign_A = assign_A, base_data = base_data, random_seed = random_seed))
 }
 
-getTrueRisks <- function(time_range = 1:2000,
-                         n = 1e6,
+getTrueRisks <- function(target_time = 1:2000,
+                         n = 1e5,
                          assign_A = function(W, n) return(rep_len(1, n)),
                          ltfu_coefs = c(0, 1, 1, 1),
-                         eos_coefs = c(max(time_range) + 1, max(time_range) + 1)) {
-    outcomes <- simConCR(assign_A = assign_A,
-                         ltfu_coefs = ltfu_coefs,
-                         eos_coefs = eos_coefs,
-                         n = n)
-    if (sum(outcomes$EVENT != 0)) {
-        Js <- setdiff(sort(unique(outcomes$EVENT)), 0)
-        risks <- data.table(sapply(Js,
-                                   function(j) colSums(outer(outcomes[EVENT == j, TIME], time_range, `<=`)))) / n
-        setnames(risks, as.character(Js))
+                         eos_coefs = c(max(target_time) + 1, max(target_time) + 1), 
+                         rep = 5, 
+                         parallel = FALSE) {
+    seeds <- sample(0:999999999, size = rep)
+    if (all(parallel, require(doParallel), require(foreach))) {
+        n_cores <- min(parallel::detectCores() - 1, 10)
+        cl <- makeCluster(n_cores, type = "FORK")
+        registerDoParallel(cl)
+        risks <- data.table(Reduce("+", foreach(i = seq_along(seeds)) %dopar% {
+            outcomes <- simConCR(assign_A = assign_A,
+                                 ltfu_coefs = ltfu_coefs,
+                                 eos_coefs = eos_coefs,
+                                 n = n, 
+                                 random_seed = seeds[i])
+            Js <- sort(unique(outcomes$EVENT))
+            risks <- data.table()
+            risks[, (as.character(Js)) := lapply(Js, function(j) {
+                    unlist(colSums(outer(
+                        outcomes[EVENT == j, TIME], target_time, `<=`
+                    )))   
+            })]
+            return(as.matrix(risks))
+        }))
+        registerDoSEQ()
+        stopCluster(cl)
+        rm(cl); gc()
     } else {
-        stop("Error! There's censoring that shouldn't be here")
+        outcomes <- simConCR(assign_A = assign_A,
+                             ltfu_coefs = ltfu_coefs,
+                             eos_coefs = eos_coefs,
+                             n = n, 
+                             random_seed = seeds[1])
+        Js <- sort(unique(outcomes$EVENT))
+        risks <- data.table(matrix(0, nrow = length(target_time), ncol = length(Js)))
+        setnames(risks, as.character(Js))
+        i <- 1
+        while (i <= rep) {
+            risks[, (as.character(Js)) := lapply(Js, function(j) { 
+                risks[[as.character(j)]] +
+                    unlist(colSums(outer(
+                        outcomes[EVENT == j, TIME], target_time, `<=`)))   
+            })]
+            i <- i + 1
+            if (i < rep) {
+                outcomes <- simConCR(assign_A = assign_A,
+                                     ltfu_coefs = ltfu_coefs,
+                                     eos_coefs = eos_coefs,
+                                     n = n, 
+                                     random_seed = seeds[i])
+            }
+        }
     }
-    return(risks)
+    return(cbind("Time" = target_time, risks / (n * rep)))
 }
