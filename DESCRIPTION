@@ -2,7 +2,7 @@ Package: concrete
 Type: Package
 Title: Continuous-Time Competing Risks Estimated using Targeted Minimum Loss-Based Estimation (TMLE)
 Version: 1.0.1
-Date: 2023-05-19
+Date: 2023-09-06
 Author: David Chen [aut, cre] (<https://orcid.org/0000-0002-9413-8152>)
 Authors@R: 
     person(given = "David",
@@ -11,7 +11,7 @@ Authors@R:
            email = "david.chen49@berkeley.edu",
            comment = c(ORCID = "0000-0002-9413-8152"))
 Maintainer: David Chen <david.chen49@berkeley.edu>
-Description: 'concrete' implements a one-step continuous-time Targeted Minimum Loss-Based Estimator (TMLE) for outcome-specific absolute risk estimands in right-censored survival settings with or without competing risks. This package implements the methodology described by Rytgaard et al. (2023) <DOI: 10.1111/biom.13856> and by Rytgaard and van der Laan (2023) <DOI: 10.1007/s10985-022-09576-2>. Flexible, cross-validated initial estimation of treatment propensity is done using the 'SuperLearner' or 'sl3' packages while initial estimation of conditional hazards is done using ensembles of Cox regressions from the 'survival' package. Currently 'concrete' can be used to estimate the effects of static or dynamic interventions on binary treatments given at baseline.
+Description: One-step continuous-time Targeted Minimum Loss-Based Estimator (TMLE) for outcome-specific absolute risk estimands in right-censored survival settings with or without competing risks, implementing the methodology described in Rytgaard et al. (2023) <doi:10.1111/biom.13856> and Rytgaard and van der Laan (2023) <doi:10.1007/s10985-022-09576-2>. Currently 'concrete' can be used to estimate the effects of static or dynamic interventions on binary treatments given at baseline, cross-validated initial estimation of treatment propensity is done using the 'SuperLearner' package, and initial estimation of conditional hazards is done using ensembles of Cox regressions from the 'survival' package or Coxnet from the 'glmnet' package.
 License: 
     GPL (>= 3) + file LICENSE
 Imports: 
