@@ -720,9 +720,10 @@ makeModelList <- function(Treatment, EventTime, EventType, UniqueEvents, Model, 
     # Propensity Score Estimators
     for (Trt in Treatment) {
         if (isTRUE(all(inherits(Model[[Trt]], "R6"), 
-                       inherits(Model[[Trt]], "Lrnr_base"), 
-                       requireNamespace("sl3", quietly = TRUE), 
-                       requireNamespace("Rsolnp", quietly = TRUE)))) {
+                       inherits(Model[[Trt]], "Lrnr_base") #, 
+                       # requireNamespace("sl3", quietly = TRUE), 
+                       # requireNamespace("Rsolnp", quietly = TRUE)
+        ))) {
             attr(Model[[Trt]], "Backend") <- "sl3"
         } else if (isTRUE(inherits(Model[[Trt]], "SuperLearner"))) {
             attr(Model[[Trt]], "Backend") <- "SuperLearner"
@@ -973,7 +974,7 @@ print.ConcreteArgs <- function(x, ...) {
             " Estimation (coxph): Discrete SL Selector, Log Partial-LL Loss, ", 
             length(JMod), " candidate", ifelse(length(JMod) > 1, "s", ""), 
             " - ", paste0(head(names(JMod), 5), collapse = ", "), 
-                ifelse(length(JMod) > 5, ", ...", ""), "\n", sep = "")
+            ifelse(length(JMod) > 5, ", ...", ""), "\n", sep = "")
     }
     cat("\n")
     

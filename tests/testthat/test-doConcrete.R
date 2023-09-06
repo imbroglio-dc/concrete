@@ -46,20 +46,20 @@ test_that("doConcrete() runs with competing risks",
               }, regexp = NA)
               
               # using sl3
-              expect_error(object = {
-                  if (requireNamespace("sl3", quietly = TRUE) & requireNamespace("Rsolnp", quietly = TRUE)) {
-                      a_lrnrs <- make_learner(Stack, Lrnr_glm$new(), Lrnr_glmnet$new())
-                      concrete.args.sl3 <- formatArguments(Data = data, EventTime = "time", EventType = "status",
-                                                           Treatment = "trt", ID = "id", Intervention = 0:1,
-                                                           TargetTime = 2500, TargetEvent = NULL, 
-                                                           Model = NULL, Verbose = TRUE, ReturnModels = TRUE)
-                      concrete.args.sl3$Model$trt <- a_lrnrs
-                      concrete.args.sl3 <- formatArguments(concrete.args.sl3)
-                      concrete.est <- doConcrete(ConcreteArgs = concrete.args.sl3)
-                      print(concrete.est)
-                      plot(concrete.est, convergence = FALSE, propscores = TRUE, ask = FALSE)
-                  }
-              }, regexp = NA) 
+              # expect_error(object = {
+              #     if (requireNamespace("sl3", quietly = TRUE) & requireNamespace("Rsolnp", quietly = TRUE)) {
+              #         a_lrnrs <- make_learner(Stack, Lrnr_glm$new(), Lrnr_glmnet$new())
+              #         concrete.args.sl3 <- formatArguments(Data = data, EventTime = "time", EventType = "status",
+              #                                              Treatment = "trt", ID = "id", Intervention = 0:1,
+              #                                              TargetTime = 2500, TargetEvent = NULL, 
+              #                                              Model = NULL, Verbose = TRUE, ReturnModels = TRUE)
+              #         concrete.args.sl3$Model$trt <- a_lrnrs
+              #         concrete.args.sl3 <- formatArguments(concrete.args.sl3)
+              #         concrete.est <- doConcrete(ConcreteArgs = concrete.args.sl3)
+              #         print(concrete.est)
+              #         plot(concrete.est, convergence = FALSE, propscores = TRUE, ask = FALSE)
+              #     }
+              # }, regexp = NA) 
           }
 )
 
@@ -84,19 +84,19 @@ test_that("doConcrete() runs right-censored survival",
                   print(concrete.est, Verbose = FALSE)
                   plot(concrete.est, convergence = TRUE, propscores = FALSE, ask = FALSE)
 
-                  if (requireNamespace("sl3", quietly = TRUE) & requireNamespace("Rsolnp", quietly = TRUE)) {
-                      a_lrnrs <- make_learner(Stack, Lrnr_glm$new(), Lrnr_glmnet$new())
-
-                      concrete.args.sl3 <- formatArguments(Data = data, EventTime = "time", EventType = "status",
-                                                           Treatment = "trt", ID = "id", Intervention = 0:1,
-                                                           TargetTime = 2500, TargetEvent = NULL, MaxUpdateIter = 2,
-                                                           Model = NULL, Verbose = TRUE, ReturnModels = TRUE)
-                      concrete.args.sl3$Model$trt <- a_lrnrs
-                      concrete.args.sl3 <- formatArguments(concrete.args.sl3)
-                      concrete.est <- doConcrete(ConcreteArgs = concrete.args.sl3)
-                      print(concrete.est)
-                      plot(concrete.est, convergence = TRUE, propscores = FALSE, ask = FALSE)
-                  }
+                  # if (requireNamespace("sl3", quietly = TRUE) & requireNamespace("Rsolnp", quietly = TRUE)) {
+                  #     a_lrnrs <- make_learner(Stack, Lrnr_glm$new(), Lrnr_glmnet$new())
+                  # 
+                  #     concrete.args.sl3 <- formatArguments(Data = data, EventTime = "time", EventType = "status",
+                  #                                          Treatment = "trt", ID = "id", Intervention = 0:1,
+                  #                                          TargetTime = 2500, TargetEvent = NULL, MaxUpdateIter = 2,
+                  #                                          Model = NULL, Verbose = TRUE, ReturnModels = TRUE)
+                  #     concrete.args.sl3$Model$trt <- a_lrnrs
+                  #     concrete.args.sl3 <- formatArguments(concrete.args.sl3)
+                  #     concrete.est <- doConcrete(ConcreteArgs = concrete.args.sl3)
+                  #     print(concrete.est)
+                  #     plot(concrete.est, convergence = TRUE, propscores = FALSE, ask = FALSE)
+                  # }
               }, regexp = NA)
           }
 )

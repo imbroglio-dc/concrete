@@ -37,19 +37,19 @@ getPropScore <- function(TrtVal, CovDT, TrtModel, MinNuisance, Regime,
                                               "shuffle" = FALSE,
                                               "validRows" = lapply(CVFolds, function(v) v[["validation_set"]]))
                 TrtFit[[a_i]] <- do.call(SuperLearner, SLArgs)
-            } else if (attr(TrtModel[[a_i]], "Backend") == "sl3") {
-                data <- as.data.frame(cbind(subset(TrtVal, select = 1:a_i), CovDT))
-                TrtTask <- sl3::make_sl3_Task(
-                    data = data,
-                    covariates = setdiff(colnames(data), colnames(TrtVal)[a_i]),
-                    outcome = colnames(TrtVal)[a_i]
-                )
-                if (is.null(TrtModel[[a_i]]$params$learners)) {
-                    TrtSL <- sl3::Lrnr_cv$new(learner = TrtModel[[a_i]], folds = CVFolds)
-                } else {
-                    TrtSL <- sl3::Lrnr_sl$new(learners = TrtModel[[a_i]], folds = CVFolds)
-                }
-                TrtFit[[a_i]] <- TrtSL$train(TrtTask)
+            # } else if (attr(TrtModel[[a_i]], "Backend") == "sl3") {
+            #     data <- as.data.frame(cbind(subset(TrtVal, select = 1:a_i), CovDT))
+            #     TrtTask <- sl3::make_sl3_Task(
+            #         data = data,
+            #         covariates = setdiff(colnames(data), colnames(TrtVal)[a_i]),
+            #         outcome = colnames(TrtVal)[a_i]
+            #     )
+            #     if (is.null(TrtModel[[a_i]]$params$learners)) {
+            #         TrtSL <- sl3::Lrnr_cv$new(learner = TrtModel[[a_i]], folds = CVFolds)
+            #     } else {
+            #         TrtSL <- sl3::Lrnr_sl$new(learners = TrtModel[[a_i]], folds = CVFolds)
+            #     }
+            #     TrtFit[[a_i]] <- TrtSL$train(TrtTask)
             } else {
                 stop("functionality for propensity score estimation not using 'sl3' or ", 
                      "'SuperLearner' has not yet been implemented")
@@ -76,10 +76,10 @@ getPropScore <- function(TrtVal, CovDT, TrtModel, MinNuisance, Regime,
                 g.a <- as.numeric(predict.SuperLearner(object = TrtFit[[a_i]], newdata = newdata)$pred)
                 g.a[a_vec == 0] <- 1 - g.a[a_vec == 0]
                 PropScore <- PropScore * g.a
-            } else if (attr(TrtModel[[a_i]], "Backend") == "sl3") {
-                g.a <- unlist(TrtFit[[a_i]]$predict())
-                g.a[a_vec == 0] <- 1 - g.a[a_vec == 0]
-                PropScore <- PropScore * g.a
+            # } else if (attr(TrtModel[[a_i]], "Backend") == "sl3") {
+            #     g.a <- unlist(TrtFit[[a_i]]$predict())
+            #     g.a[a_vec == 0] <- 1 - g.a[a_vec == 0]
+            #     PropScore <- PropScore * g.a
             } 
         }
         attr(PropScore, "g.star.intervention") <- attr(a, "g.star")(a, CovDT, PropScore, a)

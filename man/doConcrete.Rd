@@ -16,7 +16,7 @@ doConcrete(ConcreteArgs)
 \method{print}{ConcreteOut}(x, ...)
 }
 \arguments{
-\item{ConcreteArgs}{"ConcreteArgs" sl3 object : output of formatArguments()}
+\item{ConcreteArgs}{"ConcreteArgs" object : output of formatArguments()}
 
 \item{x}{a ConcreteOut object}
 

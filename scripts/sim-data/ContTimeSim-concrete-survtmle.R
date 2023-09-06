@@ -230,14 +230,14 @@ if (length(list.files(OutputPath, full.names = TRUE)) < B) {
                                                 SL.trt = sl_lib_g,
                                                 returnIC = TRUE,
                                                 returnModels = TRUE,
-                                                ftypeOfInterest = TargetEvent,
+                                                ftypeOfInterest = sort(setdiff(unique(Data$EVENT), 0)),
                                                 trtOfInterest = c(1, 0),
                                                 method = "hazard",
                                                 verbose = FALSE,
                                                 maxIter = 100,
                                                 Gcomp = FALSE)
-                            survtmleOut <- print(timepoints(object = tmleFit, times = TargetTime))
-                            survtmleOut <- getSurvtmleTbl(survtmleOut, TargetEvent, TargetTime, Bins)
+                            survtmleOut <- getSurvtmleTbl(survtmleOut = print(timepoints(object = tmleFit, times = TargetTime)), 
+                                                          TargetEvent = TargetEvent, TargetTime = TargetTime, Bins = Bins)
                             
                             Stop <- Sys.time()
                             attr(survtmleOut, "time") <- difftime(Stop, Start, units = "mins")

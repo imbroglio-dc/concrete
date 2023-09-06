@@ -1,6 +1,6 @@
 #' doConcrete
 #'
-#' @param ConcreteArgs "ConcreteArgs" sl3 object : output of formatArguments()
+#' @param ConcreteArgs "ConcreteArgs" object : output of formatArguments()
 #'
 # #' @param DataTable: data.table (N x ?)
 # #' @param CovDataTable : data.table (N x ?)
