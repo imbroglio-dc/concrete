@@ -143,47 +143,54 @@ library(data.table)
 library(concrete)
 
 data <- as.data.table(survival::pbc)
+data <- data[1:200, .SD, .SDcols = c("id", "time", "status", "trt", "age", "sex")]
 data[, trt := sample(0:1, nrow(data), TRUE)]
-cols <- c("id", "time", "status", "trt",
-          "age", "albumin", "sex", "bili")
-data <- data[, .SD, .SDcols = cols]
 
 # makeITT() creates a list of functions to specify intent-to-treat
 #   regimes for a binary, single, point treatment variable
 intervention <- makeITT()
-target.time <- 2500
-target.event <- 1:2
+
+# formatArguments() returns correctly formatted arguments for doConcrete()
+#   If no input is provided for the Model argument, a default will be generated
+\donttest{concrete.args <- formatArguments(DataTable = data,
+                                 EventTime = "time",
+                                 EventType = "status",
+                                 Treatment = "trt",
+                                 ID = "id",
+                                 TargetTime = 2500,
+                                 TargetEvent = c(1, 2),
+                                 Intervention = intervention,
+                                 CVArg = list(V = 2))
+
+# Alternatively, estimation algorithms can be provided as a named list
 model <- list("trt" = c("SL.glm", "SL.glmnet"),
               "0" = list(Surv(time, status == 0) ~ .),
               "1" = list(Surv(time, status == 1) ~ .),
               "2" = list(Surv(time, status == 2) ~ .))
-
-# formatArguments() returns correctly formatted arguments for doConcrete()
 concrete.args <- formatArguments(DataTable = data,
                                  EventTime = "time",
                                  EventType = "status",
                                  Treatment = "trt",
                                  ID = "id",
+                                 TargetTime = 2500,
+                                 TargetEvent = c(1, 2),
                                  Intervention = intervention,
-                                 TargetTime = target.time,
-                                 TargetEvent = target.event,
+                                 CVArg = list(V = 2), 
                                  Model = model)
 
-# if formatArguments(Model = NULL), a template will be returned for the user to modify
-# examples of modifying/adding models for censoring and failure events
+# 'ConcreteArgs' output can be modified and passed back through formatArguments()
+# examples of modifying the censoring and failure event candidate regressions
 concrete.args[["Model"]][["0"]] <-
-    list(Surv(time, status == 0) ~ trt:sex + age + bili)
+    list(Surv(time, status == 0) ~ trt:sex + age)
 concrete.args[["Model"]][["1"]] <-
     list("mod1" = Surv(time, status == 1) ~ trt,
          "mod2" = Surv(time, status == 1) ~ .)
+formatArguments(concrete.args)}
 
-#
-# examples of modifying "Superlearner" treatment models
-concrete.args[["Model"]][["trt"]] <- c("SL.glm", "SL.glmnet", "SL.bayesglm")
-
-# examples of modifying "sl3" treatment models
-# library(sl3)
-# concrete.args[["Model"]][["trt"]] <-
-#     make_learner(Stack, Lrnr_hal9001$new(), Lrnr_glmnet$new(), Lrnr_glm$new())
+# examples of specifying "sl3" treatment models
+\dontrun{
+library(sl3)
+concrete.args[["Model"]][["trt"]] <-
+    make_learner(Stack, Lrnr_hal9001$new(), Lrnr_glmnet$new(), Lrnr_glm$new())}
 
 }

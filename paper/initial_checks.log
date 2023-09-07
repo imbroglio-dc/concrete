@@ -1,0 +1,16 @@
+Initial check results: 
+
+SUCCESS: Submission has consistently named tex, bib, and R files
+ERROR: File or directory names contain spaces or non-ASCII characters. For portability only use ASCII characters and no spaces in file and directory names.
+SUCCESS: No problematic file found
+SUCCESS: Possible motivation letter found: motivation-letter.mdSUCCESS: Possible motivation letter found: motivation-letter.pdf
+ERROR: The title is not in title case! Suggest title to be changed to:
+Concrete: An R Package for Continuous-Time, Competing Risks Targeted Maximum Likelihood Estimation
+SUCCESS: All sections are properly formatted in sentence case
+SUCCESS: Abstract comes before the introduction section
+NOTE: A potential list of spelling to check: subdistributions, pseudovalue, estimands, roadmap, estimand, trunctation, coxnet, otherpkgs, positivity, prespecification, counterfactuals, timepoint, exchangeability, cv, trtps, haz, ds, da, limied, vectorized, coxph, concreteargs, concreteest, interpretability, behaviour, grey
+NOTE: No CRAN activities detected for package concrete
+ERROR: 5 of 9 package(s) not available on CRAN: concrete, stremr, survtmle, riskregression, sl3
+
+SUCCESS: 5 | NOTE: 2 | WARNING: 0 | ERROR: 3
+

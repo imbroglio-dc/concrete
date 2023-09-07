@@ -10,3 +10,4 @@
 .covrignore
 .travis.yml
 ..Rcheck
+^paper$

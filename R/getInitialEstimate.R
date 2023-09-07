@@ -16,14 +16,13 @@ getInitialEstimate <- function(Data, Model, CVFolds, MinNuisance, TargetEvent, T
     Censored <- any(Data[[attr(Data, "EventType")]] <= 0)
     
     ## Propensity Scores for Regimes of Interest ----
-    cat("Trt: ")
+    message("\nEstimating Treatment Propensity:\n")
     PropScores <- getPropScore(TrtVal = Data[, .SD, .SDcols = attr(Data, "Treatment")], 
                                CovDT = subset(Data, select = attr(Data, "CovNames")[["ColName"]]), 
                                TrtModel = Model[which(names(Model) %in% attr(Data, "Treatment"))],
                                MinNuisance = MinNuisance, Regime = Regime, CVFolds = CVFolds, 
                                TrtLoss = NULL, ReturnModels = ReturnModels)
     InitFits <- attr(PropScores, "TrtFit")
-    cat("Done\n")
     
     ## hazards: Events & censoring ----
     ## baseline hazards for obs times + target times ----
@@ -31,7 +30,7 @@ getInitialEstimate <- function(Data, Model, CVFolds, MinNuisance, TargetEvent, T
     HazTimes <- HazTimes[HazTimes <= max(TargetTime)]
     Hazards <- data.table("Time" = c(0, HazTimes))
     
-    cat("Hazards: ")
+    message("\nEstimating Hazards:\n")
     HazFits <- getHazFit(Data = Data, Model = Model, CVFolds = CVFolds, Hazards = Hazards, 
                          ReturnModels = ReturnModels)
     InitFits <- c(InitFits, lapply(HazFits, function(HF) return(attr(HF, "HazSL"))))
@@ -59,7 +58,6 @@ getInitialEstimate <- function(Data, Model, CVFolds, MinNuisance, TargetEvent, T
     names(InitialEstimates) <- names(Regime)
     attr(InitialEstimates, "Times") <- Hazards[["Time"]]
     attr(InitialEstimates, "InitFits") <- InitFits
-    cat("Done\n")
     return(InitialEstimates)
 }
 

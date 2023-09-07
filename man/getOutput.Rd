@@ -52,10 +52,34 @@ getOutput
 
 }}
 \examples{
-# getOutput returns risk difference, relative risk, and treatment-specific risks
-# concrete.out <- getOutput(ConcreteEst = concrete.est, Estimand = "RR", Intervention = 1:2)
-# concrete.out$RD
-# concrete.out$RR
-# concrete.out$Risk
+library(data.table)
+library(concrete)
 
+data <- as.data.table(survival::pbc)
+data <- data[1:200, .SD, .SDcols = c("id", "time", "status", "trt", "age", "sex")]
+data[, trt := sample(0:1, nrow(data), TRUE)]
+
+# formatArguments() returns correctly formatted arguments for doConcrete()
+concrete.args <- formatArguments(DataTable = data,
+                                 EventTime = "time",
+                                 EventType = "status",
+                                 Treatment = "trt",
+                                 ID = "id",
+                                 TargetTime = 2500,
+                                 TargetEvent = c(1, 2),
+                                 Intervention = makeITT(),
+                                 CVArg = list(V = 2))
+                                 
+# doConcrete() returns tmle (and g-formula plug-in) estimates of targeted risks
+\donttest{
+concrete.est <- doConcrete(concrete.args)
+
+# getOutput returns risk difference, relative risk, and treatment-specific risks
+#  GComp=TRUE returns g-formula plug-in estimates
+#  Simultaneous=TRUE computes simultaneous CI for all output TMLE estimates 
+concrete.out <- getOutput(concrete.est, Estimand = c("RR", "RD", "Risk"),
+                          GComp = TRUE, Simultaneous = TRUE)
+print(concrete.out)
+plot(concrete.out, ask = FALSE)
+}
 }

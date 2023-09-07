@@ -11,6 +11,7 @@
 #' @useDynLib concrete
 #' @importFrom Rcpp evalCpp
 #' @exportPattern "ˆ[[:alpha:]]+"
+#' @importFrom stats var
 
 getEIC <- function(Estimates, Data, Regime, TargetEvent, TargetTime, MinNuisance, GComp = FALSE) {
     EvalTimes <- attr(Estimates, "Times")
@@ -102,8 +103,9 @@ summarizeIC <- function(IC.a) {
     IC.a <- rbind(IC.a,
                   IC.a[, list("Event" = -1, "IC" = -sum(IC)), by = c("ID", "Time")])
     summIC <- IC.a[, list("PnEIC" = mean(IC), 
-                          "seEIC" = sqrt(mean(IC^2)),
-                          "seEIC/(sqrt(n)log(n))" = sqrt(mean(IC^2)/.N)/log(.N)),
+                          "seEIC" = sqrt(stats::var(IC)),
+                          "seEIC/(sqrt(n)log(n))" = 
+                            sqrt(stats::var(IC)) / (3 * sqrt(.N) * log(.N))),
                    by = c("Time", "Event")]
     return(summIC)
 }

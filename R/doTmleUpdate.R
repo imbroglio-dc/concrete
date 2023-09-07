@@ -53,21 +53,21 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, TargetEvent, TargetTime,
     ## one-step tmle loop starts here ----
     StepNum <- 1
     IterNum <- 1
-    if (!Verbose) {
-        Progress <- utils::txtProgressBar(min = 0, max = 5, initial = 0, style = 3)
-        Q <- 0
-    }
+    # if (!Verbose) {
+    #     Progress <- utils::txtProgressBar(min = 0, max = 5, initial = 0, style = 3)
+    #     Q <- 0
+    # }
     while (StepNum <= MaxUpdateIter & IterNum <= MaxUpdateIter * 2) {
         IterNum <- IterNum + 1
         if (Verbose) {
             cat("Starting step", StepNum, "with update epsilon =", WorkingEps, "\n")
-        } else {
-            # add progress toward PnEIC cutoff ?
-            MaxUpdateIterQuantile <- floor(quantile(1:MaxUpdateIter, probs = .2*(1:5)))
-            if (StepNum %in% MaxUpdateIterQuantile) {
-                Q <- Q + 1
-                utils::setTxtProgressBar(Progress, value = Q)
-            }
+        # } else {
+        #     # add progress toward PnEIC cutoff ?
+        #     MaxUpdateIterQuantile <- floor(quantile(1:MaxUpdateIter, probs = .2*(1:5)))
+        #     if (StepNum %in% MaxUpdateIterQuantile) {
+        #         Q <- Q + 1
+        #         utils::setTxtProgressBar(Progress, value = Q)
+        #     }
         }
         
         ## Get updated hazards and EICs
@@ -102,11 +102,11 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, TargetEvent, TargetTime,
             cbind("Trt" = names(newEsts)[a], newEsts[[a]][["SummEIC"]])}))
         NewNormPnEIC <- getNormPnEIC(NewSummEIC[Time %in% TargetTime & Event %in% TargetEvent, PnEIC])
         
+        # TMLE update breaking because Survival -> 0?
         if(anyNA(NewNormPnEIC)) browser()
         
         if (NormPnEIC < NewNormPnEIC) {
-            if (Verbose)
-                cat("Update increased ||PnEIC||, halving OneStepEps\n")
+            if (Verbose) cat("Update increased ||PnEIC||, halving OneStepEps\n")
             WorkingEps <- WorkingEps / 2
             next
         }

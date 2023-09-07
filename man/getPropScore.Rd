@@ -2,7 +2,7 @@
 % Please edit documentation in R/getPropScore.R
 \name{getPropScore}
 \alias{getPropScore}
-\title{Title}
+\title{getPropScore}
 \usage{
 getPropScore(
   TrtVal,
@@ -33,5 +33,5 @@ getPropScore(
 \item{ReturnModels}{boolean}
 }
 \description{
-Title
+getPropScore
 }

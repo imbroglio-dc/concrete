@@ -1,10 +1,10 @@
 # all models are simulated from underlying Weibull distribution
 
 simConCR <- function(interval = 1:2e3,
-                     ltfu_coefs = c(1.5e-4, 1, 2, 2),
+                     ltfu_coefs = c(1.5e-4, 1, 5, 10),
                      eos_coefs = c("eos_start_time" = 1460, "eos_end_time" = 2000),
                      t1_coefs = c(7.5e-5, 1, 2, 1.2, 2, 1.2),
-                     t2_coefs = c(1.5e-5, 1.3, 2.75, 1.75, 2),
+                     t2_coefs = c(1.5e-5, 1.3, 5, 3, 1),
                      t3_coefs = c(0, 1),
                      n = 1e3,
                      assign_A = function(W, n) rbinom(n, 1, 0.5),

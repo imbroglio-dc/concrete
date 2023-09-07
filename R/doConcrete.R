@@ -1,5 +1,4 @@
 #' doConcrete
-#'
 #' @param ConcreteArgs "ConcreteArgs" object : output of formatArguments()
 #'
 # #' @param DataTable: data.table (N x ?)
@@ -29,41 +28,26 @@
 #'
 #' @examples
 #' library(data.table)
-#' library(survival)
-#' data <- as.data.table(survival::pbc)
-#' data[, trt := sample(0:1, nrow(data), TRUE)]
-#' cols <- c("id", "time", "status", "trt",
-#'           "age", "albumin", "sex", "bili")
-#' data <- data[, .SD, .SDcols = cols]
+#' library(concrete)
 #' 
-#' intervention <- makeITT()
-#' target.time <- 2500
-#' target.event <- 1:2
-#' model <- list("trt" = c("SL.glm", "SL.glmnet"),
-#'               "0" = list(Surv(time, status == 0) ~ .),
-#'               "1" = list(Surv(time, status == 1) ~ .),
-#'               "2" = list(Surv(time, status == 2) ~ .))
+#' data <- as.data.table(survival::pbc)
+#' data <- data[1:200, .SD, .SDcols = c("id", "time", "status", "trt", "age", "sex")]
+#' data[, trt := sample(0:1, nrow(data), TRUE)]
 #' 
 #' # formatArguments() returns correctly formatted arguments for doConcrete()
-#' concrete.args <- formatArguments(Data = data,
+#' 
+#' concrete.args <- formatArguments(DataTable = data,
 #'                                  EventTime = "time",
 #'                                  EventType = "status",
 #'                                  Treatment = "trt",
 #'                                  ID = "id",
-#'                                  Intervention = intervention,
-#'                                  TargetTime = target.time,
-#'                                  TargetEvent = target.event,
-#'                                  Model = model,
-#'                                  Verbose = FALSE)
-#' 
-#' # doConcrete() returns tmle (and g-comp plug-in) estimates of targeted risks
-#' # concrete.est <- doConcrete(concrete.args)
-#' 
-#' # getOutput returns risk difference, relative risk, and treatment-specific risks
-#' # concrete.out <- getOutput(concrete.est, Estimand = c("rd", "rr", "risk"))
-#' # concrete.out$RD
-#' # concrete.out$RR
-#' # concrete.out$Risk
+#'                                  TargetTime = 2500,
+#'                                  TargetEvent = c(1, 2),
+#'                                  Intervention = makeITT(),
+#'                                  CVArg = list(V = 2))
+#'                                  
+#' # doConcrete() returns tmle (and g-formula plug-in) estimates of targeted risks
+#' \donttest{concrete.est <- doConcrete(concrete.args)}
 
 doConcrete <- function(ConcreteArgs) {
     if (!inherits(ConcreteArgs, "ConcreteArgs")) {
@@ -82,7 +66,6 @@ doConCRTmle <- function(DataTable, TargetTime, TargetEvent, Regime, CVFolds, Mod
     ratio <- Time <- Event <- PnEIC <- `seEIC/(sqrt(n)log(n))` <- NULL # for data.table compatibility w/ global var binding check
     
     # initial estimation ------------------------------------------------------------------------
-    cat("Getting Initial Estimates:\n")
     Estimates <- getInitialEstimate(Data = DataTable, Model = Model, CVFolds = CVFolds, 
                                     MinNuisance = MinNuisance, TargetEvent = TargetEvent, 
                                     TargetTime = TargetTime, Regime = Regime, 
@@ -107,7 +90,7 @@ doConCRTmle <- function(DataTable, TargetTime, TargetEvent, Regime, CVFolds, Mod
     if (Verbose) printOneStepDiagnostics(OneStepStop, NormPnEIC)
     
     ## one-step tmle loop (one-step) ----
-    cat("\nStarting TMLE Update:\n")
+    message("\nStarting TMLE Update:\n")
     if (!all(sapply(OneStepStop[["check"]], isTRUE))) {
         Estimates <- doTmleUpdate(Estimates = Estimates, SummEIC = SummEIC, Data = DataTable,
                                   TargetEvent = TargetEvent, TargetTime = TargetTime,
@@ -124,7 +107,6 @@ doConCRTmle <- function(DataTable, TargetTime, TargetEvent, Regime, CVFolds, Mod
     attr(Estimates, "Delta") <- DataTable[[attr(DataTable, "EventType")]]
     attr(Estimates, "GComp") <- GComp
     class(Estimates) <- union("ConcreteEst", class(Estimates))
-    print.ConcreteEst(Estimates, Verbose = Verbose)
     return(Estimates)
 }
 

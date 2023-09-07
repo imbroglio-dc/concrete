@@ -1,5 +1,4 @@
-
-#' Title
+#' getPropScore
 #'
 #' @param TrtVal numeric vector
 #' @param CovDT data.table
@@ -15,6 +14,8 @@
 
 getPropScore <- function(TrtVal, CovDT, TrtModel, MinNuisance, Regime, 
                          CVFolds, TrtLoss = NULL, ReturnModels) {
+    old <- options()
+    on.exit(options(old))
     options(warn = 0)
     
     if (all(sapply(TrtModel, function(a) inherits(a, "SuperLearner")))) {
@@ -93,7 +94,6 @@ getPropScore <- function(TrtVal, CovDT, TrtModel, MinNuisance, Regime,
         attr(PropScores, "TrtFit") <- "TrtFits not saved because `ReturnModels' was set = FALSE"
     }
     attr(PropScores, "warnings") <- summary(warnings())
-    last.warning <- NULL
     return(PropScores)
 }
 

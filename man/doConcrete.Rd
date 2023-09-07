@@ -45,39 +45,24 @@ doConcrete
 }}
 \examples{
 library(data.table)
-library(survival)
-data <- as.data.table(survival::pbc)
-data[, trt := sample(0:1, nrow(data), TRUE)]
-cols <- c("id", "time", "status", "trt",
-          "age", "albumin", "sex", "bili")
-data <- data[, .SD, .SDcols = cols]
+library(concrete)
 
-intervention <- makeITT()
-target.time <- 2500
-target.event <- 1:2
-model <- list("trt" = c("SL.glm", "SL.glmnet"),
-              "0" = list(Surv(time, status == 0) ~ .),
-              "1" = list(Surv(time, status == 1) ~ .),
-              "2" = list(Surv(time, status == 2) ~ .))
+data <- as.data.table(survival::pbc)
+data <- data[1:200, .SD, .SDcols = c("id", "time", "status", "trt", "age", "sex")]
+data[, trt := sample(0:1, nrow(data), TRUE)]
 
 # formatArguments() returns correctly formatted arguments for doConcrete()
-concrete.args <- formatArguments(Data = data,
+
+concrete.args <- formatArguments(DataTable = data,
                                  EventTime = "time",
                                  EventType = "status",
                                  Treatment = "trt",
                                  ID = "id",
-                                 Intervention = intervention,
-                                 TargetTime = target.time,
-                                 TargetEvent = target.event,
-                                 Model = model,
-                                 Verbose = FALSE)
-
-# doConcrete() returns tmle (and g-comp plug-in) estimates of targeted risks
-# concrete.est <- doConcrete(concrete.args)
-
-# getOutput returns risk difference, relative risk, and treatment-specific risks
-# concrete.out <- getOutput(concrete.est, Estimand = c("rd", "rr", "risk"))
-# concrete.out$RD
-# concrete.out$RR
-# concrete.out$Risk
+                                 TargetTime = 2500,
+                                 TargetEvent = c(1, 2),
+                                 Intervention = makeITT(),
+                                 CVArg = list(V = 2))
+                                 
+# doConcrete() returns tmle (and g-formula plug-in) estimates of targeted risks
+\donttest{concrete.est <- doConcrete(concrete.args)}
 }
