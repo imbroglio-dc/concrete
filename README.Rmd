@@ -1,3 +1,17 @@
+---
+output: github_document
+---
+
+<!-- README.md is generated from README.Rmd. Please edit that file -->
+
+```{r, echo = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "README-"
+)
+```
+
 # concrete
 [![CRAN](http://www.r-pkg.org/badges/version/concrete)](http://www.r-pkg.org/pkg/concrete)
 [![R-CMD-check](https://github.com/imbroglio-dc/concrete/workflows/R-CMD-check/badge.svg)](https://github.com/imbroglio-dc/concrete/actions)
