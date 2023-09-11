@@ -187,10 +187,4 @@ concrete.args[["Model"]][["1"]] <-
          "mod2" = Surv(time, status == 1) ~ .)
 formatArguments(concrete.args)}
 
-# examples of specifying "sl3" treatment models
-\dontrun{
-library(sl3)
-concrete.args[["Model"]][["trt"]] <-
-    make_learner(Stack, Lrnr_hal9001$new(), Lrnr_glmnet$new(), Lrnr_glm$new())}
-
 }

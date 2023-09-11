@@ -128,7 +128,7 @@ getNormPnEIC <- function(PnEIC, Sigma = NULL) {
 #' @param ... additional arguments to be passed into print methods
 #' @exportS3Method print ConcreteEst
 print.ConcreteEst <- function(x, ...) {
-    `.` <- `..a` <- `Pt Est` <- se <- PnEIC <- `abs(PnEIC / Stop Criteria)` <- `seEIC/(sqrt(n)log(n))` <- NULL
+    `.` <- `..a` <- `Pt Est` <- se <- PnEIC <- `|Pn EIC| / Stop Criteria` <- `seEIC/(sqrt(n)log(n))` <- NULL
     cat("Continuous-Time One-Step TMLE targeting the Cause-Specific Absolute Risks for:\n")
     cat("Intervention", ifelse(length(x) > 1, "s", ""), ": ", 
         paste0("\"", names(x), "\"", collapse = ", "), "  |  ", sep = "")
@@ -151,11 +151,11 @@ print.ConcreteEst <- function(x, ...) {
         Risks <- rbind(Risks, Risks[, list("Event" = -1, "Pt Est" = 1 - sum(`Pt Est`), 
                                            "se" = sqrt(sum(se^2))), by = c("Intervention", "Time")])
         PnEICs <- merge(PnEICs, Risks, by = c("Intervention", "Time", "Event"))
-        PnEICs[, "abs(PnEIC / Stop Criteria)" := abs(PnEIC / `seEIC/(sqrt(n)log(n))`)]
-        PnEICs <- PnEICs[`abs(PnEIC / Stop Criteria)` > 1, .SD, 
+        PnEICs[, "|Pn EIC| / Stop Criteria" := abs(PnEIC / `seEIC/(sqrt(n)log(n))`)]
+        PnEICs <- PnEICs[`|Pn EIC| / Stop Criteria` > 1, .SD, 
                          .SDcols = c("Intervention", "Time", "Event", "Pt Est", "se", "PnEIC", 
-                                     "abs(PnEIC / Stop Criteria)")]
-        print(PnEICs[order(`abs(PnEIC / Stop Criteria)`, decreasing = TRUE), ], digits = 4)
+                                     "|Pn EIC| / Stop Criteria")]
+        print(PnEICs[order(`|Pn EIC| / Stop Criteria`, decreasing = TRUE), ], digits = 4)
         cat("\n")
     }
     

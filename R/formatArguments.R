@@ -134,12 +134,6 @@
 #'          "mod2" = Surv(time, status == 1) ~ .)
 #' formatArguments(concrete.args)}
 #'
-#' # examples of specifying "sl3" treatment models
-#' \dontrun{
-#' library(sl3)
-#' concrete.args[["Model"]][["trt"]] <-
-#'     make_learner(Stack, Lrnr_hal9001$new(), Lrnr_glmnet$new(), Lrnr_glm$new())}
-#'
 #' @export formatArguments
 #' @export makeITT
 
@@ -284,7 +278,7 @@ formatDataTable <- function(DT, EventTime, EventType, Treatment, ID, LongTime, V
   nEff <- length(unique(DT[[ID]]))
   LongTime <- NULL # LongTime <- getLongTime(LongTime = LongTime, DataTable = DT)
   
-  OrigCovDT <- attr(DT, "OrigCovDT")
+  # OrigCovDT <- attr(DT, "OrigCovDT")
   SpecialCols <- c(ID, EventTime, EventType, Treatment, LongTime)
   CovNames <- setdiff(colnames(DT), SpecialCols)
   
@@ -299,7 +293,7 @@ formatDataTable <- function(DT, EventTime, EventType, Treatment, ID, LongTime, V
                                Verbose = Verbose)
       DT <- cbind(DT[, .SD, .SDcols = SpecialCols], CovDT)
       attr(DT, "CovNames") <- attr(CovDT, "CovNames")
-      OrigCovDT <- attr(CovDT, "OrigCovDT")
+      # OrigCovDT <- attr(CovDT, "OrigCovDT")
     }
   } else {
     if (is.null(attr(DT, "CovNames")))
@@ -314,8 +308,8 @@ formatDataTable <- function(DT, EventTime, EventType, Treatment, ID, LongTime, V
                   LongTime = LongTime,
                   ID = ID, 
                   nEff = nEff,
-                  RenameCovs = RenameCovs, 
-                  OrigCovDT = OrigCovDT)
+                  RenameCovs = RenameCovs) #, 
+                  # OrigCovDT = OrigCovDT)
   setcolorder(DT, SpecialCols)
   return(DT)
 }
@@ -427,21 +421,24 @@ getCovDataTable <- function(DataTable, EventTime, EventType, Treatment, ID, Long
   # if (Verbose) try(superheat::superheat(cov(scale(model.matrix(~., CovDT1Hot)))))
   
   attr(CovDT1Hot, "CovNames") <- CovNames1Hot
-  attr(CovDT1Hot, "OrigCovDT") <- CovDT
+  # attr(CovDT1Hot, "OrigCovDT") <- CovDT
   return(CovDT1Hot)
 }
 
 getRegime <- function(Intervention, Data) {
   TrtVal <- Data[, .SD, .SDcols = attr(Data, "Treatment")]
-  CovDT <- attr(Data, "OrigCovDT")
+  CovDT <- Data[, .SD, .SDcols = attr(Data, "CovNames")[["ColName"]]]
+  # CovDT <- attr(Data, "OrigCovDT")
   if (all(Intervention %in% c(0, 1), length(Intervention) %in% c(1, 2)))
     Intervention <- makeITT()[c("1", "0") %in% try(as.character(Intervention))]
   if (is.list(Intervention)) {
-    Regimes <- lapply(seq_along(Intervention), function(i) {
       if (inherits(Intervention, "concreteIntervention") | 
-          all(length(Intervention) %in% c(1, 2), sapply(Intervention, is.function))) {
-        Intervention <- list(Intervention)
+          all(length(Intervention) %in% c(1, 2), 
+              sapply(Intervention, is.function), 
+              length(setdiff(names(Intervention), c("intervention", "g.star"))) == 0)) {
+          Intervention <- list(Intervention)
       }
+    Regimes <- lapply(seq_along(Intervention), function(i) {
       Regime <- Intervention[[i]]
       
       if (is.null(names(Intervention))) {
@@ -514,7 +511,7 @@ getRegime <- function(Intervention, Data) {
       }
       if (is.null(attr(RegimeVal, "g.star"))) {
         attr(RegimeVal, "g.star") <- function(Treatment, Covariates, PropScore, Intervened) {
-          Probability <- data.table(1 * sapply(1:nrow(Treatment), function(i) 
+          Probability <- data.table::data.table(1 * sapply(1:nrow(Treatment), function(i) 
             all(Treatment[i, ] == Intervened[i, ])))
           return(Probability)
         }
@@ -800,6 +797,12 @@ getMinNuisance <- function(MinNuisance = 0.05) {
 }
 
 #' @describeIn formatArguments makeITT ...
+#' # ObservedTrt : data.table containing treatment columns with observed treatment values
+#' # Covariates : data.table containing baseline covariates
+#' # PropScore : data.table with the same names and dimensions as ObservedTrt containing propensity scores
+#' # Intervened: data.table with the same names and dimensions as ObservedTrt containing intervened treatment values
+#' # Treatment: data.table with the same names and dimensions as ObservedTrt containing treatment assignments that the g.star() function is to compute propensity scores for
+#' # Probability : data.table with 1 column containing the propensity scores for each subject
 makeITT <- function(...) {
   Intrv <- list(...)
   if (length(Intrv) == 0) {
@@ -810,7 +813,7 @@ makeITT <- function(...) {
       return(Intervened)
     },
     "g.star" = function(Treatment, Covariates, PropScore, Intervened) {
-      Probability <- data.table(1 * sapply(1:nrow(Treatment), function(i) 
+      Probability <- data.table::data.table(1 * sapply(1:nrow(Treatment), function(i) 
         all(Treatment[i, ] == Intervened[i, ])))
       return(Probability)
     }),
@@ -821,7 +824,7 @@ makeITT <- function(...) {
       return(Intervened)
     },
     "g.star" = function(Treatment, Covariates, PropScore, Intervened) {
-      Probability <- data.table(1 * sapply(1:nrow(Treatment), function(i) 
+      Probability <- data.table::data.table(1 * sapply(1:nrow(Treatment), function(i) 
         all(Treatment[i, ] == Intervened[i, ])))
       return(Probability)
     }))
@@ -839,7 +842,7 @@ makeITT <- function(...) {
       },
       "g.star" = function(Treatment, Covariates, PropScore, Intervened) 
       {
-        Probability <- data.table(1 * sapply(1:nrow(Treatment), function(i) 
+        Probability <- data.table::data.table(1 * sapply(1:nrow(Treatment), function(i) 
           all(Treatment[i, ] == Intervened[i, ])))
         return(Probability)
       })

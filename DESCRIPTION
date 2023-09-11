@@ -1,7 +1,7 @@
 Package: concrete
 Type: Package
 Title: Continuous-Time Competing Risks Estimation using Targeted Minimum Loss-Based Estimation (TMLE)
-Version: 1.0.4
+Version: 1.0.5
 Date: 2023-09-07
 Author: David Chen [aut, cre] (<https://orcid.org/0000-0002-9413-8152>)
 Authors@R: 
