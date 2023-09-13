@@ -22,18 +22,17 @@ competing risks.
 
 ## Installation
 
-For standard use, we recommend installing the package from
-[CRAN](https://cran.r-project.org/) via
-
-``` r
-install.packages("concrete")
-```
-
-You can install a stable release of `concrete` from GitHub via
-[`devtools`](https://www.rstudio.com/products/rpackages/devtools/) with:
+`concrete` is under active development, so we recommend installing the 
+latest release from Github via [`devtools`](https://www.rstudio.com/products/rpackages/devtools/) with:
 
 ``` r
 devtools::install_github("imbroglio-dc/concrete")
+```
+
+You can download the latest stable release of `concrete` from [CRAN](https://cran.r-project.org/) via
+
+``` r
+install.packages("concrete")
 ```
 
 ------------------------------------------------------------------------
