@@ -797,12 +797,12 @@ getMinNuisance <- function(MinNuisance = 0.05) {
 }
 
 #' @describeIn formatArguments makeITT ...
-#' # ObservedTrt : data.table containing treatment columns with observed treatment values
-#' # Covariates : data.table containing baseline covariates
-#' # PropScore : data.table with the same names and dimensions as ObservedTrt containing propensity scores
-#' # Intervened: data.table with the same names and dimensions as ObservedTrt containing intervened treatment values
-#' # Treatment: data.table with the same names and dimensions as ObservedTrt containing treatment assignments that the g.star() function is to compute propensity scores for
-#' # Probability : data.table with 1 column containing the propensity scores for each subject
+# ObservedTrt : data.table containing treatment columns with observed treatment values
+# Covariates : data.table containing baseline covariates
+# PropScore : data.table with the same names and dimensions as ObservedTrt containing propensity scores
+# Intervened: data.table with the same names and dimensions as ObservedTrt containing intervened treatment values
+# Treatment: data.table with the same names and dimensions as ObservedTrt containing treatment assignments that the g.star() function is to compute propensity scores for
+# Probability : data.table with 1 column containing the propensity scores for each subject
 makeITT <- function(...) {
   Intrv <- list(...)
   if (length(Intrv) == 0) {

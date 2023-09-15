@@ -105,7 +105,7 @@ summarizeIC <- function(IC.a) {
     summIC <- IC.a[, list("PnEIC" = mean(IC), 
                           "seEIC" = sqrt(stats::var(IC)),
                           "seEIC/(sqrt(n)log(n))" = 
-                            sqrt(stats::var(IC)) / (3 * sqrt(.N) * log(.N))),
+                            sqrt(stats::var(IC)) / (sqrt(.N) * log(.N))),
                    by = c("Time", "Event")]
     return(summIC)
 }

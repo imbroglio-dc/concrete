@@ -47,13 +47,13 @@ risks %>% mutate(Event = factor(Event)) %>%
 
 # simulation --------------------------------------------------------------
 
+B <- 1000
 OutputPath <- paste0(concrete.dir, "scripts/sim-data/sim-out/")
 
 if (length(list.files(OutputPath, full.names = TRUE)) < B) {
   library(foreach)
   library(doParallel)
   n_cores <- min(parallel::detectCores(), 12)
-  B <- 1000
   j <- 0
   set.seed(0)
   seeds <- sample(0:12345678, size = B)
@@ -443,19 +443,42 @@ for (i in seq_along(Output)) {
 meta[, 2:4] <- meta[, 2:4] / length(Output)
 meta
 
-# estimates <- rbind(estimates,
-#                    estimates[, list("Intervention" = "RD",
-#                                     "Pt Est" = `Pt Est`[Intervention == "A=1"] - `Pt Est`[Intervention == "A=0"],
-#                                     "se" = sqrt(se[Intervention == "A=1"]^2 + se[Intervention == "A=0"]^2)),
-#                              by = c("iter", "Package", "Estimator", "Event", "Time")],
-#                    estimates[, list("Intervention" = "RR",
-#                                     "Pt Est`" = `Pt Est`[Intervention == "A=1"] / `Pt Est`[Intervention == "A=0"],
-#                                     "se" = sqrt((se[Intervention == "A=1"] / `Pt Est`[Intervention == "A=0"])^2 +
-#                                                     (se[Intervention == "A=0"] * `Pt Est`[Intervention == "A=1"] /
-#                                                          `Pt Est`[Intervention == "A=0"]^2)^2)),
-#                              by = c("iter", "Package", "Estimator", "Event", "Time")], 
-#                    fill = TRUE)
+# True Risks --------------------------------------------------------------
 
+TargetTimes <- sort(unique(estimates[["Time"]]))
+
+risks1 <- cbind("Intervention" = "A=1",
+                getTrueRisks(target_time = TargetTimes, 
+                             n = 2.5e3, assign_A = function(W, n) return(rep_len(1, n)), 
+                             parallel = TRUE, rep = 80)); gc()
+risks0 <- cbind("Intervention" = "A=0",
+                getTrueRisks(target_time = TargetTimes, 
+                             n = 2.5e3, assign_A = function(W, n) return(rep_len(0, n)), 
+                             parallel = TRUE, rep = 80)); gc()
+risks <- melt(rbind(risks1, risks0), id.vars = c("Intervention", "Time"), 
+              variable.name = "Event", value.name = "True") 
+risks <- rbind(risks, 
+               risks[, list("Intervention" = "RD",
+                            "True" = True[Intervention == "A=1"] - True[Intervention == "A=0"]),
+                     by = c("Event", "Time")],
+               risks[, list("Intervention" = "RR",
+                            "True" = True[Intervention == "A=1"] / True[Intervention == "A=0"]),
+                     by = c("Event", "Time")])
+
+estimates <- rbind(estimates,
+                   estimates[, list("Intervention" = "RD",
+                                    "Pt Est" = `Pt Est`[Intervention == "A=1"] - `Pt Est`[Intervention == "A=0"],
+                                    "se" = sqrt(se[Intervention == "A=1"]^2 + se[Intervention == "A=0"]^2)),
+                             by = c("iter", "Package", "Estimator", "Event", "Time")],
+                   estimates[, list("Intervention" = "RR",
+                                    "Pt Est" = `Pt Est`[Intervention == "A=1"] / `Pt Est`[Intervention == "A=0"],
+                                    "se" = sqrt((se[Intervention == "A=1"] / `Pt Est`[Intervention == "A=0"])^2 +
+                                                  (se[Intervention == "A=0"] * `Pt Est`[Intervention == "A=1"] /
+                                                     `Pt Est`[Intervention == "A=0"]^2)^2)),
+                             by = c("iter", "Package", "Estimator", "Event", "Time")],
+                   fill = TRUE)
+
+# # for including contmle
 # estimates <- rbind(estimates,
 #                    do.call(rbind, lapply(seq_along(Output), function(iter) {
 #                        if (inherits(Output[[iter]]$contmle, "data.frame")) {
@@ -468,23 +491,9 @@ meta
 #                    })))
 
 
-# True Risks --------------------------------------------------------------
 
-TargetTimes <- sort(unique(estimates[["Time"]]))
-
-risks1 <- cbind("Intervention" = "A=1",
-                getTrueRisks(target_time = TargetTimes, 
-                             n = 2.5e5, assign_A = function(W, n) return(rep_len(1, n)), 
-                             parallel = TRUE, rep = 80)); gc()
-risks0 <- cbind("Intervention" = "A=0",
-                getTrueRisks(target_time = TargetTimes, 
-                             n = 2.5e5, assign_A = function(W, n) return(rep_len(0, n)), 
-                             parallel = TRUE, rep = 80)); gc()
-risks <- melt(rbind(risks1, risks0), id.vars = c("Intervention", "Time"), 
-              variable.name = "Event", value.name = "True")
-
-perf <- left_join(estimates[, Event := as.factor(Event)], 
-                  risks, by = c("Intervention", "Event", "Time")) %>% 
+estimates <- left_join(estimates[, Event := as.factor(Event)], 
+                       risks, by = c("Intervention", "Event", "Time")) %>% 
   .[, list(`Pt Est` = mean(`Pt Est`), se = mean(se),
            l = quantile(`Pt Est`, 0.025), u = quantile(`Pt Est`, 0.975), 
            True = mean(True), Bias = mean(`Pt Est` - True), 
@@ -493,7 +502,8 @@ perf <- left_join(estimates[, Event := as.factor(Event)],
            l.se = mean(`Pt Est`) - 1.96*mean(se), 
            u.se = mean(`Pt Est`) + 1.96*mean(se)),
     by = c("Package", "Intervention", "Estimator", "Event", "Time")]
-# rm(list = c("risks0", "risks1", "risks")); gc()
+
+# plots -------------------------------------------------------------------
 
 melt(perf[, Time := as.numeric(Time)][, Bias := abs(Bias)], 
      id.vars = c("Package", "Intervention", "Estimator", "Event", "Time"), 

@@ -218,21 +218,23 @@ getSimultaneous <- function(ConcreteEst, Output, EstimandType, Intervention, Sig
   if (exists("RDICs")) ICs <- rbind(ICs, RDICs)
   if (exists("RRICs")) ICs <- rbind(ICs, RRICs)
   
-  ICs <- dcast(ICs, ID ~ Intervention + Time + Event, value.var = "IC")[, !c("ID")]
-  CovEIC <- cov(ICs)
+  ICs <- dcast(ICs[, Time := as.character(Time)], 
+               ID ~ Intervention + Time + Event, value.var = "IC")[, !c("ID")]
+  CovEIC <- cov(subset(ICs, select = sapply(1:ncol(ICs), function(j) !(max(unlist(ICs[[j]])) == 0))))
   CovEIC[is.na(CovEIC)] <- 1e-9
-  CorrEIC <- cor(ICs)
+  CorrEIC <- cor(subset(ICs, select = sapply(1:ncol(ICs), function(j) !(max(unlist(ICs[[j]])) == 0))))
   n <- length(attr(ConcreteEst, "T.tilde"))
   
   q <- apply(abs(MASS::mvrnorm(n = 1e3, mu = rep(0, nrow(CorrEIC)), Sigma = CorrEIC)), 1, max)
   q <- as.numeric(stats::quantile(q, 1 - Signif))
-  se <- data.table(names = rownames(CovEIC), SimQ = q)
+  se <- data.table(names = rownames(CorrEIC), SimQ = q)
   se[, c("Intervention", "Time", "Event") := tstrsplit(names, "_")]
-  se[, Estimator := "tmle"][, Event := as.numeric(Event)][, Time := as.numeric(Time)]
+  se[, Estimator := "tmle"][, Event := as.numeric(Event)]
   se[Intervention == "Rel Risk", Intervention := paste0("[", A1, "] / [", A0, "]")]
   se[Intervention == "Risk Diff", Intervention := paste0("[", A1, "] - [", A0, "]")]
+  Output[, NumTime := Time][, Time := as.character(Time)]
   simCI <- merge(Output, se, c("Intervention", "Estimator", "Event", "Time"), all.x = TRUE)
-  simCI[, "SimCI Low" := `Pt Est` - se*SimQ][, "SimCI Hi" := `Pt Est` + se*SimQ]
+  simCI[, Time := NumTime][, "SimCI Low" := `Pt Est` - se*SimQ][, "SimCI Hi" := `Pt Est` + se*SimQ]
   simCI <- subset(simCI, select = c("Intervention", "Estimand", "Estimator", "Event", "Time", 
                                     "Pt Est", "se","CI Low", "CI Hi", "SimCI Low", "SimCI Hi"))
   return(simCI)
@@ -243,7 +245,8 @@ getSimultaneous <- function(ConcreteEst, Output, EstimandType, Intervention, Sig
 #' @param ... additional arguments to be passed into print methods
 #' @exportS3Method print ConcreteOut
 print.ConcreteOut <- function(x, ...) {
-  num.cols <- c("Pt Est", "se", "CI Low", "CI Hi", "SimCI Low", "SimCI Hi")
+  num.cols <- intersect(c("Pt Est", "se", "CI Low", "CI Hi", "SimCI Low", "SimCI Hi"), 
+                    colnames(x))
   dt <- x[, (num.cols) := lapply(.SD, function(y) signif(y, 2)), .SDcols = num.cols]
   NextMethod(generic = "print", object = dt)
 }
