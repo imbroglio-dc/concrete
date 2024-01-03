@@ -1,10 +1,10 @@
 # all models are simulated from underlying Weibull distribution
 
 simConCR <- function(interval = 1:2e3,
-                     ltfu_coefs = c(1.5e-4, 1, 5, 10),
+                     ltfu_coefs = c(7.5e-5, 1, 4, 4),
                      eos_coefs = c("eos_start_time" = 1460, "eos_end_time" = 2000),
                      t1_coefs = c(7.5e-5, 1, 2, 1.2, 2, 1.2),
-                     t2_coefs = c(1.5e-5, 1.3, 5, 3, 1),
+                     t2_coefs = c(1.5e-5, 1.3, 2, 2, 1.4),
                      t3_coefs = c(0, 1),
                      n = 1e3,
                      assign_A = function(W, n) rbinom(n, 1, 0.5),
@@ -52,8 +52,8 @@ simConCR <- function(interval = 1:2e3,
     ltfu_fn <- function(ARM, BMIBL, MIFL, params, output = c("h.t", "S.t", "F_inv.u"), t = NULL, u = NULL) {
         B <- params[1]
         k <- params[2]
-        b_1 <- log(params[3]) * as.numeric(ARM == 0) * as.numeric(BMIBL > 30)
-        b_2 <- log(params[4]) * as.numeric(ARM == 1) * as.numeric(MIFL)
+        b_1 <- log(params[3]) * as.numeric(BMIBL > 30) # * as.numeric(ARM == 0) 
+        b_2 <- log(params[4]) * as.numeric(MIFL) # * as.numeric(ARM == 1) 
         phi <- exp(b_1 + b_2)
         
         return(return_weibull_outputs(phi, B, k, output, t, u))
@@ -79,9 +79,9 @@ simConCR <- function(interval = 1:2e3,
         B <- params[1]
         k <- params[2]
         b1 <- log(params[3]) * as.numeric(SMOKER)
-        b2 <- log(params[4]) * as.numeric(ARM == 0) * as.numeric(SMOKER)
+        b2 <- log(params[4]) * as.numeric(ARM == 0) # * as.numeric(SMOKER)
         b3 <- log(params[5]) * as.numeric(BMIBL > 30)
-        b4 <- log(params[6]) * as.numeric(ARM == 0) * as.numeric(BMIBL > 30)
+        b4 <- log(params[6]) * as.numeric(ARM == 0) # * as.numeric(BMIBL > 30)
         phi <- exp(b1 + b2 + b3 + b4)
         
         return(return_weibull_outputs(phi, B, k, output, t, u))
@@ -92,9 +92,9 @@ simConCR <- function(interval = 1:2e3,
                       output = c("h.t", "S.t", "F_inv.u"), t = NULL, u = NULL) {
         B <- params[1]
         k <- params[2]
-        b1 <- log(params[3]) * as.numeric(ARM == 0) * as.numeric(STROKSFL)
-        b2 <- log(params[4]) * as.numeric(ARM == 1) * as.numeric(MIFL)
-        b3 <- log(params[5]) * as.numeric(STROKSFL) * as.numeric(MIFL)
+        b1 <- log(params[3]) * as.numeric(STROKSFL) # * as.numeric(ARM == 0)
+        b2 <- log(params[4]) * as.numeric(MIFL) # * as.numeric(ARM == 1)
+        b3 <- log(params[5]) * as.numeric(ARM == 1) # as.numeric(STROKSFL) * as.numeric(MIFL)
         phi <- exp(b1 + b2 + b3)
         
         return(return_weibull_outputs(phi, B, k, output, t, u))
@@ -199,5 +199,6 @@ getTrueRisks <- function(target_time = 1:2000,
             }
         }
     }
+    risks <- subset(risks, select = apply(risks, 2, function(j) max(j) > 0))
     return(cbind("Time" = target_time, risks / (n * rep)))
 }

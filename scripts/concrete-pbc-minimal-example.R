@@ -5,22 +5,28 @@ set.seed(12345)
 data <- as.data.table(survival::pbc)
 data <- data[!is.na(trt), ][, trt := trt - 1]
 data <- data[, c("time", "status", "trt", "age", "sex", "albumin")]
+data[, time := time / 365.25]
+# targtimes <- seq(0.1, 2, by = 0.1)
+targtimes <- 2
 
 ConcreteArgs <- formatArguments(DataTable = data,
                                 EventTime = "time",
                                 EventType = "status",
                                 Treatment = "trt",
                                 Intervention = 0:1,
-                                TargetTime = 2000,
+                                TargetTime = targtimes,
                                 TargetEvent = 1:2,
-                                MaxUpdateIter = 250,
-                                Verbose = FALSE)
+                                MaxUpdateIter = 2e3,
+                                Verbose = TRUE)
+ConcreteArgs$Model$`0`[["coxnet"]] <- ConcreteArgs$Model$`1`[["coxnet"]] <- 
+  ConcreteArgs$Model$`2`[["coxnet"]] <- "coxnet"
+formatArguments(ConcreteArgs)
 
 ConcreteEst <- doConcrete(ConcreteArgs)
 
-ConcreteOut <- getOutput(ConcreteEst)
-
-
+ConcreteOut <- getOutput(ConcreteEst, Estimand = "RR")
+print(ConcreteOut)
+plot(ConcreteOut, ask = FALSE)
 
 # Joint Intervention --------------------------------------------------------------------------
 

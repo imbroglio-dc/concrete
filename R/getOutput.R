@@ -81,7 +81,7 @@ getOutput <- function(ConcreteEst, Estimand = c("Risk"), Intervention = seq_alon
            "specify at least two indices in Intervention or remove 'RR' and 'RD' from Estimand.")
     if (length(Intervention) > 2)
       message("Risk ratios and risk differences will be computed using only the first two ",
-          "elements of the provided 'Intervention' argument.\n", sep = "")
+              "elements of the provided 'Intervention' argument.\n", sep = "")
   }
   if (!is.logical(Simultaneous))
     stop("Simultaneous must be a logical, TRUE or FALSE")
@@ -143,7 +143,8 @@ getRisk <- function(ConcreteEst, TargetTime, TargetEvent, GComp) {
                    "Risk" = rowMeans(subset(risks, subset = attr(ConcreteEst, "Times") %in% TargetTime)))
       se <- subset(est.a$SummEIC[Event == j, ], select = c("Time", "seEIC"))
       Psi <- merge(Psi, se[, list("Time" = Time, "se" = seEIC / sqrt(ncol(risks)))], by = "Time")
-      return(cbind("Estimator" = "tmle", "Event" = as.numeric(j), Psi))
+      Psi <- cbind("Estimator" = "tmle", "Event" = as.numeric(j), Psi)
+      return(Psi)
     }))
     if (GComp)
       risk.a <- rbind(risk.a,
@@ -158,14 +159,24 @@ getRisk <- function(ConcreteEst, TargetTime, TargetEvent, GComp) {
   Risk[, Estimand := "Abs Risk"]
   setnames(Risk, "Risk", "Pt Est")
   setcolorder(Risk, c("Intervention", "Estimand", "Estimator", "Event", "Time", "Pt Est", "se"))
+  attr(Risk, "IC") <- do.call(rbind, lapply(seq_along(ConcreteEst), function(a) {
+    cbind("Intervention" = names(ConcreteEst)[a], ConcreteEst[[a]][["IC"]])}))
   return(Risk)
 }
 
 getRD <- function(Risks, A1, A0, TargetTime, TargetEvent, GComp) {
   `Pt Est` <- se <- Intervention <- Estimand <- NULL
-  RD <- Risks[, list("Pt Est" = `Pt Est`[Intervention == A1] - `Pt Est`[Intervention == A0], 
-                     se = sqrt(se[Intervention == A1]^2 + se[Intervention == A0]^2)), 
-              by = c("Estimator", "Event", "Time")]
+  RD <- merge(Risks[, list("Pt Est" = `Pt Est`[Intervention == A1] - `Pt Est`[Intervention == A0]), 
+                    by = c("Estimator", "Event", "Time")], 
+              attr(Risks, "IC")[, list('Estimator' = "tmle", 
+                                       "se" = sqrt(mean((IC[Intervention == A1] - 
+                                                           IC[Intervention == A0])^2) / 
+                                                     length(unique(ID)))), 
+                                by = c("Event", "Time")], 
+              all.x = TRUE)
+  # RD <- Risks[, list("Pt Est" = `Pt Est`[Intervention == A1] - `Pt Est`[Intervention == A0], 
+  #                    se = sqrt(se[Intervention == A1]^2 + se[Intervention == A0]^2)), 
+  #             by = c("Estimator", "Event", "Time")]
   RD[, Intervention := paste0("[", A1, "] - [", A0, "]")]
   RD[, Estimand := "Risk Diff"]
   setcolorder(RD, c("Intervention", "Estimand", "Estimator", "Event", "Time", "Pt Est", "se"))
@@ -174,11 +185,24 @@ getRD <- function(Risks, A1, A0, TargetTime, TargetEvent, GComp) {
 
 getRR <- function(Risks, A1, A0, TargetTime, TargetEvent, GComp) {
   `Pt Est` <- se <- Intervention <- Estimand <- NULL
-  RR <- Risks[, list("Pt Est" = `Pt Est`[Intervention == A1] / `Pt Est`[Intervention == A0], 
-                     se = sqrt((se[Intervention == A1] / `Pt Est`[Intervention == A0])^2 + 
-                                 se[Intervention == A0]^2 * 
-                                 (`Pt Est`[Intervention == A1] / `Pt Est`[Intervention == A0]^2)^2)), 
+  RR <- Risks[, list("Pt Est" = `Pt Est`[Intervention == A1] / `Pt Est`[Intervention == A0]), 
               by = c("Estimator", "Event", "Time")]
+  for (time in TargetTime) {
+    for (event in TargetEvent) {
+      R1 <- Risks[Time == time & Event == event & Estimator == "tmle" & Intervention == A1, `Pt Est`]
+      R0 <- Risks[Time == time & Event == event & Estimator == "tmle" & Intervention == A0, `Pt Est`]
+      RR[Time == time & Event == event & Estimator == "tmle", 
+         se := attr(Risks, "IC")[Time == time & Event == event, 
+                                  sqrt(mean((IC[Intervention == A1] / R0 - 
+                                               IC[Intervention == A0] * R1 / R0^2)^2) / 
+                                         length(unique(ID)))]]
+    }
+  }
+  # RR <- Risks[, list("Pt Est" = `Pt Est`[Intervention == A1] / `Pt Est`[Intervention == A0], 
+  #                    se = sqrt((se[Intervention == A1] / `Pt Est`[Intervention == A0])^2 + 
+  #                                se[Intervention == A0]^2 * 
+  #                                (`Pt Est`[Intervention == A1] / `Pt Est`[Intervention == A0]^2)^2)), 
+  #             by = c("Estimator", "Event", "Time")]
   RR[, Intervention := paste0("[", A1, "] / [", A0, "]")]
   RR[, Estimand := "Rel Risk"]
   setcolorder(RR, c("Intervention", "Estimand", "Estimator", "Event", "Time", "Pt Est", "se"))
@@ -186,7 +210,7 @@ getRR <- function(Risks, A1, A0, TargetTime, TargetEvent, GComp) {
 }
 
 getSimultaneous <- function(ConcreteEst, Output, EstimandType, Intervention, Signif) {
-  Estimator <- `Pt Est` <- Event <- Time <- SimQ <- IC <- Risk <- NULL
+  NumTime <- Estimator <- `Pt Est` <- Event <- Time <- SimQ <- IC <- Risk <- NULL
   
   if (any(grepl("(RR)|(RD)", EstimandType))) {
     A1 <- names(ConcreteEst)[Intervention[1]]
@@ -246,7 +270,7 @@ getSimultaneous <- function(ConcreteEst, Output, EstimandType, Intervention, Sig
 #' @exportS3Method print ConcreteOut
 print.ConcreteOut <- function(x, ...) {
   num.cols <- intersect(c("Pt Est", "se", "CI Low", "CI Hi", "SimCI Low", "SimCI Hi"), 
-                    colnames(x))
+                        colnames(x))
   dt <- x[, (num.cols) := lapply(.SD, function(y) signif(y, 2)), .SDcols = num.cols]
   NextMethod(generic = "print", object = dt)
 }

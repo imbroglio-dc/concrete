@@ -16,25 +16,30 @@ loadPackages <- function() {
   library(tidyverse)
   invisible(NULL)
 }
-
-# true risks --------------------------------------------------------------
-# true risks for 3 competing risks
-# 5e6 takes me ~60Gb memory
 loadPackages()
 data.table::setDTthreads(threads = parallel::detectCores(), restore_after_fork = TRUE)
 concrete.dir <- "/Shared/Projects/concrete/"
+TargetTime <- seq(730, 1460, length.out = 5)
+
+# Simulation Params
+B <- 1000
+OutputPath <- paste0(concrete.dir, "scripts/sim-data/sim-out/")
+
+# true risks --------------------------------------------------------------
 
 if (file.exists(paste0(concrete.dir, "scripts/sim-data/TrueRisks.csv"))) {
   risks <- read.csv(paste0(concrete.dir, "scripts/sim-data/TrueRisks.csv"))[, -1]
 } else {
   risks1 <- cbind("Intervention" = "A=1",
-                  getTrueRisks(n = 2.5e5, assign_A = function(W, n) return(rep_len(1, n)), 
-                               # ltfu_coefs = c(1.5e-4, 1, 5, 5),
-                               parallel = TRUE, rep = 80)); gc()
+                  getTrueRisks(n = 1e3, target_time = sort(union(1:2000, TargetTime)), 
+                               assign_A = function(W, n) return(rep_len(1, n)), 
+                               # ltfu_coefs = c(7.5e-5, 1, 4, 4),
+                               parallel = TRUE, rep = 100)); gc()
   risks0 <- cbind("Intervention" = "A=0",
-                  getTrueRisks(n = 2.5e5, assign_A = function(W, n) return(rep_len(0, n)), 
-                               # ltfu_coefs = c(1.5e-4, 1, 5, 5),
-                               parallel = TRUE, rep = 80)); gc()
+                  getTrueRisks(n = 1e3, target_time = sort(union(1:2000, TargetTime)), 
+                               assign_A = function(W, n) return(rep_len(0, n)), 
+                               # ltfu_coefs = c(7.5e-5, 1, 4, 4),
+                               parallel = TRUE, rep = 100)); gc()
   risks <- melt(rbind(risks1, risks0), id.vars = c("Intervention", "Time"), 
                 variable.name = "Event", value.name = "True")
   write.csv(risks, paste0(concrete.dir, "scripts/sim-data/TrueRisks.csv"))
@@ -46,9 +51,6 @@ risks %>% mutate(Event = factor(Event)) %>%
 
 
 # simulation --------------------------------------------------------------
-
-B <- 1000
-OutputPath <- paste0(concrete.dir, "scripts/sim-data/sim-out/")
 
 if (length(list.files(OutputPath, full.names = TRUE)) < B) {
   library(foreach)
@@ -89,7 +91,6 @@ if (length(list.files(OutputPath, full.names = TRUE)) < B) {
                 
                 MaxIter <- 500
                 Data <- simConCR(n = 1e3, random_seed = seeds[i])
-                TargetTime <- seq(730, 1460, length.out = 5)
                 
                 # helper functions --------------------------------------------------------
                 simConcrete <- function(TargetTime, Data, MaxIter, DiagPath = NULL, j = 1) {
@@ -449,12 +450,12 @@ TargetTimes <- sort(unique(estimates[["Time"]]))
 
 risks1 <- cbind("Intervention" = "A=1",
                 getTrueRisks(target_time = TargetTimes, 
-                             n = 2.5e3, assign_A = function(W, n) return(rep_len(1, n)), 
-                             parallel = TRUE, rep = 80)); gc()
+                             n = 1e6, assign_A = function(W, n) return(rep_len(1, n)), 
+                             parallel = FALSE, rep = 1)); gc()
 risks0 <- cbind("Intervention" = "A=0",
                 getTrueRisks(target_time = TargetTimes, 
-                             n = 2.5e3, assign_A = function(W, n) return(rep_len(0, n)), 
-                             parallel = TRUE, rep = 80)); gc()
+                             n = 1e6, assign_A = function(W, n) return(rep_len(0, n)), 
+                             parallel = FALSE, rep = 1)); gc()
 risks <- melt(rbind(risks1, risks0), id.vars = c("Intervention", "Time"), 
               variable.name = "Event", value.name = "True") 
 risks <- rbind(risks, 
@@ -492,15 +493,16 @@ estimates <- rbind(estimates,
 
 
 
-estimates <- left_join(estimates[, Event := as.factor(Event)], 
-                       risks, by = c("Intervention", "Event", "Time")) %>% 
+perf <- left_join(estimates[, Event := as.factor(Event)], 
+                  mutate(risks, Event = factor(Event)), 
+                  by = c("Intervention", "Event", "Time")) %>% 
   .[, list(`Pt Est` = mean(`Pt Est`), se = mean(se),
            l = quantile(`Pt Est`, 0.025), u = quantile(`Pt Est`, 0.975), 
            True = mean(True), Bias = mean(`Pt Est` - True), 
            MSE = mean((`Pt Est` - True)^2), 
            "95% Cov" = mean(`Pt Est` + 1.96*se > True & `Pt Est` - 1.96*se < True), 
-           l.se = mean(`Pt Est`) - 1.96*mean(se), 
-           u.se = mean(`Pt Est`) + 1.96*mean(se)),
+           l.se = mean(`Pt Est` - 1.96*se), 
+           u.se = mean(`Pt Est` + 1.96*se)),
     by = c("Package", "Intervention", "Estimator", "Event", "Time")]
 
 # plots -------------------------------------------------------------------
@@ -513,13 +515,18 @@ melt(perf[, Time := as.numeric(Time)][, Bias := abs(Bias)],
   ggplot(aes(x = Time, y = Value, colour = Estimator)) +
   facet_wrap(Intervention + Event ~ Metric, scales = "free", ncol = 3) +
   geom_line() + theme_minimal()
+ggsave(filename = "/Shared/Projects/concrete/scripts/sim-data/perf_plot.png", 
+       device = "png", width = 1600, height = 1500, units = "px")
 
 perf[, Time := as.factor(Time)] %>%
   ggplot(aes(x = Time, y = `Pt Est`, colour = Estimator)) +
-  facet_wrap(Intervention ~ Event, scales = "free") +
+  facet_wrap(Intervention ~ Event, scales = "free", ncol = 2) +
   geom_errorbar(aes(ymin = l, ymax = u), width = 0.8, position = position_dodge2(width = 0.8)) +
   # geom_errorbar(aes(ymin = l.se, ymax = u.se), width = 0.8, 
   #               position = position_dodge2(width = 0.8), alpha = 0.5) +
   geom_point(size = 2, position = position_dodge2(width = 0.8)) + theme_minimal() + 
   geom_errorbar(aes(ymin = True, ymax = True))
+
+# perf[, RelEff :=round(`se`[Estimator == "Aalen-Johansen"]^2 / `se`^2, 2),
+#      by = c("Analysis", "Time", "Event", "Estimand")]
 
