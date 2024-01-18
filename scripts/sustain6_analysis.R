@@ -712,13 +712,16 @@ tmp %>%
   mutate(relci_l = ci_l / head(ci_l, 1),
          relci_d = ci_d / head(ci_d, 1), 
          rel_ci_ld = (ci_l / ci_d)) %>% 
-  dplyr::filter(Event == 1) %>% dplyr::mutate(Time = factor(Time)) %>% 
+  dplyr::filter(Event == 1, 
+                !grepl("lagged", Estimator)) %>% 
   pivot_longer(cols = c("relci_l", "relci_d", "rel_ci_ld")) %>% 
   mutate(name = case_when(name == "relci_l" ~ "Standardized Log-transformed CI widths",
-                          name == "relci_l" ~ "Standardized Direct CI widths",
-                          name == "relci_l" ~ "Relative Log-transformed/Direct CI widths")) %>% 
-  ggplot(aes(x= Time, y = rr, linetype = Estimator)) + 
-  
+                          name == "relci_d" ~ "Standardized Direct CI widths",
+                          name == "rel_ci_ld" ~ "Relative Log-transformed/Direct CI widths")) %>% 
+  dplyr::filter(name == "Relative Log-transformed/Direct CI widths") %>% 
+  ggplot(aes(x= Time, y = value, colour = Estimator)) + 
+  theme_minimal() + facet_wrap(Analysis~name, scales = "free", nrow = 1) + 
+  geom_line()
 
 
 # bootstrap ---------------------------------------------------------------

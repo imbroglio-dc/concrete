@@ -22,7 +22,7 @@ concrete.dir <- "/Shared/Projects/concrete/"
 TargetTime <- seq(730, 1460, length.out = 5)
 
 # Simulation Params
-B <- 1000
+B <- 3000
 OutputPath <- paste0(concrete.dir, "scripts/sim-data/sim-out/")
 
 # true risks --------------------------------------------------------------
@@ -31,12 +31,12 @@ if (file.exists(paste0(concrete.dir, "scripts/sim-data/TrueRisks.csv"))) {
   risks <- read.csv(paste0(concrete.dir, "scripts/sim-data/TrueRisks.csv"))[, -1]
 } else {
   risks1 <- cbind("Intervention" = "A=1",
-                  getTrueRisks(n = 1e3, target_time = sort(union(1:2000, TargetTime)), 
+                  getTrueRisks(n = 1e4, target_time = sort(union(1:2000, TargetTime)), 
                                assign_A = function(W, n) return(rep_len(1, n)), 
                                # ltfu_coefs = c(7.5e-5, 1, 4, 4),
                                parallel = TRUE, rep = 100)); gc()
   risks0 <- cbind("Intervention" = "A=0",
-                  getTrueRisks(n = 1e3, target_time = sort(union(1:2000, TargetTime)), 
+                  getTrueRisks(n = 1e4, target_time = sort(union(1:2000, TargetTime)), 
                                assign_A = function(W, n) return(rep_len(0, n)), 
                                # ltfu_coefs = c(7.5e-5, 1, 4, 4),
                                parallel = TRUE, rep = 100)); gc()
@@ -73,8 +73,15 @@ if (length(list.files(OutputPath, full.names = TRUE)) < B) {
                   "concrete",
                   # "contmle",
                   "survtmle-6mo",
+                  # "survtmle-4mo",
                   "survtmle-3mo", 
+                  # "survtmle-2mo", 
+                  "survtmle-1mo",
                   "Aalen-Johansen")
+                
+                discretizations <- c("survtmle-6mo" = 2, "survtmle-4mo" = 3,
+                                     "survtmle-3mo" = 4, "survtmle-2mo" = 6,
+                                     "survtmle-1mo" = 12)
                 
                 if (file.exists(paste0(OutputPath, i, ".RDS"))) {
                   out <- read_rds(paste0(OutputPath, i, ".RDS"))
@@ -108,6 +115,7 @@ if (length(list.files(OutputPath, full.names = TRUE)) < B) {
                                                   TargetTime = TargetTime,
                                                   MaxUpdateIter = MaxIter,
                                                   Verbose = FALSE)
+                  concreteArgs$Model$ARM <- c("SL.glm", "SL.glmnet")
                   for (VarName in names(concreteArgs$Model)) {
                     if (VarName %in% unique(Data[["EVENT"]])) {
                       concreteArgs[["Model"]][[as.character(VarName)]][["Coxnet"]] <- "coxnet"
@@ -215,7 +223,7 @@ if (length(list.files(OutputPath, full.names = TRUE)) < B) {
                     readr::write_lines(paste0("Run ", j + i - 1, " ; ", survMonths," ; start"),
                                        file = DiagPath, append = TRUE)
                   }
-                  sl_lib_failure <- c("SL.glmnet", "SL.xgboost")
+                  sl_lib_failure <- c("SL.glmnet", "SL.glm")
                   sl_lib_censor <- c("SL.glmnet", "SL.xgboost")
                   sl_lib_g <- c("SL.glmnet", "SL.xgboost")
                   TargetTime <- ceiling(TargetTime / 365 * Bins)
@@ -342,50 +350,31 @@ if (length(list.files(OutputPath, full.names = TRUE)) < B) {
                   rm(contmleOut); gc()
                 }
                 
-                # survtmle 6mo ----------------------------------------------------------------
-                if ("survtmle-6mo" %in% estimators & !("survtmle-6mo" %in% out$estimates[["Estimator"]])) {
-                  Bins <- 2
-                  survtmle6mo <- try(simSurvtmle(TargetTime, Bins, Data, MaxIter, DiagPath),
-                                     silent = TRUE)
-                  
-                  if (inherits(survtmle6mo, "try-error")) {
-                    out$meta$error <- c(out$meta$error, paste0("survtmle", as.integer(12 / Bins), "mo"))
-                  } else {
-                    out$estimates <- rbind(out$estimates,
-                                           cbind(Package = "survtmle-6mo",
-                                                 survtmle6mo, 
-                                                 Estimand = "Abs Risk", 
-                                                 "CI Low" = NA, 
-                                                 "CI Hi"  = NA, 
-                                                 "SimCI Low" = NA, 
-                                                 "SimCI Hi"  = NA))
-                    out$meta$time[Estimator == paste0("survtmle-", as.integer(12 / Bins), "mo"),
-                                  Time := attr(survtmle6mo, "time")]
-                  }
-                  rm(survtmle6mo); gc()
-                }
                 
-                # survtmle 3mo ----------------------------------------------------------------
-                if ("survtmle-3mo" %in% estimators & !("survtmle-3mo" %in% out$estimates[["Estimator"]])) {
-                  Bins <- 4
-                  survtmle3mo <- try(simSurvtmle(TargetTime, Bins, Data, MaxIter, DiagPath),
-                                     silent = TRUE)
-                  
-                  if (inherits(survtmle3mo, "try-error")) {
-                    out$meta$error <- c(out$meta$error, paste0("survtmle", as.integer(12 / Bins), "mo"))
-                  } else {
-                    out$estimates <- rbind(out$estimates,
-                                           cbind(Package = "survtmle-3mo",
-                                                 survtmle3mo, 
-                                                 Estimand = "Abs Risk", 
-                                                 "CI Low" = NaN, 
-                                                 "CI Hi"  = NaN, 
-                                                 "SimCI Low" = NaN, 
-                                                 "SimCI Hi"  = NaN))
-                    out$meta$time[Estimator == paste0("survtmle-", as.integer(12 / Bins), "mo"),
-                                  Time := attr(survtmle3mo, "time")]
+                # survtmle ----------------------------------------------------------------
+                
+                for (estimator in names(discretizations)) {
+                  if (estimator %in% estimators & !(estimator %in% out$estimates[["Estimator"]])) {
+                    Bins <- discretizations[[estimator]]
+                    survtmle_out <- try(simSurvtmle(TargetTime, Bins, Data, MaxIter, DiagPath), 
+                                        silent = TRUE)
+                    
+                    if (inherits(survtmle_out, "try-error")) {
+                      out$meta$error <- c(out$meta$error, estimator)
+                    } else {
+                      out$estimates <- rbind(out$estimates,
+                                             cbind(Package = estimator,
+                                                   survtmle_out, 
+                                                   Estimand = "Abs Risk", 
+                                                   "CI Low" = NA, 
+                                                   "CI Hi"  = NA, 
+                                                   "SimCI Low" = NA, 
+                                                   "SimCI Hi"  = NA))
+                      out$meta$time[Estimator == estimator,
+                                    Time := attr(survtmle_out, "time")]
+                    }
                   }
-                  rm(survtmle3mo); gc()
+                  rm(survtmle_out); gc()
                 }
                 
                 
@@ -447,17 +436,7 @@ meta
 # True Risks --------------------------------------------------------------
 
 TargetTimes <- sort(unique(estimates[["Time"]]))
-
-risks1 <- cbind("Intervention" = "A=1",
-                getTrueRisks(target_time = TargetTimes, 
-                             n = 1e6, assign_A = function(W, n) return(rep_len(1, n)), 
-                             parallel = FALSE, rep = 1)); gc()
-risks0 <- cbind("Intervention" = "A=0",
-                getTrueRisks(target_time = TargetTimes, 
-                             n = 1e6, assign_A = function(W, n) return(rep_len(0, n)), 
-                             parallel = FALSE, rep = 1)); gc()
-risks <- melt(rbind(risks1, risks0), id.vars = c("Intervention", "Time"), 
-              variable.name = "Event", value.name = "True") 
+setDT(risks)
 risks <- rbind(risks, 
                risks[, list("Intervention" = "RD",
                             "True" = True[Intervention == "A=1"] - True[Intervention == "A=0"]),
@@ -511,14 +490,24 @@ melt(perf[, Time := as.numeric(Time)][, Bias := abs(Bias)],
      id.vars = c("Package", "Intervention", "Estimator", "Event", "Time"), 
      measure.vars = c("Bias", "MSE", "95% Cov"), 
      variable.name = "Metric", value.name = "Value") %>% 
-  # .[Metric != "Bias"] %>% 
+  mutate(Estimator = factor(Estimator, 
+                            levels = c("Aalen-Johansen", "tmle", "survtmle-1mo", 
+                                       "survtmle-3mo", "survtmle-6mo"), 
+                            labels = c("Aalen-Johansen", "contmle", "survtmle-1mo", 
+                                       "survtmle-3mo", "survtmle-6mo"))) %>% 
+  dplyr::filter(Estimator != "gcomp") %>% 
   ggplot(aes(x = Time, y = Value, colour = Estimator)) +
   facet_wrap(Intervention + Event ~ Metric, scales = "free", ncol = 3) +
   geom_line() + theme_minimal()
 ggsave(filename = "/Shared/Projects/concrete/scripts/sim-data/perf_plot.png", 
        device = "png", width = 1600, height = 1500, units = "px")
 
-perf[, Time := as.factor(Time)] %>%
+perf[, Time := as.factor(Time)] %>% dplyr::filter(Estimator != "gcomp") %>% 
+  mutate(Estimator = factor(Estimator, 
+                            levels = c("Aalen-Johansen", "tmle", "survtmle-1mo", 
+                                       "survtmle-3mo", "survtmle-6mo"), 
+                            labels = c("Aalen-Johansen", "contmle", "survtmle-1mo", 
+                                       "survtmle-3mo", "survtmle-6mo"))) %>% 
   ggplot(aes(x = Time, y = `Pt Est`, colour = Estimator)) +
   facet_wrap(Intervention ~ Event, scales = "free", ncol = 2) +
   geom_errorbar(aes(ymin = l, ymax = u), width = 0.8, position = position_dodge2(width = 0.8)) +
