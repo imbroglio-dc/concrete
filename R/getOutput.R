@@ -165,7 +165,7 @@ getRisk <- function(ConcreteEst, TargetTime, TargetEvent, GComp) {
 }
 
 getRD <- function(Risks, A1, A0, TargetTime, TargetEvent, GComp) {
-  `Pt Est` <- se <- Intervention <- Estimand <- NULL
+  IC <- ID <- `Pt Est` <- se <- Intervention <- Estimand <- NULL
   RD <- merge(Risks[, list("Pt Est" = `Pt Est`[Intervention == A1] - `Pt Est`[Intervention == A0]), 
                     by = c("Estimator", "Event", "Time")], 
               attr(Risks, "IC")[, list('Estimator' = "tmle", 
@@ -184,7 +184,7 @@ getRD <- function(Risks, A1, A0, TargetTime, TargetEvent, GComp) {
 }
 
 getRR <- function(Risks, A1, A0, TargetTime, TargetEvent, GComp) {
-  `Pt Est` <- se <- Intervention <- Estimand <- NULL
+  Time <- Event <- Estimator <- IC <- ID <- `Pt Est` <- se <- Intervention <- Estimand <- NULL
   RR <- Risks[, list("Pt Est" = `Pt Est`[Intervention == A1] / `Pt Est`[Intervention == A0]), 
               by = c("Estimator", "Event", "Time")]
   for (time in TargetTime) {

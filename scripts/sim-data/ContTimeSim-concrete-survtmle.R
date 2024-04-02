@@ -22,7 +22,7 @@ concrete.dir <- "/Shared/Projects/concrete/"
 TargetTime <- seq(730, 1460, length.out = 5)
 
 # Simulation Params
-B <- 3000
+B <- 1e3
 OutputPath <- paste0(concrete.dir, "scripts/sim-data/sim-out/")
 
 # true risks --------------------------------------------------------------
@@ -31,15 +31,15 @@ if (file.exists(paste0(concrete.dir, "scripts/sim-data/TrueRisks.csv"))) {
   risks <- read.csv(paste0(concrete.dir, "scripts/sim-data/TrueRisks.csv"))[, -1]
 } else {
   risks1 <- cbind("Intervention" = "A=1",
-                  getTrueRisks(n = 1e4, target_time = sort(union(1:2000, TargetTime)), 
+                  getTrueRisks(n = 5e6, target_time = sort(union(1:2000, TargetTime)), 
                                assign_A = function(W, n) return(rep_len(1, n)), 
-                               # ltfu_coefs = c(7.5e-5, 1, 4, 4),
-                               parallel = TRUE, rep = 100)); gc()
+                               # ltfu_coefs = c(7.5e-5, 1, 4, .3),
+                               parallel = FALSE, rep = 1)); gc()
   risks0 <- cbind("Intervention" = "A=0",
-                  getTrueRisks(n = 1e4, target_time = sort(union(1:2000, TargetTime)), 
+                  getTrueRisks(n = 5e6, target_time = sort(union(1:2000, TargetTime)), 
                                assign_A = function(W, n) return(rep_len(0, n)), 
-                               # ltfu_coefs = c(7.5e-5, 1, 4, 4),
-                               parallel = TRUE, rep = 100)); gc()
+                               # ltfu_coefs = c(7.5e-5, 1, 4, .3),
+                               parallel = FALSE, rep = 1)); gc()
   risks <- melt(rbind(risks1, risks0), id.vars = c("Intervention", "Time"), 
                 variable.name = "Event", value.name = "True")
   write.csv(risks, paste0(concrete.dir, "scripts/sim-data/TrueRisks.csv"))
@@ -97,7 +97,7 @@ if (length(list.files(OutputPath, full.names = TRUE)) < B) {
                 }
                 
                 MaxIter <- 500
-                Data <- simConCR(n = 1e3, random_seed = seeds[i])
+                Data <- simConCR(n = 2.5e3, random_seed = seeds[i])
                 
                 # helper functions --------------------------------------------------------
                 simConcrete <- function(TargetTime, Data, MaxIter, DiagPath = NULL, j = 1) {
@@ -475,14 +475,16 @@ estimates <- rbind(estimates,
 perf <- left_join(estimates[, Event := as.factor(Event)], 
                   mutate(risks, Event = factor(Event)), 
                   by = c("Intervention", "Event", "Time")) %>% 
-  .[, list(`Pt Est` = mean(`Pt Est`), se = mean(se),
-           l = quantile(`Pt Est`, 0.025), u = quantile(`Pt Est`, 0.975), 
-           True = mean(True), Bias = mean(`Pt Est` - True), 
+  .[, list(l = quantile(`Pt Est`, 0.025), u = quantile(`Pt Est`, 0.975), 
+           True = mean(True), 
+           Bias = mean(`Pt Est` - True), 
            MSE = mean((`Pt Est` - True)^2), 
            "95% Cov" = mean(`Pt Est` + 1.96*se > True & `Pt Est` - 1.96*se < True), 
-           l.se = mean(`Pt Est` - 1.96*se), 
-           u.se = mean(`Pt Est` + 1.96*se)),
-    by = c("Package", "Intervention", "Estimator", "Event", "Time")]
+           `Pt Est` = mean(`Pt Est`), se = mean(se)),
+    by = c("Package", "Intervention", "Estimator", "Event", "Time")] %>% 
+  group_by(Package, Intervention, Estimator, Event, Time) %>% 
+  dplyr::mutate(l.se = `Pt Est` - 1.96*se, u.se = `Pt Est` + 1.96*se) %>% 
+  setDT()
 
 # plots -------------------------------------------------------------------
 

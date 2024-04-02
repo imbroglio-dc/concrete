@@ -1,8 +1,8 @@
 Package: concrete
 Type: Package
 Title: Continuous-Time Competing Risks Estimation using Targeted Minimum Loss-Based Estimation (TMLE)
-Version: 1.0.5
-Date: 2023-09-07
+Version: 1.0.6
+Date: 2024-03-12
 Author: David Chen [aut, cre] (<https://orcid.org/0000-0002-9413-8152>)
 Authors@R: 
     person(given = "David",
@@ -29,7 +29,7 @@ LinkingTo: Rcpp, RcppArmadillo
 Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.2.3
+RoxygenNote: 7.3.1
 Suggests: 
     nnls,
     xgboost,

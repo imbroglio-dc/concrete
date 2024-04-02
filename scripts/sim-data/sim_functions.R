@@ -1,7 +1,7 @@
 # all models are simulated from underlying Weibull distribution
 
 simConCR <- function(interval = 1:2e3,
-                     ltfu_coefs = c(7.5e-5, 1, 4, 4),
+                     ltfu_coefs = c(7.5e-5, 1, 4, .3),
                      eos_coefs = c("eos_start_time" = 1460, "eos_end_time" = 2000),
                      t1_coefs = c(7.5e-5, 1, 2, 1.2, 1.5, 1.2),
                      t2_coefs = c(1.5e-5, 1.3, 2, 2, 1.4),
@@ -49,11 +49,11 @@ simConCR <- function(interval = 1:2e3,
     ## 1.1 Censoring Model ------------------------------------------------------------------------
     
     # lost-to-followup
-    ltfu_fn <- function(ARM, SMOKER, MIFL, params, output = c("h.t", "S.t", "F_inv.u"), t = NULL, u = NULL) {
+    ltfu_fn <- function(ARM, SMOKER, BMIBL, params, output = c("h.t", "S.t", "F_inv.u"), t = NULL, u = NULL) {
         B <- params[1]
         k <- params[2]
         b_1 <- log(params[3]) * as.numeric(ARM == 0) * as.numeric(SMOKER)
-        b_2 <- log(params[4]) * as.numeric(MIFL) * as.numeric(ARM == 1)
+        b_2 <- log(params[4]) * (scale(BMIBL) + .25) * as.numeric(ARM == 1)
         phi <- exp(b_1 + b_2)
         
         return(return_weibull_outputs(phi, B, k, output, t, u))
@@ -119,7 +119,7 @@ simConCR <- function(interval = 1:2e3,
         set.seed(random_seed)
         obs <- dplyr::select(sample_n(base_data, size = n, replace = T), -ARM, -TIME, -EVENT)
         A <- assign_A(obs, n)
-        outcomes <- data.table("C_ltfu" = ltfu_fn(A, obs[["SMOKER"]], obs[["MIFL"]], ltfu_coefs,
+        outcomes <- data.table("C_ltfu" = ltfu_fn(A, obs[["SMOKER"]], obs[["BMIBL"]], ltfu_coefs,
                                                   output = "F_inv.u", u = runif(n, 0, 1))$F_inv.u,
                                "C_eos" = eos_fn(eos_coefs, "F_inv.u", u = runif(n, 0, 1))$F_inv.u,
                                "T1" = T1_fn(A, obs[["SMOKER"]], obs[["BMIBL"]],

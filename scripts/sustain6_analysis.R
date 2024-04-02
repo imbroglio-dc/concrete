@@ -647,7 +647,7 @@ releff_tbl <- tmp[, RelEff :=  round(se[Estimator == "NPMLE"]^2 / se^2, 2),
   dplyr::select(Time, Analysis, Estimand, Estimator, `Pt Est`, RelEff) %>% 
   arrange(Estimator, Analysis, Estimand, Time) %>% 
   dcast(Estimator + Analysis + Time ~ Estimand, value.var = "RelEff")
-releff_tbl %>% dcast(Analysis + Time ~ Estimator, value.var = "RD")
+releff_tbl %>% dcast(Analysis + Time ~ Estimator, value.var = "RR")
 
 
 ptest_tbl <- tmp[, `Pt Est` :=  round(`Pt Est`, 2),
@@ -672,8 +672,8 @@ tmp[, RelEff :=  round(se[Estimator == "NPMLE"]^2 / se^2, 2),
   dcast(Analysis + Time + Estimand + Event ~ Estimator, value.var = "Output")
 
 tmp %>% mutate(Time = factor(Time)) %>% 
-  dplyr::filter(Event == 1) %>% 
-  ggplot(aes(x = Time, y = RR, ymin = `CI Low`, ymax = `CI Hi`, colour = Estimator)) + 
+  dplyr::filter(Event == 1, Estimand == "RR") %>% 
+  ggplot(aes(x = Time, y = `Pt Est`, ymin = `CI Low`, ymax = `CI Hi`, colour = Estimator)) + 
   geom_point(position = position_dodge2(0.3)) + 
   geom_errorbar(position = position_dodge2(0.3), width = 0.3) + 
   theme_minimal() + 
