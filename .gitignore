@@ -42,8 +42,6 @@ vignettes/*.pdf
 
 *.Rproj
 
-*.github
-
 output/
 
 scripts/sim-data/sim-diagnostics.txt

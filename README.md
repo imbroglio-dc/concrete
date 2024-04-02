@@ -4,7 +4,7 @@
 # concrete
 
 [![CRAN](http://www.r-pkg.org/badges/version/concrete)](http://www.r-pkg.org/pkg/concrete)
-[![R-CMD-check](https://github.com/imbroglio-dc/concrete/workflows/R-CMD-check/badge.svg)](https://github.com/imbroglio-dc/concrete/actions)
+[![R-CMD-check](https://github.com/imbroglio-dc/concrete/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/imbroglio-dc/concrete/actions/workflows/R-CMD-check.yaml)
 [![Coverage
 Status](https://coveralls.io/repos/github/imbroglio-dc/concrete/badge.svg?branch=main)](https://coveralls.io/github/imbroglio-dc/concrete?branch=main)
 
