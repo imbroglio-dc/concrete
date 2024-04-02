@@ -12,3 +12,4 @@
 ..Rcheck
 ^paper$
 ^README\.Rmd$
+^\.github$
