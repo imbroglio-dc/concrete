@@ -10,7 +10,7 @@
 #'
 #' @useDynLib concrete
 #' @importFrom Rcpp evalCpp
-#' @exportPattern "ˆ[[:alpha:]]+"
+#' @export
 #' @importFrom stats var
 
 getEIC <- function(Estimates, Data, Regime, TargetEvent, TargetTime, MinNuisance, GComp = FALSE) {
