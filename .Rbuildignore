@@ -11,3 +11,5 @@
 .travis.yml
 ..Rcheck
 ^paper$
+^README\.Rmd$
+^\.github$
