@@ -515,7 +515,7 @@ getRegime <- function(Intervention, Data) {
             all(Treatment[i, ] == Intervened[i, ])))
           return(Probability)
         }
-        message("No g.star function specified, defaulting to the indicator that observed",
+        message("No g.star function specified, defaulting to the indicator that observed ",
                 "treatment equals the desired treatment assignment, 1(A = a*).\n", sep = "")
       }
       PropScoreDummy <- data.table::copy(TrtVal)

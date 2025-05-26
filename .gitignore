@@ -51,3 +51,5 @@ scripts/sim-data/sim-diag/diagnostic.txt
 .coveralls_github_token
 
 inst/doc
+
+scripts/
