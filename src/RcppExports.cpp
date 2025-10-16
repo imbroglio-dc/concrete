@@ -38,10 +38,31 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// updateHazardsCpp
+List updateHazardsCpp(List Hazards, const arma::mat& TotalSurv, const arma::mat& GStar, const arma::mat& NuisanceWeight, const arma::vec& EvalTimes, const CharacterVector& TargetEvent, const arma::vec& TargetTime, const DataFrame& PnEIC, double OneStepEps, double NormPnEIC);
+RcppExport SEXP _concrete_updateHazardsCpp(SEXP HazardsSEXP, SEXP TotalSurvSEXP, SEXP GStarSEXP, SEXP NuisanceWeightSEXP, SEXP EvalTimesSEXP, SEXP TargetEventSEXP, SEXP TargetTimeSEXP, SEXP PnEICSEXP, SEXP OneStepEpsSEXP, SEXP NormPnEICSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< List >::type Hazards(HazardsSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type TotalSurv(TotalSurvSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type GStar(GStarSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type NuisanceWeight(NuisanceWeightSEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type EvalTimes(EvalTimesSEXP);
+    Rcpp::traits::input_parameter< const CharacterVector& >::type TargetEvent(TargetEventSEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type TargetTime(TargetTimeSEXP);
+    Rcpp::traits::input_parameter< const DataFrame& >::type PnEIC(PnEICSEXP);
+    Rcpp::traits::input_parameter< double >::type OneStepEps(OneStepEpsSEXP);
+    Rcpp::traits::input_parameter< double >::type NormPnEIC(NormPnEICSEXP);
+    rcpp_result_gen = Rcpp::wrap(updateHazardsCpp(Hazards, TotalSurv, GStar, NuisanceWeight, EvalTimes, TargetEvent, TargetTime, PnEIC, OneStepEps, NormPnEIC));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_concrete_getCleverCovariate", (DL_FUNC) &_concrete_getCleverCovariate, 4},
     {"_concrete_getHazLS", (DL_FUNC) &_concrete_getHazLS, 3},
+    {"_concrete_updateHazardsCpp", (DL_FUNC) &_concrete_updateHazardsCpp, 10},
     {NULL, NULL, 0}
 };
 

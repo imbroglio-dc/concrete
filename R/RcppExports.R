@@ -9,3 +9,7 @@ getHazLS <- function(T_Tilde, EvalTimes, HazL) {
     .Call('_concrete_getHazLS', PACKAGE = 'concrete', T_Tilde, EvalTimes, HazL)
 }
 
+updateHazardsCpp <- function(Hazards, TotalSurv, GStar, NuisanceWeight, EvalTimes, TargetEvent, TargetTime, PnEIC, OneStepEps, NormPnEIC) {
+    .Call('_concrete_updateHazardsCpp', PACKAGE = 'concrete', Hazards, TotalSurv, GStar, NuisanceWeight, EvalTimes, TargetEvent, TargetTime, PnEIC, OneStepEps, NormPnEIC)
+}
+
