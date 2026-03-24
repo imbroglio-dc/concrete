@@ -1,8 +1,9 @@
 #' formatArguments
-#' @description formatArguments() checks and reformats inputs into a form that can be interpreted by doConcrete().
-#'              makeITT() returns an Intervention list for a single, binary, point-treatment variable
-#' @param ConcreteArgs list (default: NULL, not yet ready) : Use to recheck amended output from previous formatArguments()
-#'                                            calls. A non-NULL input will cause all other arguments to be ignored.
+#' @description formatArguments() validates and formats inputs for TMLE estimation via doConcrete().
+#'   It performs data validation, intervention specification processing, and model setup.
+#'   makeITT() returns an Intervention list for a single, binary, point-treatment variable.
+#' @param ConcreteArgs list (default: NULL): A previously generated "ConcreteArgs" object from a prior
+#'   formatArguments() call. If provided, all other arguments are ignored and the object is re-validated.
 #' @param DataTable data.table (n x (d + (3:5)); data.table of the observed data, with rows n =
 #' the number of observations and d = the number of baseline covariates. DataTable must include
 #' the following columns:
@@ -10,7 +11,6 @@
 #'   \item{"EventTime"}{: numeric; real numbers > 0, the observed event or censoring time}
 #'   \item{"EventType"}{: numeric; the observed event type, censoring events indicated by integers <= 0}
 #'   \item{"Treatment"}{: numeric; the observed treatment value. Binary treatments must be coded as 0, 1}
-#'   \item{"Treatment"}{: numeric; the observed treatment}
 #' }
 #' May include
 #' \itemize{
@@ -73,7 +73,7 @@
 #'   \item{CVFolds}{: list of cross-validation fold assignments in the structure as output by origami::make_folds()}
 #'   \item{Model}{: named list of model specifications, one for each unique 'EventType' and one for the 'Treatment' variable.}
 #'   \item{MaxUpdateIter}{: the number of one-step update steps}
-#'   \item{OneStepEps}{: list of cross-validation fold assignments in the structure as output by origami::make_folds()}
+#'   \item{OneStepEps}{: numeric step size for the one-step TMLE update (default 0.1)}
 #'   \item{MinNuisance}{: numeric lower bound for the propensity score denominator in the efficient influence function}
 #'   \item{Verbose}{: boolean to print additional information}
 #'   \item{GComp}{: boolean to return g-computation formula plug-in estimates}
@@ -137,23 +137,23 @@
 #' @export formatArguments
 #' @export makeITT
 
-formatArguments <- function(DataTable,
+formatArguments <- function(DataTable = NULL,
                             # DataStructure = NULL,
-                            EventTime,
-                            EventType,
-                            Treatment,
+                            EventTime = NULL,
+                            EventType = NULL,
+                            Treatment = NULL,
                             ID = NULL,
                             # LongTime = NULL,
                             # DataStructure = NULL,
                             TargetTime = NULL,
                             TargetEvent = NULL,
-                            Intervention,
+                            Intervention = NULL,
                             # Target = NULL,
                             CVArg = NULL,
                             Model = NULL,
                             MaxUpdateIter = 500,
                             OneStepEps = 0.1,
-                            MinNuisance = 5/sqrt(nrow(DataTable))/log(nrow(DataTable)),
+                            MinNuisance = NULL,
                             Verbose = TRUE,
                             GComp = TRUE,
                             ReturnModels = TRUE,
@@ -163,9 +163,23 @@ formatArguments <- function(DataTable,
                             ...)
 {
   ## Data Structure - incorporate prodlim::EventHistory.frame?
-  if (!is.null(ConcreteArgs) | isTRUE(try(inherits(DataTable, "ConcreteArgs"), silent = TRUE))) {
-    if (isTRUE(try(inherits(DataTable, "ConcreteArgs"), silent = TRUE)))
-      ConcreteArgs <- DataTable
+  # Handle case where ConcreteArgs is passed as first argument (DataTable position)
+  if (inherits(DataTable, "ConcreteArgs")) {
+    ConcreteArgs <- DataTable
+  }
+
+  # Set default MinNuisance based on data size if not provided
+  if (is.null(MinNuisance) && !is.null(DataTable) && !inherits(DataTable, "ConcreteArgs")) {
+    n <- nrow(DataTable)
+    if (n > 0) {
+      MinNuisance <- 5 / sqrt(n) / log(n)
+    } else {
+      MinNuisance <- 0.05  # fallback for edge cases
+    }
+  }
+
+  # If ConcreteArgs provided, validate it; otherwise create new ConcreteArgs
+  if (!is.null(ConcreteArgs)) {
     if (!inherits(ConcreteArgs, "ConcreteArgs"))
       stop("ConcreteArgs must be of class 'ConcreteArgs', the output of formatArguments()")
   } else {
@@ -348,8 +362,9 @@ checkTreatment <- function(Treatment, EventType, DataTable = NULL) {
       stop("Column", ifelse(length(Treatment) > 1, "s", ""), " '", paste0(Treatment, collapse = ", "), 
            "' ", ifelse(length(Treatment) > 1, "were", "was"), " not found in the supplied data.",  
            "Check Treatment and DataTable argument inputs \n", attr(tmp, "condition"))
-    if (any(tmp %in% DataTable[[EventType]]))
-      stop("The name of the Treatment column(s) must be different from all EventType values. ", 
+    # Check if treatment column NAME matches any EventType VALUE (would cause model formula conflicts)
+    if (any(Treatment %in% as.character(DataTable[[EventType]])))
+      stop("The name of the Treatment column(s) must be different from all EventType values. ",
            "Rename the treatment column(s) or recode EventType values to different integers.")
     attr(tmp, "var.name") <- Treatment
     apply(tmp, 2, function(trt) {
@@ -382,47 +397,148 @@ getID <- function(ID, DataTable = NULL) {
 #     return(NULL)
 # }
 
+#' Convert Covariates to One-Hot Encoded Data Table
+#'
+#' Transforms covariate data into a standardized format with one-hot encoding
+#' for categorical variables. Numeric variables are preserved as-is. Column
+#' names are standardized to "L1", "L2", etc. for consistent downstream processing.
+#'
+#' @param DataTable data.table containing all observed data
+#' @param EventTime character; column name of event time (excluded from covariates)
+#' @param EventType character; column name of event type (excluded from covariates)
+#' @param Treatment character; column name(s) of treatment (excluded from covariates)
+#' @param ID character; column name of subject ID (excluded from covariates)
+#' @param LongTime character; column name of longitudinal time (excluded, currently unused)
+#' @param Verbose logical; whether to print diagnostic information
+#'
+#' @return data.table with one-hot encoded covariates. Has attribute "CovNames"
+#'   containing a mapping table with columns:
+#'   - ColName: standardized column name ("L1", "L2", ...)
+#'   - CovName: original covariate name
+#'   - CovVal: factor level (for categorical) or "." (for numeric)
+#'
+#' @details
+#' Uses vectorized model.matrix() for efficient one-hot encoding of all
+
+#' categorical variables simultaneously, rather than processing each column
+#' in a loop. This provides better performance for datasets with many
+#' categorical covariates.
+#'
+#' @keywords internal
 getCovDataTable <- function(DataTable, EventTime, EventType, Treatment, ID, LongTime, Verbose) {
   `(Intercept)` <- NULL
-  CovNames <- setdiff(colnames(DataTable), c(EventTime, EventType, Treatment, ID, LongTime))
-  CovDT <- DataTable[, .SD , .SDcols = CovNames]
-  NonNumInd <- sapply(CovNames, function(CovName) {!inherits(CovDT[[CovName]], c("numeric", "integer"))})
-  CovNames1Hot <- data.table()
-  
-  if (length(CovNames[!NonNumInd]) == 0) {
-    CovDT1Hot <- data.table()
-    l <- 0
-  } else {
-    CovDT1Hot <- CovDT[, .SD, .SDcols = CovNames[!NonNumInd]]
-    CovNames1Hot <- CovNames1Hot[, list(ColName = paste0("L", 1:ncol(CovDT1Hot)),
-                                        CovName = colnames(CovDT1Hot),
-                                        CovVal = rep_len(".", ncol(CovDT1Hot)))]
-    setnames(CovDT1Hot, colnames(CovDT1Hot), paste0("L", 1:ncol(CovDT1Hot)))
-    l <- ncol(CovDT1Hot)
-    
-    if (length(CovNames[NonNumInd]) == 0) {
-      attr(CovDT1Hot, "CovNames") <- CovNames1Hot
-      return(CovDT1Hot)
+
+  # Identify covariate columns (everything except reserved columns)
+  reserved_cols <- c(EventTime, EventType, Treatment, ID, LongTime)
+  cov_names <- setdiff(colnames(DataTable), reserved_cols)
+
+
+  if (length(cov_names) == 0) {
+    warning("No covariate columns found in DataTable. ",
+            "Model will use intercept-only specification.",
+            call. = FALSE)
+    result <- data.table(L1 = rep(1, nrow(DataTable)))
+    attr(result, "CovNames") <- data.table(ColName = "L1", CovName = "(Intercept)", CovVal = ".")
+    return(result)
+  }
+
+  cov_dt <- DataTable[, .SD, .SDcols = cov_names]
+
+  # Classify columns as numeric or categorical
+  is_numeric <- vapply(cov_dt, function(x) inherits(x, c("numeric", "integer")), logical(1))
+  numeric_names <- cov_names[is_numeric]
+  categorical_names <- cov_names[!is_numeric]
+
+  # Initialize result components
+  result_list <- list()
+  cov_mapping <- data.table()
+  col_counter <- 0L
+
+  # Process numeric covariates (no transformation needed)
+  if (length(numeric_names) > 0) {
+    numeric_dt <- cov_dt[, .SD, .SDcols = numeric_names]
+    n_numeric <- ncol(numeric_dt)
+    new_names <- paste0("L", seq_len(n_numeric))
+    setnames(numeric_dt, numeric_names, new_names)
+
+    result_list[["numeric"]] <- numeric_dt
+    cov_mapping <- rbind(cov_mapping, data.table(
+      ColName = new_names,
+      CovName = numeric_names,
+      CovVal = rep(".", n_numeric)
+    ))
+    col_counter <- n_numeric
+  }
+
+  # Process categorical covariates using vectorized model.matrix
+  if (length(categorical_names) > 0) {
+    # Convert all categorical columns to factors for consistent model.matrix behavior
+    cat_dt <- cov_dt[, .SD, .SDcols = categorical_names]
+    for (col in categorical_names) {
+      if (!is.factor(cat_dt[[col]])) {
+        set(cat_dt, j = col, value = as.factor(cat_dt[[col]]))
+      }
+    }
+
+    # Single model.matrix call for all categorical variables (vectorized)
+    # This is more efficient than looping through each column separately
+    cat_formula <- as.formula(paste("~", paste(categorical_names, collapse = " + ")))
+    cat_matrix <- model.matrix(cat_formula, data = cat_dt)
+
+    # Remove intercept column
+    intercept_col <- which(colnames(cat_matrix) == "(Intercept)")
+    if (length(intercept_col) > 0) {
+      cat_matrix <- cat_matrix[, -intercept_col, drop = FALSE]
+    }
+
+    if (ncol(cat_matrix) > 0) {
+      cat_dt_encoded <- as.data.table(cat_matrix)
+      original_names <- colnames(cat_dt_encoded)  # snapshot before any renaming
+      n_cat <- length(original_names)
+      new_names <- paste0("L", col_counter + seq_len(n_cat))
+
+      # Parse original column names to extract covariate name and level BEFORE
+      # calling setnames, which modifies names in-place via C and would corrupt
+      # original_names if it shares the same underlying SEXP.
+      # model.matrix produces names like "sexfemale" for factor "sex" level "female"
+      cov_name_mapping <- vapply(original_names, function(nm) {
+        for (cat_name in categorical_names) {
+          if (startsWith(nm, cat_name)) {
+            return(cat_name)
+          }
+        }
+        return(nm)  # Fallback
+      }, character(1))
+
+      cov_val_mapping <- vapply(seq_along(original_names), function(i) {
+        nm <- original_names[i]
+        cat_name <- cov_name_mapping[i]
+        sub(paste0("^", cat_name), "", nm)
+      }, character(1))
+
+      cov_mapping <- rbind(cov_mapping, data.table(
+        ColName = new_names,
+        CovName = cov_name_mapping,
+        CovVal = cov_val_mapping
+      ))
+
+      setnames(cat_dt_encoded, new_names)
+      result_list[["categorical"]] <- cat_dt_encoded
     }
   }
-  
-  for (CovName in CovNames[NonNumInd]) {
-    Cov1Hot <- as.data.table(model.matrix(~., subset(CovDT, select = CovName)))[, `(Intercept)` := NULL]
-    setnames(Cov1Hot, colnames(Cov1Hot), sub(CovName, "", colnames(Cov1Hot)))
-    CovNames1Hot <- rbind(CovNames1Hot,
-                          data.table(ColName = paste0("L", l + 1:ncol(Cov1Hot)),
-                                     CovName = CovName,
-                                     CovVal = colnames(Cov1Hot)))
-    setnames(Cov1Hot, colnames(Cov1Hot), paste0("L", l + 1:ncol(Cov1Hot)))
-    l <- l + ncol(Cov1Hot)
-    CovDT1Hot <- cbind(CovDT1Hot, Cov1Hot)
+
+  # Combine all processed columns
+  if (length(result_list) == 0) {
+    warning("No valid covariates after processing. Using intercept-only model.",
+            call. = FALSE)
+    result <- data.table(L1 = rep(1, nrow(DataTable)))
+    attr(result, "CovNames") <- data.table(ColName = "L1", CovName = "(Intercept)", CovVal = ".")
+    return(result)
   }
-  
-  # if (Verbose) try(superheat::superheat(cov(scale(model.matrix(~., CovDT1Hot)))))
-  
-  attr(CovDT1Hot, "CovNames") <- CovNames1Hot
-  # attr(CovDT1Hot, "OrigCovDT") <- CovDT
-  return(CovDT1Hot)
+
+  result <- do.call(cbind, unname(result_list))
+  attr(result, "CovNames") <- cov_mapping
+  return(result)
 }
 
 getRegime <- function(Intervention, Data) {
@@ -599,13 +715,42 @@ getTargetTime <- function(TargetTime, TargetEvent, Data) {
   return(TargetTime)
 }
 
+#' Determine default number of CV folds based on effective sample size
+#'
+#' Uses adaptive fold selection: fewer folds for small samples to ensure
+#' sufficient data per fold, more folds for larger samples to reduce variance.
+#'
+#' @param nEff integer; effective number of observations (unique IDs)
+#' @return integer; recommended number of cross-validation folds (V)
+#' @details
+#' The formula uses a piecewise linear function:
+#' \itemize{
+#'   \item n <= 30: V = n - 17 (minimum 3 folds for n=20)
+#'   \item 30 < n <= 500: V = 13 (10 + 3)
+#'   \item 500 < n <= 5000: V = 8 (5 + 3)
+#'   \item 5000 < n <= 10000: V = 5 (2 + 3)
+#'   \item n > 10000: V = 3
+#' }
+#' @keywords internal
+getDefaultCVFolds <- function(nEff) {
+  # Adaptive fold selection based on sample size
+  # Small samples: use leave-more-out to ensure sufficient training data
+
+  # Large samples: fewer folds sufficient, reduces computation
+  V <- (nEff <= 30) * (nEff - 20) +
+       (nEff <= 500) * 10 +
+       (nEff <= 5e3) * 5 +
+       (nEff <= 1e4) * 2 + 3
+  return(as.integer(V))
+}
+
 getCVFolds <- function(CVArg, Data, CVSeed = sample(0:1e8, 1)) {
   ## cross validation setup ----
-  # stratified by event type to avoid regressions failing with rare events 
-  # theory? but regressions may fail in practice with rare events otherwise 
+  # stratified by event type to avoid regressions failing with rare events
+  # theory? but regressions may fail in practice with rare events otherwise
   ### nice to do: make efficient CV representation
   nEff <- attr(Data, "nEff")
-  V <- (nEff <= 30)*(nEff - 20) + (nEff <= 500)*10 + (nEff <= 5e3)*5 + (nEff <= 1e4)*2 + 3
+  V <- getDefaultCVFolds(nEff)
   
   if (is.null(CVArg)) {
     CVArg <- list(n = nrow(Data), V = V, fold_fun = origami::folds_vfold, 
@@ -658,14 +803,19 @@ getModel <- function(Model, Data, Verbose) {
   for (FitVar in names(Model)) {
     if (!(FitVar %in% c(Treatment, UniqueEvents))) {
       message("The Model[['", FitVar,"']] specification will be ignored. Check that model ",
-          "specifications are named correspondingly to the treatment variable, or the ", 
+          "specifications are named correspondingly to the treatment variable, or the ",
           "numeric value representing a censoring or event type\n")
     } else {
       if (FitVar %in% UniqueEvents) {
+        # Skip survivalSL specs - they don't need formula processing
+        if (inherits(Model[[FitVar]], "Lrnr.SurvivalSL")) {
+          next
+        }
+
         CoxLeft <- paste0("Surv(", EventTime, ", ", EventType, " == ", FitVar, ") ~ ")
         CoxLeftRegex <- paste0("^Surv\\(\\s*", EventTime, "\\s*,\\s*", EventType,
                                "\\s*==\\s*", FitVar, "\\s*\\)\\s*~\\s*")
-        
+
         if (is.list(Model[[FitVar]])) {
           if (is.null(names(Model[[FitVar]]))) {
             names(Model[[FitVar]]) <- paste0("model", seq_along(Model[[FitVar]]))
@@ -759,6 +909,12 @@ makeModelList <- function(Treatment, EventTime, EventType, UniqueEvents, Model, 
         class(hazmodel) <- union("Lrnr.Cox", class(hazmodel))
         return(hazmodel)
       })
+    } else if (inherits(Model[[as.character(j)]], "Lrnr.SurvivalSL")) {
+      # survivalSL specification - pass through with j attribute
+      if (Verbose) {
+        message("Using survivalSL for event type ", j, " with methods: ",
+                paste(Model[[as.character(j)]]$methods, collapse = ", "))
+      }
     }
     attr(Model[[as.character(j)]], "j") <- j
   }

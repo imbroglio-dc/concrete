@@ -11,6 +11,45 @@ Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
 Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
+// computeIC
+List computeIC(List Hazards, arma::mat TotalSurv, arma::mat NuisanceWeight, arma::vec GStar, arma::vec T_tilde, arma::ivec Delta, arma::vec EvalTimes, arma::ivec TargetEvent, arma::vec TargetTime);
+RcppExport SEXP _concrete_computeIC(SEXP HazardsSEXP, SEXP TotalSurvSEXP, SEXP NuisanceWeightSEXP, SEXP GStarSEXP, SEXP T_tildeSEXP, SEXP DeltaSEXP, SEXP EvalTimesSEXP, SEXP TargetEventSEXP, SEXP TargetTimeSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< List >::type Hazards(HazardsSEXP);
+    Rcpp::traits::input_parameter< arma::mat >::type TotalSurv(TotalSurvSEXP);
+    Rcpp::traits::input_parameter< arma::mat >::type NuisanceWeight(NuisanceWeightSEXP);
+    Rcpp::traits::input_parameter< arma::vec >::type GStar(GStarSEXP);
+    Rcpp::traits::input_parameter< arma::vec >::type T_tilde(T_tildeSEXP);
+    Rcpp::traits::input_parameter< arma::ivec >::type Delta(DeltaSEXP);
+    Rcpp::traits::input_parameter< arma::vec >::type EvalTimes(EvalTimesSEXP);
+    Rcpp::traits::input_parameter< arma::ivec >::type TargetEvent(TargetEventSEXP);
+    Rcpp::traits::input_parameter< arma::vec >::type TargetTime(TargetTimeSEXP);
+    rcpp_result_gen = Rcpp::wrap(computeIC(Hazards, TotalSurv, NuisanceWeight, GStar, T_tilde, Delta, EvalTimes, TargetEvent, TargetTime));
+    return rcpp_result_gen;
+END_RCPP
+}
+// updateHazardsCpp
+List updateHazardsCpp(List Hazards, const arma::mat& TotalSurv, const arma::mat& GStar, const arma::mat& NuisanceWeight, const arma::vec& EvalTimes, const CharacterVector& TargetEvent, const arma::vec& TargetTime, const DataFrame& PnEIC, double OneStepEps, double NormPnEIC);
+RcppExport SEXP _concrete_updateHazardsCpp(SEXP HazardsSEXP, SEXP TotalSurvSEXP, SEXP GStarSEXP, SEXP NuisanceWeightSEXP, SEXP EvalTimesSEXP, SEXP TargetEventSEXP, SEXP TargetTimeSEXP, SEXP PnEICSEXP, SEXP OneStepEpsSEXP, SEXP NormPnEICSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< List >::type Hazards(HazardsSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type TotalSurv(TotalSurvSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type GStar(GStarSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type NuisanceWeight(NuisanceWeightSEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type EvalTimes(EvalTimesSEXP);
+    Rcpp::traits::input_parameter< const CharacterVector& >::type TargetEvent(TargetEventSEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type TargetTime(TargetTimeSEXP);
+    Rcpp::traits::input_parameter< const DataFrame& >::type PnEIC(PnEICSEXP);
+    Rcpp::traits::input_parameter< double >::type OneStepEps(OneStepEpsSEXP);
+    Rcpp::traits::input_parameter< double >::type NormPnEIC(NormPnEICSEXP);
+    rcpp_result_gen = Rcpp::wrap(updateHazardsCpp(Hazards, TotalSurv, GStar, NuisanceWeight, EvalTimes, TargetEvent, TargetTime, PnEIC, OneStepEps, NormPnEIC));
+    return rcpp_result_gen;
+END_RCPP
+}
 // getCleverCovariate
 arma::dmat getCleverCovariate(arma::dvec GStar, arma::dmat NuisanceWeight, arma::dmat hFS, int LeqJ);
 RcppExport SEXP _concrete_getCleverCovariate(SEXP GStarSEXP, SEXP NuisanceWeightSEXP, SEXP hFSSEXP, SEXP LeqJSEXP) {
@@ -38,31 +77,12 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// updateHazardsCpp
-List updateHazardsCpp(List Hazards, const arma::mat& TotalSurv, const arma::mat& GStar, const arma::mat& NuisanceWeight, const arma::vec& EvalTimes, const CharacterVector& TargetEvent, const arma::vec& TargetTime, const DataFrame& PnEIC, double OneStepEps, double NormPnEIC);
-RcppExport SEXP _concrete_updateHazardsCpp(SEXP HazardsSEXP, SEXP TotalSurvSEXP, SEXP GStarSEXP, SEXP NuisanceWeightSEXP, SEXP EvalTimesSEXP, SEXP TargetEventSEXP, SEXP TargetTimeSEXP, SEXP PnEICSEXP, SEXP OneStepEpsSEXP, SEXP NormPnEICSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< List >::type Hazards(HazardsSEXP);
-    Rcpp::traits::input_parameter< const arma::mat& >::type TotalSurv(TotalSurvSEXP);
-    Rcpp::traits::input_parameter< const arma::mat& >::type GStar(GStarSEXP);
-    Rcpp::traits::input_parameter< const arma::mat& >::type NuisanceWeight(NuisanceWeightSEXP);
-    Rcpp::traits::input_parameter< const arma::vec& >::type EvalTimes(EvalTimesSEXP);
-    Rcpp::traits::input_parameter< const CharacterVector& >::type TargetEvent(TargetEventSEXP);
-    Rcpp::traits::input_parameter< const arma::vec& >::type TargetTime(TargetTimeSEXP);
-    Rcpp::traits::input_parameter< const DataFrame& >::type PnEIC(PnEICSEXP);
-    Rcpp::traits::input_parameter< double >::type OneStepEps(OneStepEpsSEXP);
-    Rcpp::traits::input_parameter< double >::type NormPnEIC(NormPnEICSEXP);
-    rcpp_result_gen = Rcpp::wrap(updateHazardsCpp(Hazards, TotalSurv, GStar, NuisanceWeight, EvalTimes, TargetEvent, TargetTime, PnEIC, OneStepEps, NormPnEIC));
-    return rcpp_result_gen;
-END_RCPP
-}
 
 static const R_CallMethodDef CallEntries[] = {
+    {"_concrete_computeIC", (DL_FUNC) &_concrete_computeIC, 9},
+    {"_concrete_updateHazardsCpp", (DL_FUNC) &_concrete_updateHazardsCpp, 10},
     {"_concrete_getCleverCovariate", (DL_FUNC) &_concrete_getCleverCovariate, 4},
     {"_concrete_getHazLS", (DL_FUNC) &_concrete_getHazLS, 3},
-    {"_concrete_updateHazardsCpp", (DL_FUNC) &_concrete_updateHazardsCpp, 10},
     {NULL, NULL, 0}
 };
 

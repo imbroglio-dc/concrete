@@ -27,20 +27,52 @@
 #
 #     undo or commit updated h() and F() based on PnEIC
 
-#' Title
+#' Perform TMLE Targeting Step
 #'
-#' @param Estimates list
-#' @param SummEIC data.table
-#' @param Data data.table
-#' @param TargetEvent numeric vector
-#' @param TargetTime numeric vector
-#' @param MaxUpdateIter numeric
-#' @param OneStepEps numeric
-#' @param NormPnEIC numeric
-#' @param Verbose boolean
+#' Iteratively updates the initial hazard estimates along the least favorable
+#' submodel to solve the efficient influence curve equation. This is the core
+#' "targeting" step that distinguishes TMLE from plug-in estimators.
+#'
+#' @param Estimates list; initial estimates from getInitialEstimate(), containing
+#'   Hazards, EvntFreeSurv, PropScore, NuisanceWeight for each regime
+#' @param SummEIC data.table; summarized EIC with PnEIC and stopping criterion
+#' @param Data data.table; observed data with attribute column names
+#' @param TargetEvent numeric vector; event types to target
+#' @param TargetTime numeric vector; time points to target
+#' @param MaxUpdateIter integer; maximum number of update iterations
+#' @param OneStepEps numeric in (0, 1]; initial step size for updates
+#' @param NormPnEIC numeric; initial ||PnEIC|| norm
+#' @param Verbose logical; whether to print convergence diagnostics
+#'
+#' @return Updated Estimates list with:
+#'   \itemize{
+#'     \item Updated Hazards, EvntFreeSurv, SummEIC, IC for each regime
+#'     \item Attribute TmleConverged: list(converged = TRUE/FALSE, step = integer)
+#'     \item Attribute NormPnEICs: numeric vector of ||PnEIC|| trajectory
+#'   }
+#'
+#' @details
+#' The update uses a multiplicative perturbation of the hazards:
+#'   h_new(t) = h_old(t) * exp(eps * sum_jk H_jk(t) * PnEIC_jk / ||PnEIC||)
+#'
+#' where H_jk is the clever covariate for event j at time k.
+#'
+#' Convergence is declared when: |PnEIC_jk| <= seEIC_jk / (sqrt(n) * log(n)) for all j, k
+#'
+#' If an update increases ||PnEIC||, the step size is halved and the iteration
+#' repeats. This ensures monotonic decrease of ||PnEIC|| (up to numerical precision).
+#'
+#' @section Numerical Stability:
+#' Several safeguards prevent numerical issues:
+#' \itemize{
+#'   \item Survival probabilities bounded away from 0 (minimum 1e-12)
+#'   \item NA hazard values replaced with 0 (with warning)
+#'   \item Step size halved if update increases ||PnEIC||
+#'   \item Maximum iteration limit prevents infinite loops
+#' }
 #'
 #' @importFrom nleqslv nleqslv
-
+#' @keywords internal
 doTmleUpdate <- function(Estimates, SummEIC, Data, TargetEvent, TargetTime,
                          MaxUpdateIter, OneStepEps, NormPnEIC, Verbose) {
   Time <- Event <- `seEIC/(sqrt(n)log(n))` <- PnEIC <- NULL
@@ -98,10 +130,14 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, TargetEvent, TargetTime,
       )
       NewHazards <- lapply(NewHazards, function(hazards) {
         if (anyNA(hazards)) {
+          warning("NA/NaN values detected in updated hazard estimates; setting to 0. ",
+                  "This may indicate numerical instability. Consider increasing MinNuisance.",
+                  call. = FALSE)
           hazards[is.na(hazards) | is.nan(hazards)] <- 0
         }
         return(hazards)
       })
+
       NewSurv <- apply(Reduce(`+`, NewHazards), 2, function(haz) exp(-cumsum(haz)))
       NewSurv[NewSurv < 1e-12 | is.na(NewSurv) | is.nan(NewSurv)] <- 1e-12
       NewIC <- getIC(
@@ -124,8 +160,11 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, TargetEvent, TargetTime,
     }))
     NewNormPnEIC <- getNormPnEIC(NewSummEIC[Time %in% TargetTime & Event %in% TargetEvent, PnEIC])
 
-    # TMLE update breaking because Survival -> 0?
-    if (anyNA(NewNormPnEIC)) browser()
+    # TMLE update may produce NA if survival -> 0 or numerical instability
+    if (anyNA(NewNormPnEIC)) {
+      stop("NormPnEIC contains NA values; TMLE update may be numerically unstable. ",
+              "Consider increasing MinNuisance or checking data for extreme values.")
+    }
 
     if (NormPnEIC < NewNormPnEIC) {
       if (Verbose) cat("Update increased ||PnEIC||, halving OneStepEps\n")
@@ -168,31 +207,52 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, TargetEvent, TargetTime,
   return(Estimates)
 }
 
+#' Update Hazards Along Least Favorable Submodel (R Implementation)
+#'
+#' Computes the one-step TMLE update of cause-specific hazards. This is the R
+#' reference implementation; the C++ version (updateHazardsCpp) is used in production.
+#'
+#' @param GStar numeric vector; intervention probabilities g*(A|W) for each subject
+#' @param Hazards list; cause-specific hazard matrices (times x subjects)
+#' @param TotalSurv matrix; overall survival S(t) (times x subjects)
+#' @param NuisanceWeight matrix; inverse of g-related weights (times x subjects)
+#' @param EvalTimes numeric vector; time points for hazard evaluation
+#' @param T.tilde numeric vector; observed event/censoring times
+#' @param Delta numeric vector; observed event types (0 = censored)
+#' @param PnEIC data.table; empirical mean EIC with columns Time, Event, PnEIC
+#' @param NormPnEIC numeric; current ||PnEIC|| norm for scaling updates
+#' @param OneStepEps numeric; step size multiplier
+#' @param TargetEvent numeric vector; event types being targeted
+#' @param TargetTime numeric vector; time points being targeted
+#'
+#' @return list of updated hazard matrices with same structure as input Hazards
+#'
+#' @details
+#' For each cause l, the hazard update is:
+#'   h_l,new(t) = h_l,old(t) * exp(eps / ||PnEIC|| * sum_{j,tau} H_{l,j,tau}(t) * PnEIC_{j,tau})
+#'
+#' where H_{l,j,tau} is the clever covariate measuring the sensitivity of the
+#' risk F_j(tau) to perturbations in hazard h_l.
+#'
+#' @keywords internal
 updateHazard <- function(GStar, Hazards, TotalSurv, NuisanceWeight, EvalTimes, T.tilde,
-                         Delta, PnEIC, NormPnEIC, OneStepEps, TargetEvent, TargetTime) {
+                         Delta, PnEIC, NormPnEIC, OneStepEps, TargetEvent, TargetTime, 
+                        Iterative = FALSE) {
   eps <- Time <- Event <- NULL
-  Iterative <- FALSE
   GStar <- as.numeric(unlist(GStar))
   if (min(TotalSurv) == 0) {
-    stop("People's survival probabilty -> 0 makes the clever covariate explode.")
+    stop("Survival probability reached exactly 0, causing undefined clever covariate. ",
+         "This typically occurs when:\n",
+         "  1. TargetTime extends beyond most observed events\n",
+         "  2. Hazard estimates are unstable (try different model specification)\n",
+         "  3. Sample size is insufficient for the target time horizon\n",
+         "Consider targeting an earlier time point or checking data quality.",
+         call. = FALSE)
   }
   if (Iterative) {
     warning("Iterative TMLE not yet implemented. Performing one-step TMLE instead.")
   }
-  # tmp <- microbenchmark(
-  #     "cpp" = {
-  #         NewHaz <- updateHazardsCpp(J = TargetEvent,
-  #                                    TargetTimes = TargetTime,
-  #                                    L = as.numeric(names(Hazards)),
-  #                                    Hazards = array(unlist(Hazards), dim = c(dim(Hazards[[1]]), length(Hazards))),
-  #                                    TotalSurv = TotalSurv,
-  #                                    EvalTimes = EvalTimes,
-  #                                    GStar = GStar,
-  #                                    NuisanceWeight = NuisanceWeight,
-  #                                    PnEIC = unlist(PnEIC[Event > 0, ][order(Event, Time), PnEIC]),
-  #                                    StepSize = OneStepEps / NormPnEIC)
-  #         NewHaz <- lapply(seq(dim(NewHaz)[3]), function(l) NewHaz[, , l])},
-  #     "apply" = {
+
   NewHazards <- lapply(Hazards, function(haz.al) { # loop over L
     l <- attr(haz.al, "j")
 
@@ -225,45 +285,7 @@ updateHazard <- function(GStar, Hazards, TotalSurv, NuisanceWeight, EvalTimes, T
     attr(newhaz.al, "j") <- l
     return(newhaz.al)
   })
-  # })
 
-  #     eps.l <- nleqslv(0.01, function(eps) getFluctPnEIC(GStar = GStar, Hazards = Hazards,
-  #                                                        TotalSurv = TotalSurv,
-  #                                                        NuisanceWeight = NuisanceWeight,
-  #                                                        TargetEvent = TargetEvent,
-  #                                                        TargetTime = TargetTime, T.tilde = T.tilde,
-  #                                                        Delta = Delta, EvalTimes = EvalTimes,
-  #                                                        GComp = FALSE, l = attr(haz.al, "j"),
-  #                                                        fluct.eps = eps))$x
-  #     lapply(TargetEvent, function(j) {
-  #         `F.j.t` <- apply(Hazards[[as.character(j)]] * TotalSurv, 2, cumsum)
-  #         eps.lj <- nleqslv(0.01, function(eps) getFluctPnEIC(GStar = GStar, Hazards = Hazards,
-  #                                                             TotalSurv = TotalSurv,
-  #                                                             NuisanceWeight = NuisanceWeight,
-  #                                                             TargetEvent = j,
-  #                                                             TargetTime = TargetTime, T.tilde = T.tilde,
-  #                                                             Delta = Delta, EvalTimes = EvalTimes,
-  #                                                             GComp = FALSE, l = attr(haz.al, "j"),
-  #                                                             fluct.eps = eps))$x
-  #         update.j <- sapply(TargetTime, function(tau) {
-  #             eps.ljk <- nleqslv(0.01, function(eps) getFluctPnEIC(GStar = GStar, Hazards = Hazards,
-  #                                                                  TotalSurv = TotalSurv,
-  #                                                                  NuisanceWeight = NuisanceWeight,
-  #                                                                  TargetEvent = j,
-  #                                                                  TargetTime = tau, T.tilde = T.tilde,
-  #                                                                  Delta = Delta, EvalTimes = EvalTimes,
-  #                                                                  GComp = FALSE, l = attr(haz.al, "j"),
-  #                                                                  fluct.eps = eps))$x
-  #             `F.j.tau` <- `F.j.t`[EvalTimes == tau, ]
-  #             h.q <- (l == j) - t(apply(`F.j.t`, 1, function(r) `F.j.tau` - r)) / TotalSurv
-  #             h.q[EvalTimes > tau, ] <- 0
-  #             update <- h.q * NuisanceWeight %*% diag(GStar) * eps.ljk
-  #             update.l <<- update.l + update
-  #             return(NULL)
-  #         })
-  #         return(NULL)
-  #     })
-  # }
   return(NewHazards)
 }
 
@@ -310,6 +332,26 @@ updateHazard <- function(GStar, Hazards, TotalSurv, NuisanceWeight, EvalTimes, T
 #     return(IC.a)
 # }
 
+#' Print TMLE Convergence Diagnostics
+#'
+#' Displays information about the current state of TMLE convergence, including
+#' the targets with the highest |PnEIC| / stopping_criterion ratios.
+#'
+#' @param OneStepStop data.table with columns Trt, Time, Event, check (logical),
+#'   and ratio (|PnEIC| / stopping_criterion)
+#' @param NormPnEIC numeric; current Euclidean norm of PnEIC vector
+#'
+#' @return NULL (called for side effect of printing)
+#'
+#' @details
+#' The ratio column indicates how far each target is from convergence:
+#' - ratio < 1: Target has converged
+
+#' - ratio = 1: Exactly at stopping criterion
+#' - ratio > 1: Target has not yet converged; higher values indicate
+#'   more targeting needed
+#'
+#' @keywords internal
 printOneStepDiagnostics <- function(OneStepStop, NormPnEIC) {
   ratio <- NULL
   Worst <- OneStepStop[, !"check"][, ratio := round(ratio, 2)][order(ratio, decreasing = TRUE)]
