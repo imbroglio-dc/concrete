@@ -1,25 +1,36 @@
-#' doConcrete
-#' @param ConcreteArgs "ConcreteArgs" object : output of formatArguments()
+#' Perform TMLE Estimation of Cause-Specific Absolute Risks
 #'
-# #' @param DataTable: data.table (N x ?)
-# #' @param CovDataTable : data.table (N x ?)
-# #' @param LongTime : numeric vector (?? x 1)
-# #' @param ID : vector (N x 1)
-# #' @param Events : numeric
-# #' @param Censored : boolean
-# #' @param TargetTime : numeric vector (length = K)
-# #' @param TargetEvent : numeric vector \\subset EventType (length = J)
-# #' @param Regime : list
-# #' @param CVFolds : list
-# #' @param Model : list of functions (length = L)
-# #' @param MaxUpdateIter : numeric
-# #' @param OneStepEps : numeric
-# #' @param MinNuisance : numeric
-# #' @param Verbose : boolean
-# #' @param GComp : boolean
-# #' @param ReturnModels boolean
+#' Main estimation function for the concrete package. Computes continuous-time
+#' one-step TMLE estimates of cause-specific cumulative incidence (absolute risk)
+#' under specified intervention regimes.
 #'
-#' @return object with s3 class "ConcreteEst"
+#' @param ConcreteArgs "ConcreteArgs" object; validated output from formatArguments().
+#'   Contains all data, model specifications, and estimation parameters.
+#'
+#' @return Object of class "ConcreteEst" containing:
+#'   \itemize{
+#'     \item For each intervention regime: Hazards, EvntFreeSurv, PropScore,
+#'       NuisanceWeight, SummEIC, and IC (efficient influence curve)
+#'     \item Attributes: TmleConverged (list with convergence status and step count),
+#'       NormPnEICs (trajectory of PnEIC norms), TargetTime, TargetEvent, T.tilde,
+#'       Delta, GComp (whether g-computation estimates included)
+#'   }
+#'
+#' @details
+#' The estimation proceeds in three stages:
+#' \enumerate{
+#'   \item Initial estimation: Fits propensity scores and cause-specific hazards
+#'     using cross-validated super learner ensembles
+#'   \item EIC computation: Calculates the efficient influence curve for the
+#'     cumulative incidence function under each intervention
+#'   \item TMLE update: Iteratively updates hazard estimates along the least
+#'     favorable submodel until the empirical mean of the EIC is sufficiently
+#'     small (convergence criterion: |PnEIC| <= seEIC / (sqrt(n) * log(n)))
+#' }
+#'
+#' The one-step TMLE update uses a small step size (controlled by OneStepEps)
+#' and halves the step size if the update increases the PnEIC norm, ensuring
+#' monotonic convergence.
 #'
 #' @importFrom grDevices dev.hold dev.flush devAskNewPage
 #' @importFrom graphics abline
@@ -60,20 +71,41 @@ doConcrete <- function(ConcreteArgs) {
     return(do.call(doConCRTmle, ArgList))
 }
 
-doConCRTmle <- function(DataTable, TargetTime, TargetEvent, Regime, CVFolds, Model, MaxUpdateIter, 
+#' Internal TMLE Implementation
+#'
+#' Core implementation of the continuous-time TMLE algorithm. Called by doConcrete()
+#' after argument validation.
+#'
+#' @param DataTable data.table; formatted data with attributes for column names
+#' @param TargetTime numeric vector; time points at which to estimate risks
+#' @param TargetEvent numeric vector; event types to target
+#' @param Regime list; intervention specifications with g.star functions
+#' @param CVFolds list; cross-validation fold assignments from origami
+#' @param Model list; model specifications for propensity and hazard estimation
+#' @param MaxUpdateIter integer; maximum TMLE update iterations
+#' @param OneStepEps numeric; initial step size for TMLE updates (0, 1]
+#' @param MinNuisance numeric; lower bound for propensity score truncation
+#' @param Verbose logical; whether to print progress information
+#' @param GComp logical; whether to compute g-computation estimates
+#' @param ReturnModels logical; whether to return fitted model objects
+#' @param ... additional arguments (unused, for compatibility)
+#'
+#' @return ConcreteEst object (see doConcrete documentation)
+#' @keywords internal
+doConCRTmle <- function(DataTable, TargetTime, TargetEvent, Regime, CVFolds, Model, MaxUpdateIter,
                         OneStepEps, MinNuisance, Verbose, GComp, ReturnModels, ...)
 {
     ratio <- Time <- Event <- PnEIC <- `seEIC/(sqrt(n)log(n))` <- NULL # for data.table compatibility w/ global var binding check
     
     # initial estimation ------------------------------------------------------------------------
-    Estimates <- getInitialEstimate(Data = DataTable, Model = Model, CVFolds = CVFolds, 
-                                    MinNuisance = MinNuisance, TargetEvent = TargetEvent, 
-                                    TargetTime = TargetTime, Regime = Regime, 
+    Estimates <- getInitialEstimate(Data = DataTable, Model = Model, CVFolds = CVFolds,
+                                    MinNuisance = MinNuisance, TargetEvent = TargetEvent,
+                                    TargetTime = TargetTime, Regime = Regime,
                                     ReturnModels = ReturnModels)
-    
+
     # get initial EIC (possibly with GComp plug-in estimate) ---------------------------------------------
     Estimates <- getEIC(Estimates = Estimates, Data = DataTable, Regime = Regime,
-                        TargetEvent = TargetEvent, TargetTime = TargetTime, 
+                        TargetEvent = TargetEvent, TargetTime = TargetTime,
                         MinNuisance = MinNuisance, GComp = GComp)
     
     
@@ -106,17 +138,41 @@ doConCRTmle <- function(DataTable, TargetTime, TargetEvent, Regime, CVFolds, Mod
     attr(Estimates, "TargetEvent") <- TargetEvent
     attr(Estimates, "Delta") <- DataTable[[attr(DataTable, "EventType")]]
     attr(Estimates, "GComp") <- GComp
+
+    # Note if survival warnings were generated (already attached from getInitialEstimate)
+    if (!is.null(attr(Estimates, "SurvivalWarnings"))) {
+        message("Note: Low survival warnings generated. Details: attr(result, 'SurvivalWarnings')")
+    }
+
     class(Estimates) <- union("ConcreteEst", class(Estimates))
     return(Estimates)
 }
 
+#' Compute Norm of Empirical Mean EIC
+#'
+#' Calculates the (optionally weighted) Euclidean norm of the empirical mean
+#' efficient influence curve. Used as the convergence criterion for TMLE.
+#'
+#' @param PnEIC numeric vector; empirical mean of the EIC for each target
+#' @param Sigma matrix (optional); covariance matrix for weighted norm.
+#'   If NULL, computes unweighted Euclidean norm.
+#'
+#' @return numeric; the norm ||PnEIC|| (or ||PnEIC||_Sigma if Sigma provided)
+#'
+#' @details
+#' The weighted norm is computed as sqrt(PnEIC' * Sigma^{-1} * PnEIC).
+#' If Sigma is singular, a small ridge regularization (1e-6) is added
+#' to the diagonal before inversion.
+#'
+#' @keywords internal
 getNormPnEIC <- function(PnEIC, Sigma = NULL) {
     WeightedPnEIC <- PnEIC
     if (!is.null(Sigma)) {
         SigmaInv <- try(solve(Sigma))
         if (any(class(SigmaInv) == "try-error")) {
             SigmaInv <- solve(Sigma + diag(x = 1e-6, nrow = nrow(Sigma)))
-            warning("regularization of Sigma needed for inversion")
+            warning("Covariance matrix Sigma was singular; added ridge regularization ",
+                    "(1e-6) for inversion. This may occur with highly correlated EICs.")
         }
         WeightedPnEIC <- PnEIC %*% SigmaInv
     }

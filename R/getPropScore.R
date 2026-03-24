@@ -1,18 +1,43 @@
-#' getPropScore
+#' Estimate Propensity Scores for Treatment Assignment
 #'
-#' @param TrtVal numeric vector
-#' @param CovDT data.table
-#' @param TrtModel list or fitted object
-#' @param MinNuisance numeric
-#' @param Regime list
-#' @param CVFolds list
-#' @param TrtLoss character or function(A, g.A)
-#' @param ReturnModels boolean
-#' 
+#' Estimates P(A|W), the conditional probability of treatment given covariates,
+#' using cross-validated super learner. Computes both the propensity for the
+#' observed treatment and for the intervention assignment (g.star).
+#'
+#' @param TrtVal data.table; observed treatment values (n x p for p treatment variables)
+#' @param CovDT data.table; baseline covariates for prediction
+#' @param TrtModel list; SuperLearner library specification for each treatment variable,
+#'   or a pre-fitted SuperLearner object
+#' @param MinNuisance numeric in (0, 1); minimum propensity score (for documentation;
+#'   actual truncation occurs in getInitialEstimate)
+#' @param Regime list; intervention specifications, each with g.star function
+#' @param CVFolds list; cross-validation fold assignments
+#' @param TrtLoss character or function (optional); loss function for super learner.
+#'   Currently unused; defaults to binomial deviance for binary, MSE for continuous.
+#' @param ReturnModels logical; if TRUE, store fitted SuperLearner objects
+#'
+#' @return List of propensity scores, one element per intervention regime.
+#'   Each element is a numeric vector of length n with attributes:
+#'   \itemize{
+#'     \item g.star.intervention: P(A = a*|W) under the intervention
+#'     \item g.star.obs: P(A = A_obs|W) for observed treatment
+#'   }
+#'   List attributes: TrtFit (fitted models if ReturnModels), warnings (any SuperLearner warnings)
+#'
+#' @details
+#' For binary treatment: uses binomial family SuperLearner
+#' For continuous treatment: uses Gaussian family (not fully implemented)
+#' For multiple treatment variables: estimates joint propensity as product of conditionals
+#'
+#' The g.star function from each Regime computes the intervention-specific
+#' propensity: typically 1(A = a*) for static interventions, but can be
+#' more complex for dynamic or stochastic interventions.
+#'
 #' @import SuperLearner
 #' @importFrom stats binomial gaussian
+#' @keywords internal
 
-getPropScore <- function(TrtVal, CovDT, TrtModel, MinNuisance, Regime, 
+getPropScore <- function(TrtVal, CovDT, TrtModel, MinNuisance, Regime,
                          CVFolds, TrtLoss = NULL, ReturnModels) {
     old <- options()
     on.exit(options(old))
@@ -32,7 +57,7 @@ getPropScore <- function(TrtVal, CovDT, TrtModel, MinNuisance, Regime,
                 } else {
                     SLArgs[["X"]] <- CovDT
                 }
-                SLArgs[["family"]] <- ifelse(length(unique(unlist(TrtVal))) == 2, "binomial", "gaussian")
+                SLArgs[["family"]] <- ifelse(length(unique(unlist(TrtVal[[a_i]]))) == 2, "binomial", "gaussian")
                 SLArgs[["SL.library"]] <- TrtModel[[a_i]]
                 SLArgs[["cvControl"]] <- list("V" = as.integer(length(CVFolds)), "stratifyCV" = FALSE, 
                                               "shuffle" = FALSE,
@@ -52,21 +77,36 @@ getPropScore <- function(TrtVal, CovDT, TrtModel, MinNuisance, Regime,
             #     }
             #     TrtFit[[a_i]] <- TrtSL$train(TrtTask)
             } else {
-                stop("functionality for propensity score estimation not using 'sl3' or ", 
-                     "'SuperLearner' has not yet been implemented")
+                stop("Propensity score estimation requires either SuperLearner or sl3 backend. ",
+                     "Received model of class: ", paste(class(TrtModel[[a_i]]), collapse = ", "), ". ",
+                     "Use a character vector of SuperLearner library names (e.g., c('SL.glm', 'SL.glmnet')) ",
+                     "or an sl3 learner object.",
+                     call. = FALSE)
             }
         } 
     }
     
     PropScores <- lapply(Regime, function(a) {
-        if (!all(dim(a) == dim(TrtVal))) 
-            stop("Regime dimensions don't match with observed treatment. Bugfix needed")
+        if (!all(dim(a) == dim(TrtVal))) {
+            stop("Intervention regime dimensions (", paste(dim(a), collapse = " x "),
+                 ") do not match observed treatment dimensions (",
+                 paste(dim(TrtVal), collapse = " x "), "). ",
+                 "The intervention function must return a data structure with the same ",
+                 "dimensions as the treatment variable. Check your Intervention specification.",
+                 call. = FALSE)
+        }
         
         PropScore <- rep_len(1, nrow(TrtVal))
         for (a_i in 1:ncol(TrtVal)) {
             a_vec <- unlist(subset(a, select = a_i))
-            if (!all(a_vec %in% c(0, 1))) 
-                stop("support for non-binary intervention variables is not yet implemented")
+            if (!all(a_vec %in% c(0, 1))) {
+                stop("Non-binary intervention variables are not yet supported. ",
+                     "Intervention values must be 0 or 1. Found values: ",
+                     paste(unique(a_vec[!a_vec %in% c(0, 1)])[1:min(5, sum(!a_vec %in% c(0, 1)))], collapse = ", "),
+                     ". For continuous or multi-level treatments, consider dichotomizing ",
+                     "or using a different estimation approach.",
+                     call. = FALSE)
+            }
             
             if (attr(TrtModel[[a_i]], "Backend") == "SuperLearner") {
                 if (a_i > 1) {

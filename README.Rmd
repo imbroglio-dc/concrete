@@ -17,27 +17,29 @@ knitr::opts_chunk$set(
 [![R-CMD-check](https://github.com/imbroglio-dc/concrete/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/imbroglio-dc/concrete/actions/workflows/R-CMD-check.yaml)
 [![Coverage Status](https://coveralls.io/repos/github/imbroglio-dc/concrete/badge.svg?branch=main)](https://coveralls.io/github/imbroglio-dc/concrete?branch=main)
 
-> Continuous-Time Targeted Maximum Likelihood Estimation for Survival Analysis with Competing Risks 
+> Continuous-Time Targeted Maximum Likelihood Estimation for Survival Analysis with Competing Risks
 
 ## Description
 
-`concrete` is an R package designed to use targeted maximum likelihood
-estimation (TMLE) to compute covariate-adjusted marginal cumulative incidence
-estimates in right-censored survival settings with and without competing risks. 
+`concrete` is an R package for estimating covariate-adjusted marginal cumulative incidence (absolute risk) in right-censored survival settings with and without competing risks. It implements the continuous-time one-step Targeted Minimum Loss-Based Estimation (TMLE) methodology of [Rytgaard et al. (2023)](https://doi.org/10.1111/biom.13856) and [Rytgaard and van der Laan (2023)](https://doi.org/10.1007/s10985-022-09576-2).
+
+TMLE is a doubly-robust, semiparametric efficient estimation framework. `concrete` combines it with cross-validated super learner ensembles for the nuisance parameters (treatment propensity scores and cause-specific hazards), yielding estimates that are:
+
+- **Doubly robust**: consistent if either the propensity score or the outcome model is correctly specified
+- **Semiparametrically efficient**: achieves the lowest possible asymptotic variance among regular estimators
+- **Targeted**: the TMLE fluctuation step directly reduces bias for the estimand of interest (cumulative incidence)
 
 ---
 
 ## Installation
 
-For standard use, we recommend installing the package from
-[CRAN](https://cran.r-project.org/) via
+Install from [CRAN](https://cran.r-project.org/):
 
 ```{r cran-installation, eval = FALSE}
 install.packages("concrete")
 ```
 
-You can install a stable release of `concrete` from GitHub via
-[`devtools`](https://www.rstudio.com/products/rpackages/devtools/) with:
+Install the development version from GitHub via [`devtools`](https://www.rstudio.com/products/rpackages/devtools/):
 
 ```{r gh-installation, eval = FALSE}
 devtools::install_github("imbroglio-dc/concrete")
@@ -45,7 +47,220 @@ devtools::install_github("imbroglio-dc/concrete")
 
 ---
 
+## Quick Start
+
+The `concrete` workflow has three steps: format inputs, run TMLE, extract output.
+
+```{r quickstart, eval = FALSE}
+library(data.table)
+library(concrete)
+
+# --- 1. Prepare data ---
+# DataTable must have columns: EventTime, EventType (0 = censored), Treatment, and covariates
+data <- as.data.table(survival::pbc)[1:200, .(id, time, status, trt, age, sex)]
+
+# --- 2. Format arguments ---
+# makeITT() specifies an intent-to-treat analysis for a binary treatment
+concrete.args <- formatArguments(
+  DataTable   = data,
+  EventTime   = "time",       # observed follow-up time
+  EventType   = "status",     # 0 = censored, 1 = transplant, 2 = death
+  Treatment   = "trt",        # binary treatment (0/1)
+  ID          = "id",
+  TargetTime  = c(1000, 2000, 3000),  # time points to estimate risk at
+  TargetEvent = c(1, 2),              # competing events to target
+  Intervention = makeITT(),           # compare treat-all vs. treat-none
+  CVArg       = list(V = 5)           # 5-fold cross-validation
+)
+
+# --- 3. Run TMLE ---
+concrete.est <- doConcrete(concrete.args)
+
+# --- 4. Extract and visualize results ---
+concrete.out <- getOutput(
+  concrete.est,
+  Estimand     = c("Risk", "RD", "RR"),  # absolute risk, risk diff, risk ratio
+  Simultaneous = TRUE                     # simultaneous CIs across time points
+)
+
+print(concrete.out)
+plot(concrete.out)
+```
+
+---
+
+## Core Functions
+
+### `formatArguments()` — Validate and format inputs
+
+`formatArguments()` validates your data and builds a `ConcreteArgs` object consumed by `doConcrete()`. Key arguments:
+
+| Argument | Description |
+|---|---|
+| `DataTable` | `data.table` with columns for event time, event type, treatment, and covariates |
+| `EventTime` | Column name of the observed follow-up time (positive reals) |
+| `EventType` | Column name of the event type; values ≤ 0 indicate censoring |
+| `Treatment` | Column name of the binary treatment variable (coded 0/1) |
+| `TargetTime` | Time point(s) at which to estimate cumulative incidence |
+| `TargetEvent` | Event type(s) to target (subset of non-censoring `EventType` values) |
+| `Intervention` | List of intervention regimes; use `makeITT()` for intent-to-treat |
+| `CVArg` | Arguments for cross-validation folds (passed to `origami::make_folds()`) |
+| `Model` | Named list of learners for propensity and hazard models (see below) |
+| `GComp` | If `TRUE`, also returns g-computation plug-in estimates for comparison |
+
+**Data requirements:** `DataTable` must contain at minimum `EventTime`, `EventType`, and `Treatment` columns. All remaining columns are treated as baseline covariates.
+
+### `makeITT()` — Specify interventions
+
+`makeITT()` returns a two-element list defining the treat-all (`trt = 1`) and treat-none (`trt = 0`) interventions for a binary, point-in-time treatment. You can also write custom intervention functions directly:
+
+```{r custom-intervention, eval = FALSE}
+# Custom intervention: treat if age > 50, otherwise don't treat
+my_intervention <- list(
+  "high.age" = list(
+    intervention = function(trt, W) as.numeric(W[["age"]] > 50),
+    gstar        = function(trt, W) as.numeric(W[["age"]] > 50)
+  ),
+  "low.age" = list(
+    intervention = function(trt, W) as.numeric(W[["age"]] <= 50),
+    gstar        = function(trt, W) as.numeric(W[["age"]] <= 50)
+  )
+)
+```
+
+### `doConcrete()` — Run the TMLE
+
+`doConcrete()` takes a `ConcreteArgs` object and runs the full estimation pipeline:
+
+1. **Initial estimation**: fits cross-validated propensity scores (via `SuperLearner`) and cause-specific hazards (via Cox regression ensembles)
+2. **EIC computation**: computes the efficient influence curve for each target (event, time, intervention) combination
+3. **TMLE update**: iteratively fluctuates the hazard estimates along the least favorable submodel until the empirical mean EIC is below the convergence threshold (`|PnEIC| ≤ seEIC / (√n · log n)`)
+
+Returns a `ConcreteEst` object. You can print it to inspect convergence and initial estimator weights, or plot it to view nuisance weight distributions and the convergence trajectory:
+
+```{r plot-est, eval = FALSE}
+print(concrete.est)             # convergence status + super learner coefficients
+plot(concrete.est, convergence = TRUE, gweights = TRUE)  # diagnostic plots
+```
+
+### `getOutput()` — Extract estimates
+
+`getOutput()` extracts final estimates from a `ConcreteEst` object. Supported estimands:
+
+| `Estimand` | Description |
+|---|---|
+| `"Risk"` | Cause-specific absolute risk (cumulative incidence) under each intervention |
+| `"RD"` | Risk difference between two interventions |
+| `"RR"` | Risk ratio between two interventions |
+
+```{r getoutput-example, eval = FALSE}
+# Absolute risks only
+getOutput(concrete.est, Estimand = "Risk")
+
+# Risk difference and ratio (requires exactly 2 interventions)
+getOutput(concrete.est, Estimand = c("RD", "RR"), Intervention = c(1, 2))
+
+# Include g-computation plug-in estimates alongside TMLE
+getOutput(concrete.est, Estimand = c("Risk", "RD"), GComp = TRUE)
+
+# Simultaneous confidence bands across target times (recommended for multiple comparisons)
+getOutput(concrete.est, Estimand = c("Risk", "RD", "RR"), Simultaneous = TRUE)
+```
+
+The returned `ConcreteOut` is a `data.table` with columns `Time`, `Event`, `Estimand`, `Intervention`, `Estimator`, `Pt Est`, `se`, `CI Low`, `CI Hi`, and (if `Simultaneous = TRUE`) `SimCI Low`, `SimCI Hi`. Call `plot()` on it to generate `ggplot2` figures.
+
+---
+
+## Model Specification
+
+By default, `concrete` uses a sensible set of learners. You can override this by passing a named list to `Model`:
+
+```{r model-spec, eval = FALSE}
+model <- list(
+  # SuperLearner library for the propensity score (treatment model)
+  "trt" = c("SL.glm", "SL.glmnet", "SL.ranger"),
+
+  # Cox regression formula(s) for censoring hazard (EventType == 0)
+  "0" = list(Surv(time, status == 0) ~ age + sex),
+
+  # Cox regression formula(s) for event 1 hazard
+  "1" = list(
+    "mod1" = Surv(time, status == 1) ~ trt,
+    "mod2" = Surv(time, status == 1) ~ .   # "." includes all covariates
+  ),
+
+  # Cox regression formula(s) for event 2 hazard
+  "2" = list(Surv(time, status == 2) ~ .)
+)
+
+concrete.args <- formatArguments(
+  DataTable    = data,
+  EventTime    = "time",
+  EventType    = "status",
+  Treatment    = "trt",
+  ID           = "id",
+  TargetTime   = 2500,
+  TargetEvent  = c(1, 2),
+  Intervention = makeITT(),
+  Model        = model,
+  CVArg        = list(V = 5)
+)
+```
+
+Multiple formulas per event type are combined as a Cox regression ensemble (their linear predictors are stacked and re-fit). The `glmnet` (Coxnet) and `survivalSL` packages are also supported as hazard learners when installed.
+
+A previously generated `ConcreteArgs` object can be passed back into `formatArguments()` to modify individual model components:
+
+```{r modify-args, eval = FALSE}
+# Modify the censoring model after the initial formatArguments() call
+concrete.args[["Model"]][["0"]] <- list(Surv(time, status == 0) ~ trt + age)
+concrete.args <- formatArguments(concrete.args)  # re-validates
+```
+
+---
+
+## Output and Inference
+
+Results from `getOutput()` include:
+
+- **Point estimates** (`Pt Est`): marginal cumulative incidence under the specified intervention at each target time
+- **Standard errors** (`se`): derived from the efficient influence curve
+- **Pointwise CIs** (`CI Low`, `CI Hi`): Wald-type intervals at the specified `Signif` level (default 95%)
+- **Simultaneous CIs** (`SimCI Low`, `SimCI Hi`): confidence bands that jointly cover all target time points, computed via multivariate normal simulation from the EIC covariance matrix
+
+```{r output-example, eval = FALSE}
+concrete.out <- getOutput(
+  concrete.est,
+  Estimand     = c("Risk", "RD", "RR"),
+  Simultaneous = TRUE,
+  Signif       = 0.05   # 95% CI
+)
+
+# Tabular output
+print(concrete.out)
+
+# ggplot2 figures (one per estimand type)
+plot(concrete.out, NullLine = TRUE, ask = FALSE)
+```
+
+---
+
+## A note on bootstrap standard errors
+
+A non-parametric bootstrap is **not** offered as an inference option in `concrete`. The reason is covariate imputation: if a user's pipeline involves multiple imputation of missing covariates before calling `concrete`, a correct bootstrap must re-impute covariates on each resample. `concrete` has no visibility into imputation steps that occur upstream, so any bootstrap it ran internally would hold the imputed values fixed — systematically underestimating variance and producing anti-conservative confidence intervals. Users who want bootstrap inference should implement the full resample-then-impute-then-estimate loop themselves, outside the package.
+
+---
+
+## References
+
+Rytgaard, H. C., Gerds, T. A., & van der Laan, M. J. (2023). Continuous-time targeted minimum loss-based estimation of intervention-specific mean outcomes. *Biometrics*, 79(4), 3057–3068. <https://doi.org/10.1111/biom.13856>
+
+Rytgaard, H. C., & van der Laan, M. J. (2023). One-step targeted maximum likelihood estimation for directed acyclic graphs with multiple time point interventions. *Lifetime Data Analysis*, 29, 286–309. <https://doi.org/10.1007/s10985-022-09576-2>
+
+van der Laan, M. J., & Rose, S. (2011). *Targeted Learning: Causal Inference for Observational and Experimental Data*. Springer.
+
+---
+
 ## Issues
 
-If you encounter any bugs or have any specific feature requests, please [file an
-issue](https://github.com/imbroglio-dc/concrete/issues).
+If you encounter any bugs or have any specific feature requests, please [file an issue](https://github.com/imbroglio-dc/concrete/issues).

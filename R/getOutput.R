@@ -47,47 +47,73 @@
 #' @importFrom MASS mvrnorm
 #' @importFrom stats cor cov
 
-getOutput <- function(ConcreteEst, Estimand = c("Risk"), Intervention = seq_along(ConcreteEst), 
+getOutput <- function(ConcreteEst, Estimand = c("Risk"), Intervention = seq_along(ConcreteEst),
                       GComp = NULL, Simultaneous = TRUE, Signif = 0.05) {
   `CI Low` <- `CI Hi` <- `Pt Est` <- `se` <- NULL
-  if (!inherits(ConcreteEst, "ConcreteEst")) 
-    stop("ConcreteEst must be a 'ConcreteEst' class object")
+  if (!inherits(ConcreteEst, "ConcreteEst")) {
+    stop("getOutput() requires a 'ConcreteEst' object from doConcrete(). ",
+         "Received object of class: ", paste(class(ConcreteEst), collapse = ", "), ". ",
+         "Run doConcrete() first to obtain TMLE estimates.",
+         call. = FALSE)
+  }
   TargetTime <- attr(ConcreteEst, "TargetTime")
   TargetEvent <- attr(ConcreteEst, "TargetEvent")
   if (is.null(GComp))
     GComp <- attr(ConcreteEst, "GComp")
-  if (!is.logical(GComp))
-    stop("GComp must be a logical, TRUE or FALSE")
+  if (!is.logical(GComp)) {
+    stop("GComp must be TRUE or FALSE. Received: ", class(GComp)[1],
+         ". Set GComp=TRUE to include g-computation (plug-in) estimates, ",
+         "or GComp=FALSE for TMLE estimates only.",
+         call. = FALSE)
+  }
   
   EstimandType <- sapply(Estimand, function(e) {
     if (is.function(e)) return("Function")
     if (grepl("rd", tolower(e))) return("RD")
     if (grepl("rr", tolower(e))) return("RR")
     if (grepl("risk", tolower(e))) return("Risk")
-    else stop("Estimand inputs must be in c('RD', 'RR', 'Risk')")
+    else stop("Estimand '", e, "' not recognized. Valid options are:\n",
+              "  - 'Risk': Absolute risk (cumulative incidence) under each intervention\n",
+              "  - 'RD': Risk Difference between interventions (requires 2 interventions)\n",
+              "  - 'RR': Risk Ratio between interventions (requires 2 interventions)\n",
+              "  - A custom function(ConcreteEst, TargetTime, TargetEvent, GComp)",
+              call. = FALSE)
   })
   if (any(EstimandType == "Function")) {
     warning("User-specified Estimand functions are not checked or tested. ",
             "Please verify the correctness of your custom Estimand function(s).\n", sep = "")
   }
   
-  if (!is.numeric(Intervention) & !is.integer(Intervention))
-    stop("Intervention must be a numeric vector, specifying which 'ConcreteEst' list elements", 
-         "are of interest.")
-  if (any(grepl("(RR)|(RD)", EstimandType))) {
-    if (length(Intervention) < 2)
-      stop("Risk Ratios and Risk Differences can only be computed if Interventions is a vector of ", 
-           "length 2, i.e. c('treated' ConcreteEst list index, 'control' ConcreteEst list index). Either", 
-           "specify at least two indices in Intervention or remove 'RR' and 'RD' from Estimand.")
-    if (length(Intervention) > 2)
-      message("Risk ratios and risk differences will be computed using only the first two ",
-              "elements of the provided 'Intervention' argument.\n", sep = "")
+  if (!is.numeric(Intervention) & !is.integer(Intervention)) {
+    stop("Intervention must be a numeric vector specifying which ConcreteEst elements to use. ",
+         "Available interventions (1 to ", length(ConcreteEst), "): ",
+         paste(names(ConcreteEst), collapse = ", "), ". ",
+         "Example: Intervention = c(1, 2) compares first vs second intervention.",
+         call. = FALSE)
   }
-  if (!is.logical(Simultaneous))
-    stop("Simultaneous must be a logical, TRUE or FALSE")
-  if (!is.numeric(Signif) | Signif >= 1 | Signif <= 0)
-    stop("Signif sets the alpha (significance level) for hypothesis testing and confidence intervals", 
-         ", so should be small number that must be greater than 0")
+  if (any(grepl("(RR)|(RD)", EstimandType))) {
+    if (length(Intervention) < 2) {
+      stop("Risk Ratios (RR) and Risk Differences (RD) require exactly 2 interventions to compare. ",
+           "Specify Intervention = c(treatment_index, control_index). ",
+           "Available interventions: ", paste(seq_along(ConcreteEst), "=", names(ConcreteEst), collapse = ", "), ". ",
+           "Or remove 'RR'/'RD' from Estimand to compute only absolute risks.",
+           call. = FALSE)
+    }
+    if (length(Intervention) > 2) {
+      message("Note: RR and RD are computed using interventions[1] vs interventions[2] only: ",
+              "'", names(ConcreteEst)[Intervention[1]], "' vs '", names(ConcreteEst)[Intervention[2]], "'")
+    }
+  }
+  if (!is.logical(Simultaneous)) {
+    stop("Simultaneous must be TRUE or FALSE. Set TRUE for simultaneous confidence bands ",
+         "(recommended when making multiple comparisons), FALSE for pointwise CIs only.",
+         call. = FALSE)
+  }
+  if (!is.numeric(Signif) | Signif >= 1 | Signif <= 0) {
+    stop("Signif (significance level) must be a number in (0, 1). ",
+         "Typical values: 0.05 for 95% CI, 0.01 for 99% CI. Received: ", Signif,
+         call. = FALSE)
+  }
   
   Output <- data.table()
   Risks <- getRisk(ConcreteEst = ConcreteEst, TargetTime = TargetTime, TargetEvent = TargetEvent, GComp = GComp)
