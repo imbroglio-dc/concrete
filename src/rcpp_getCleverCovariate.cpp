@@ -1,4 +1,4 @@
-ddd// -*- mode: C++; c-indent-level: 4; c-basic-offset: 4; indent-tabs-mode: nil; -*-
+// -*- mode: C++; c-indent-level: 4; c-basic-offset: 4; indent-tabs-mode: nil; -*-
 //
 // we only include RcppArmadillo.h which pulls Rcpp.h in for us
 #include "RcppArmadillo.h"
@@ -166,9 +166,12 @@ List computeIC(List Hazards,
         }
     }
 
-    return List::create(Named("IC")    = IC_out,
-                        Named("Time")  = out_Time,
-                        Named("Event") = out_Event);
+    Rcpp::NumericMatrix IC_out_r   = Rcpp::wrap(IC_out);
+    Rcpp::NumericVector out_Time_r(out_Time.begin(), out_Time.end());
+    Rcpp::IntegerVector out_Event_r(out_Event.begin(), out_Event.end());
+    return List::create(Named("IC")    = IC_out_r,
+                        Named("Time")  = out_Time_r,
+                        Named("Event") = out_Event_r);
 }
 
 // ============================================================================
