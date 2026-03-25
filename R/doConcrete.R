@@ -13,7 +13,10 @@
 #'       NuisanceWeight, SummEIC, and IC (efficient influence curve)
 #'     \item Attributes: TmleConverged (list with convergence status and step count),
 #'       NormPnEICs (trajectory of PnEIC norms), TargetTime, TargetEvent, T.tilde,
-#'       Delta, GComp (whether g-computation estimates included)
+#'       Delta, GComp (whether g-computation estimates included),
+#'       SurvWarnings (\code{list(First = df, Last = df)} recording iterations where
+#'       event-free survival was bounded to 1e-12; both elements are \code{NULL} if
+#'       survival stayed above the floor throughout — see \code{\link{boundSurvival}})
 #'   }
 #'
 #' @details
@@ -139,9 +142,10 @@ doConCRTmle <- function(DataTable, TargetTime, TargetEvent, Regime, CVFolds, Mod
     attr(Estimates, "Delta") <- DataTable[[attr(DataTable, "EventType")]]
     attr(Estimates, "GComp") <- GComp
 
-    # Note if survival warnings were generated (already attached from getInitialEstimate)
-    if (!is.null(attr(Estimates, "SurvivalWarnings"))) {
-        message("Note: Low survival warnings generated. Details: attr(result, 'SurvivalWarnings')")
+    # Note if survival was bounded during TMLE updates (set by doTmleUpdate via boundSurvival)
+    if (!is.null(attr(Estimates, "SurvWarnings"))) {
+        message("Note: survival probabilities were bounded to 1e-12 during TMLE targeting. ",
+                "Access details with attr(result, 'SurvWarnings').")
     }
 
     class(Estimates) <- union("ConcreteEst", class(Estimates))

@@ -33,7 +33,8 @@
 #'                           concrete::makeITT() can be used to specify an intent-to-treat analysis for a
 #'                           binary intervention variable
 #' @param TargetTime numeric: vector of target times. If NULL, the last observed non-censoring event
-#'                            time will be targeted.
+#'                            time will be targeted. The stored value is always sorted in increasing
+#'                            order regardless of the order provided.
 #' @param TargetEvent numeric: vector of target events - some subset of unique EventTypes. If NULL,
 #'                             all non-censoring observed event types will be targeted.
 # #' @param Target (not yet implemented) data.table / data.frame (?? x 2); a table containing all
@@ -62,7 +63,7 @@
 #'     \item{ID}{: the column name of the observed subject id}
 #'     \item{RenameCovs}{: boolean whether or not covariates are renamed}
 #'   }}
-#'   \item{TargetTime}{: numeric vector of target times to evaluate risk/survival}
+#'   \item{TargetTime}{: numeric vector of target times to evaluate risk/survival, sorted in increasing order}
 #'   \item{TargetEvent}{: numeric vector of target events}
 #'   \item{Regime}{: named list of desired regimes, each tagged with a 'g.star' attribute function:
 #'   \describe{
@@ -717,29 +718,22 @@ getRegime <- function(Intervention, Data) {
 }
 
 getTargetEvent <- function(TargetEvent, Data) {
-  # NOTE: TargetEvent controls which events are *targeted* by TMLE (i.e. for which
-  # marginal cumulative incidence is estimated). Downstream code (hazard estimation,
-  # EIC computation) must still iterate over ALL non-censoring UniqueEvents as
-  # competing risks, regardless of which subset is targeted here. If that logic
-  # changes, revisit how UniqueEvents vs TargetEvent is used in getInitialEstimate,
-  # getEIC, and doTmleUpdate.
+  # TODO: Currently all non-censoring event types are always targeted, regardless
+  # of the user-supplied TargetEvent. This means users cannot yet request estimation
+  # for only a subset of competing risks. To support that, downstream code in
+  # getInitialEstimate, getEIC, and doTmleUpdate would need to distinguish between
+  # the full set of competing-risk events (needed for hazard estimation and EIC
+  # computation) and the targeted subset. Until that is implemented, TargetEvent
+  # is validated but then overridden with all non-censoring events.
   UniqueEvents <- sort(unique(Data[[attr(Data, "EventType")]]))
   NonCensoringEvents <- UniqueEvents[UniqueEvents > 0]
 
-  if (is.null(TargetEvent)) {
-    return(NonCensoringEvents)
+  if (!is.null(TargetEvent)) {
+    if (any(!is.vector(TargetEvent), !is.numeric(TargetEvent), is.list(TargetEvent)))
+      stop("TargetEvent must be a numeric vector of event types.")
   }
 
-  if (any(!is.vector(TargetEvent), !is.numeric(TargetEvent), is.list(TargetEvent)))
-    stop("TargetEvent must be a numeric vector of event types.")
-
-  invalid <- setdiff(TargetEvent, NonCensoringEvents)
-  if (length(invalid) > 0)
-    stop("TargetEvent contains values not found among observed non-censoring event types (",
-         paste0(NonCensoringEvents, collapse = ", "), "): ",
-         paste0(invalid, collapse = ", "))
-
-  return(sort(unique(TargetEvent)))
+  return(NonCensoringEvents)
 }
 
 getTargetTime <- function(TargetTime, TargetEvent, Data) {
@@ -765,7 +759,7 @@ getTargetTime <- function(TargetTime, TargetEvent, Data) {
     message("No TargetTime provided; targeting the last observed event time by default, which may ",
             "result in estimates with high variance if most subjects have been censored by that time\n", sep = "")
   }
-  return(TargetTime)
+  return(sort(TargetTime))
 }
 
 #' Determine default number of CV folds based on effective sample size

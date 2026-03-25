@@ -53,3 +53,4 @@ scripts/sim-data/sim-diag/diagnostic.txt
 inst/doc
 
 scripts/
+tests/testthat/Rplots.pdf

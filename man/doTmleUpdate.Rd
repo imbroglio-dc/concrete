@@ -42,6 +42,12 @@ Updated Estimates list with:
 \item Updated Hazards, EvntFreeSurv, SummEIC, IC for each regime
 \item Attribute TmleConverged: list(converged = TRUE/FALSE, step = integer)
 \item Attribute NormPnEICs: numeric vector of ||PnEIC|| trajectory
+\item Attribute SurvWarnings: \code{list(First = df, Last = df)} where each data frame
+records the step, regime, target time, minimum survival, and subject counts for
+iterations where survival was at or below 1e-12. \code{First} captures the first
+such iteration; \code{Last} captures the most recent. Both are \code{NULL} if
+survival remained above the floor throughout. A \code{warning()} is also issued at
+the first occurrence. See \code{\link{boundSurvival}} for the data frame structure.
 }
 }
 \description{
@@ -64,7 +70,12 @@ repeats. This ensures monotonic decrease of ||PnEIC|| (up to numerical precision
 
 Several safeguards prevent numerical issues:
 \itemize{
-\item Survival probabilities bounded away from 0 (minimum 1e-12)
+\item Survival probabilities are checked at the start of each iteration by
+\code{\link{boundSurvival}}, which bounds \emph{all} time points (not only target
+rows) to 1e-12 when at or below that floor. The first occurrence issues a
+\code{warning()}; all occurrences are recorded in the \code{SurvWarnings} attribute.
+If \code{SurvWarnings$First} is non-null, results may be unreliable — consider an
+earlier \code{TargetTime} or a different model specification.
 \item NA hazard values replaced with 0 (with warning)
 \item Step size halved if update increases ||PnEIC||
 \item Maximum iteration limit prevents infinite loops

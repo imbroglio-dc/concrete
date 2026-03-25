@@ -58,7 +58,8 @@ numbers will be used as ID. For longitudinal data, ID must be provided}
 longitudinal data structures}
 
 \item{TargetTime}{numeric: vector of target times. If NULL, the last observed non-censoring event
-time will be targeted.}
+time will be targeted. The stored value is always sorted in increasing
+order regardless of the order provided.}
 
 \item{TargetEvent}{numeric: vector of target events - some subset of unique EventTypes. If NULL,
 all non-censoring observed event types will be targeted.}
@@ -109,7 +110,7 @@ a list of class "ConcreteArgs"
 \item{ID}{: the column name of the observed subject id}
 \item{RenameCovs}{: boolean whether or not covariates are renamed}
 }}
-\item{TargetTime}{: numeric vector of target times to evaluate risk/survival}
+\item{TargetTime}{: numeric vector of target times to evaluate risk/survival, sorted in increasing order}
 \item{TargetEvent}{: numeric vector of target events}
 \item{Regime}{: named list of desired regimes, each tagged with a 'g.star' attribute function:
 \describe{

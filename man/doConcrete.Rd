@@ -36,7 +36,10 @@ Object of class "ConcreteEst" containing:
 NuisanceWeight, SummEIC, and IC (efficient influence curve)
 \item Attributes: TmleConverged (list with convergence status and step count),
 NormPnEICs (trajectory of PnEIC norms), TargetTime, TargetEvent, T.tilde,
-Delta, GComp (whether g-computation estimates included)
+Delta, GComp (whether g-computation estimates included),
+SurvWarnings (\code{list(First = df, Last = df)} recording iterations where
+event-free survival was bounded to 1e-12; both elements are \code{NULL} if
+survival stayed above the floor throughout — see \code{\link{boundSurvival}})
 }
 }
 \description{

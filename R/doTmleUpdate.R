@@ -49,6 +49,12 @@
 #'     \item Updated Hazards, EvntFreeSurv, SummEIC, IC for each regime
 #'     \item Attribute TmleConverged: list(converged = TRUE/FALSE, step = integer)
 #'     \item Attribute NormPnEICs: numeric vector of ||PnEIC|| trajectory
+#'     \item Attribute SurvWarnings: \code{list(First = df, Last = df)} where each data frame
+#'       records the step, regime, target time, minimum survival, and subject counts for
+#'       iterations where survival was at or below 1e-12. \code{First} captures the first
+#'       such iteration; \code{Last} captures the most recent. Both are \code{NULL} if
+#'       survival remained above the floor throughout. A \code{warning()} is also issued at
+#'       the first occurrence. See \code{\link{boundSurvival}} for the data frame structure.
 #'   }
 #'
 #' @details
@@ -65,7 +71,12 @@
 #' @section Numerical Stability:
 #' Several safeguards prevent numerical issues:
 #' \itemize{
-#'   \item Survival probabilities bounded away from 0 (minimum 1e-12)
+#'   \item Survival probabilities are checked at the start of each iteration by
+#'     \code{\link{boundSurvival}}, which bounds \emph{all} time points (not only target
+#'     rows) to 1e-12 when at or below that floor. The first occurrence issues a
+#'     \code{warning()}; all occurrences are recorded in the \code{SurvWarnings} attribute.
+#'     If \code{SurvWarnings$First} is non-null, results may be unreliable — consider an
+#'     earlier \code{TargetTime} or a different model specification.
 #'   \item NA hazard values replaced with 0 (with warning)
 #'   \item Step size halved if update increases ||PnEIC||
 #'   \item Maximum iteration limit prevents infinite loops
@@ -83,6 +94,8 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, TargetEvent, TargetTime,
   NormPnEICs <- NormPnEIC
 
   ## one-step tmle loop starts here ----
+  attr(Estimates, "SurvWarnings") <- list(First = NULL, Last = NULL)
+  TargetRows <- which(EvalTimes %in% TargetTime)
   StepNum <- 1
   IterNum <- 1
   # if (!Verbose) {
@@ -91,6 +104,10 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, TargetEvent, TargetTime,
   # }
   while (StepNum <= MaxUpdateIter & IterNum <= MaxUpdateIter * 2) {
     IterNum <- IterNum + 1
+
+    # Check survival before update; bound to 1e-12 and record any warnings on output object
+    Estimates <- boundSurvival(Estimates, TargetRows, EvalTimes, StepNum)
+
     if (Verbose) {
       cat("Starting step", StepNum, "with update epsilon =", WorkingEps, "\n")
       # } else {
@@ -139,7 +156,7 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, TargetEvent, TargetTime,
       })
 
       NewSurv <- apply(Reduce(`+`, NewHazards), 2, function(haz) exp(-cumsum(haz)))
-      NewSurv[NewSurv < 1e-12 | is.na(NewSurv) | is.nan(NewSurv)] <- 1e-12
+      
       NewIC <- getIC(
         GStar = attr(est.a[["PropScore"]], "g.star.obs"),
         Hazards = NewHazards, TotalSurv = NewSurv,
@@ -197,13 +214,101 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, TargetEvent, TargetTime,
       attr(Estimates, "NormPnEICs") <- NormPnEICs
       return(Estimates)
     }
-  }
+  } 
+
   warning(
     "TMLE has not converged by step ", MaxUpdateIter, " - Estimates may not have ",
     "the desired asymptotic properties"
   )
+
   attr(Estimates, "TmleConverged") <- list("converged" = FALSE, "step" = StepNum)
   attr(Estimates, "NormPnEICs") <- NormPnEICs
+
+  return(Estimates)
+}
+
+#' Check and Bound Near-Zero Event-Free Survival Probabilities
+#'
+#' At the start of each TMLE iteration, checks all event-free survival values
+#' across all regimes and bounds any at or below 1e-12 up to that floor. Diagnostic
+#' information is recorded per target time in the \code{SurvWarnings} attribute of
+#' \code{Estimates}, and a \code{warning()} is issued on the first occurrence.
+#'
+#' @param Estimates list; the current regime estimates, each element containing at
+#'   minimum an \code{EvntFreeSurv} matrix (times x subjects). Must carry a
+#'   \code{SurvWarnings} attribute initialised as \code{list(First = NULL, Last = NULL)}.
+#' @param TargetRows integer vector; row indices into \code{EvntFreeSurv} corresponding
+#'   to the target times (i.e. \code{which(EvalTimes \%in\% TargetTime)}).
+#' @param EvalTimes numeric vector; all evaluation time points (used to label diagnostic
+#'   rows by looking up \code{EvalTimes[TargetRows[k]]}).
+#' @param StepNum integer; the current TMLE step number, recorded in diagnostic rows.
+#'
+#' @return \code{Estimates} with two modifications:
+#'   \itemize{
+#'     \item Each regime's \code{EvntFreeSurv} has values \eqn{\leq} 1e-12 set to 1e-12
+#'       across \emph{all} time points, not only at target rows.
+#'     \item The \code{SurvWarnings} attribute is updated:
+#'       \code{list(First = df, Last = df)}, where each data frame has columns
+#'       \code{Regime} (character), \code{Step} (integer), \code{TargetTime} (numeric),
+#'       \code{MinSurv} (numeric), \code{N_subjects} (integer), \code{Pct_subjects}
+#'       (numeric). \code{First} is set on the first triggering iteration and never
+#'       overwritten; \code{Last} is updated on every triggering iteration.
+#'   }
+#'
+#' @details
+#' Bounding is applied to the entire \code{EvntFreeSurv} matrix for each regime, not
+#' only at the target time rows. Diagnostics, however, are reported only at target rows
+#' (controlled by \code{TargetRows}), since those are the time points that directly
+#' affect the estimands of interest.
+#'
+#' @section Survival floor:
+#' The floor value is 1e-12. Values strictly between 0 and 1e-12, values exactly equal
+#' to 0, and any negative values (which should not occur but can arise from floating-point
+#' error) are all set to 1e-12. \code{NA} cells are left unchanged.
+#'
+#' @keywords internal
+boundSurvival <- function(Estimates, TargetRows, EvalTimes, StepNum) {
+  step_rows <- NULL
+
+  for (a in seq_along(Estimates)) {
+    Surv.a <- Estimates[[a]][["EvntFreeSurv"]]
+    NearZero <- !is.na(Surv.a) & Surv.a <= 1e-12
+
+    new_rows <- do.call(rbind, lapply(seq_along(TargetRows), function(k) {
+      surv_k <- Surv.a[TargetRows[k], ]
+      low_k <- !is.na(surv_k) & surv_k <= 1e-12
+      if (!any(low_k)) return(NULL)
+      data.frame(
+        Regime = names(Estimates)[a], Step = StepNum,
+        TargetTime = EvalTimes[TargetRows[k]],
+        MinSurv = min(surv_k, na.rm = TRUE),
+        N_subjects = sum(low_k),
+        Pct_subjects = round(100 * mean(low_k), 1),
+        stringsAsFactors = FALSE
+      )
+    }))
+    step_rows <- rbind(step_rows, new_rows)
+
+    Estimates[[a]][["EvntFreeSurv"]][NearZero] <- 1e-12
+  }
+
+  if (!is.null(step_rows)) {
+    sw <- attr(Estimates, "SurvWarnings")
+    if (is.null(sw$First)) {
+      msg <- paste0(
+        "Survival probability approaching 0 at TMLE step ", StepNum,
+        " in regime(s): ", paste(unique(step_rows$Regime), collapse = ", "), ". ",
+        "(min = ", formatC(min(step_rows$MinSurv), format = "e", digits = 2), "). ",
+        "Values bounded to 1e-12. Results may be unreliable. ",
+        "Consider targeting an earlier time point or checking data quality."
+      )
+      warning(msg, call. = FALSE)
+      sw$First <- step_rows
+    }
+    sw$Last <- step_rows
+    attr(Estimates, "SurvWarnings") <- sw
+  }
+
   return(Estimates)
 }
 
@@ -240,15 +345,6 @@ updateHazard <- function(GStar, Hazards, TotalSurv, NuisanceWeight, EvalTimes, T
                         Iterative = FALSE) {
   eps <- Time <- Event <- NULL
   GStar <- as.numeric(unlist(GStar))
-  if (min(TotalSurv) == 0) {
-    stop("Survival probability reached exactly 0, causing undefined clever covariate. ",
-         "This typically occurs when:\n",
-         "  1. TargetTime extends beyond most observed events\n",
-         "  2. Hazard estimates are unstable (try different model specification)\n",
-         "  3. Sample size is insufficient for the target time horizon\n",
-         "Consider targeting an earlier time point or checking data quality.",
-         call. = FALSE)
-  }
   if (Iterative) {
     warning("Iterative TMLE not yet implemented. Performing one-step TMLE instead.")
   }
