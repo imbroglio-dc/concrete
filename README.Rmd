@@ -18,6 +18,8 @@ knitr::opts_chunk$set(
 [![codecov](https://codecov.io/gh/imbroglio-dc/concrete/branch/main/graph/badge.svg)](https://codecov.io/gh/imbroglio-dc/concrete)
 [![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![DOI: Biometrics](https://img.shields.io/badge/DOI-10.1111%2Fbiom.13856-blue)](https://doi.org/10.1111/biom.13856)
+[![DOI: Lifetime Data Analysis](https://img.shields.io/badge/DOI-10.1007%2Fs10985--022--09576--2-blue)](https://doi.org/10.1007/s10985-022-09576-2)
 
 > Continuous-Time Targeted Maximum Likelihood Estimation for Survival Analysis with Competing Risks
 
