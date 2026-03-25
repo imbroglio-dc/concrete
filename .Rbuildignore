@@ -13,3 +13,4 @@
 ^paper$
 ^README\.Rmd$
 ^\.github$
+^LICENSE\.md$

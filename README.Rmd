@@ -15,7 +15,9 @@ knitr::opts_chunk$set(
 # concrete
 [![CRAN](http://www.r-pkg.org/badges/version/concrete)](http://www.r-pkg.org/pkg/concrete)
 [![R-CMD-check](https://github.com/imbroglio-dc/concrete/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/imbroglio-dc/concrete/actions/workflows/R-CMD-check.yaml)
-[![Coverage Status](https://coveralls.io/repos/github/imbroglio-dc/concrete/badge.svg?branch=main)](https://coveralls.io/github/imbroglio-dc/concrete?branch=main)
+[![codecov](https://codecov.io/gh/imbroglio-dc/concrete/branch/main/graph/badge.svg)](https://codecov.io/gh/imbroglio-dc/concrete)
+[![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 > Continuous-Time Targeted Maximum Likelihood Estimation for Survival Analysis with Competing Risks
 

@@ -12,8 +12,7 @@ Authors@R:
            comment = c(ORCID = "0000-0002-9413-8152"))
 Maintainer: David Chen <david.chen49@berkeley.edu>
 Description: One-step continuous-time Targeted Minimum Loss-Based Estimation (TMLE) for outcome-specific absolute risk estimands in right-censored survival settings with or without competing risks, implementing the methodology described in Rytgaard et al. (2023) <doi:10.1111/biom.13856> and Rytgaard and van der Laan (2023) <doi:10.1007/s10985-022-09576-2>. Currently 'concrete' can be used to estimate the effects of static or dynamic interventions on binary treatments given at baseline, cross-validated initial estimation of treatment propensity is done using the 'SuperLearner' package, and initial estimation of conditional hazards is done using ensembles of Cox regressions from the 'survival' package, Coxnet from the 'glmnet' package, or survival super learners from the 'survivalSL' package.
-License: 
-    GPL (>= 3)
+License: MIT + file LICENSE
 Imports: 
     data.table, 
     survival,
