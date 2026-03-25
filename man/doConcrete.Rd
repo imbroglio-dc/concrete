@@ -5,7 +5,7 @@
 \alias{print.ConcreteEst}
 \alias{plot.ConcreteEst}
 \alias{print.ConcreteOut}
-\title{doConcrete}
+\title{Perform TMLE Estimation of Cause-Specific Absolute Risks}
 \usage{
 doConcrete(ConcreteArgs)
 
@@ -16,7 +16,8 @@ doConcrete(ConcreteArgs)
 \method{print}{ConcreteOut}(x, ...)
 }
 \arguments{
-\item{ConcreteArgs}{"ConcreteArgs" object : output of formatArguments()}
+\item{ConcreteArgs}{"ConcreteArgs" object; validated output from formatArguments().
+Contains all data, model specifications, and estimation parameters.}
 
 \item{x}{a ConcreteOut object}
 
@@ -29,10 +30,35 @@ doConcrete(ConcreteArgs)
 \item{ask}{logical: whether or not to prompt for user input before displaying plots}
 }
 \value{
-object with s3 class "ConcreteEst"
+Object of class "ConcreteEst" containing:
+\itemize{
+\item For each intervention regime: Hazards, EvntFreeSurv, PropScore,
+NuisanceWeight, SummEIC, and IC (efficient influence curve)
+\item Attributes: TmleConverged (list with convergence status and step count),
+NormPnEICs (trajectory of PnEIC norms), TargetTime, TargetEvent, T.tilde,
+Delta, GComp (whether g-computation estimates included)
+}
 }
 \description{
-doConcrete
+Main estimation function for the concrete package. Computes continuous-time
+one-step TMLE estimates of cause-specific cumulative incidence (absolute risk)
+under specified intervention regimes.
+}
+\details{
+The estimation proceeds in three stages:
+\enumerate{
+\item Initial estimation: Fits propensity scores and cause-specific hazards
+using cross-validated super learner ensembles
+\item EIC computation: Calculates the efficient influence curve for the
+cumulative incidence function under each intervention
+\item TMLE update: Iteratively updates hazard estimates along the least
+favorable submodel until the empirical mean of the EIC is sufficiently
+small (convergence criterion: |PnEIC| <= seEIC / (sqrt(n) * log(n)))
+}
+
+The one-step TMLE update uses a small step size (controlled by OneStepEps)
+and halves the step size if the update increases the PnEIC norm, ensuring
+monotonic convergence.
 }
 \section{Functions}{
 \itemize{

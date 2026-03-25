@@ -160,7 +160,7 @@ doConCRTmle <- function(DataTable, TargetTime, TargetEvent, Regime, CVFolds, Mod
 #' @return numeric; the norm ||PnEIC|| (or ||PnEIC||_Sigma if Sigma provided)
 #'
 #' @details
-#' The weighted norm is computed as sqrt(PnEIC' * Sigma^{-1} * PnEIC).
+#' The weighted norm is computed as sqrt(PnEIC' * Sigma^\{-1\} * PnEIC).
 #' If Sigma is singular, a small ridge regularization (1e-6) is added
 #' to the diagonal before inversion.
 #'

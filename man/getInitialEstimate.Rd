@@ -2,7 +2,7 @@
 % Please edit documentation in R/getInitialEstimate.R
 \name{getInitialEstimate}
 \alias{getInitialEstimate}
-\title{getInitialEstimate}
+\title{Compute Initial Estimates for TMLE}
 \usage{
 getInitialEstimate(
   Data,
@@ -16,22 +16,44 @@ getInitialEstimate(
 )
 }
 \arguments{
-\item{Data}{data.table}
+\item{Data}{data.table; formatted data with column name attributes}
 
-\item{Model}{list}
+\item{Model}{list; model specifications for propensity and hazard estimation.
+Named elements for Treatment column(s) specify SuperLearner libraries;
+elements named by EventType values specify Cox model formulas or survivalSL specs.}
 
-\item{CVFolds}{: list}
+\item{CVFolds}{list; cross-validation fold assignments from origami::make_folds()}
 
-\item{MinNuisance}{numeric}
+\item{MinNuisance}{numeric in (0, 1); minimum value for propensity score truncation.
+Values below this threshold are set to MinNuisance to avoid numerical instability.}
 
-\item{TargetEvent}{numeric vector}
+\item{TargetEvent}{numeric vector; event types to target for risk estimation}
 
-\item{TargetTime}{numeric vector}
+\item{TargetTime}{numeric vector; time points for risk estimation}
 
-\item{Regime}{list}
+\item{Regime}{list; intervention specifications, each with a g.star function}
 
-\item{ReturnModels}{boolean}
+\item{ReturnModels}{logical; if TRUE, fitted model objects are stored for inspection}
+}
+\value{
+List with one element per intervention regime, each containing:
+\itemize{
+\item PropScore: propensity score estimates P(A=a|W)
+\item Hazards: list of cause-specific hazard matrices (times x subjects)
+\item EvntFreeSurv: overall survival S(t) matrix
+\item NuisanceWeight: inverse of truncated g-related weights (for EIC)
+}
+With attributes: Times (evaluation time grid), InitFits (fitted models if ReturnModels=TRUE)
 }
 \description{
-getInitialEstimate
+Estimates the initial (pre-targeting) nuisance parameters required for TMLE:
+propensity scores, cause-specific hazards, and overall survival. These estimates
+are computed using cross-validated super learner ensembles.
 }
+\details{
+The nuisance weight combines propensity scores and censoring survival:
+weight = g(A|W) * S_C(t|A,W), truncated below by MinNuisance to ensure
+finite variance of the EIC. This truncation is the primary source of
+potential bias-variance tradeoff in TMLE.
+}
+\keyword{internal}

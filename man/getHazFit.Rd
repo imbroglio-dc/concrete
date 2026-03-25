@@ -2,21 +2,37 @@
 % Please edit documentation in R/getHazEstimate.R
 \name{getHazFit}
 \alias{getHazFit}
-\title{Title}
+\title{Fit Cause-Specific Hazard Models}
 \usage{
 getHazFit(Data, Model, CVFolds, Hazards, ReturnModels)
 }
 \arguments{
-\item{Data}{data.table}
+\item{Data}{data.table of observed data with attributes: EventTime, EventType,
+Treatment, ID, and CovNames specifying covariate column names}
 
-\item{Model}{list}
+\item{Model}{named list of model specifications, one for each unique EventType value.
+Each element can be: a formula (for Cox regression), a character vector of
+SuperLearner libraries, or a Lrnr.SurvivalSL specification from makeSurvivalSL()}
 
-\item{CVFolds}{list}
+\item{CVFolds}{list of cross-validation fold assignments from origami::make_folds()}
 
-\item{Hazards}{list}
+\item{Hazards}{data.table with Time and Event columns specifying hazard evaluation times}
 
-\item{ReturnModels}{boolean}
+\item{ReturnModels}{logical; if TRUE, return fitted model objects for inspection}
+}
+\value{
+list of class "HazFits" containing for each event type:
+\itemize{
+\item SupLrnCVRisks: cross-validated risks for each learner
+\item SupLrnModel: the model specification used
+\item j: the event type identifier
+\item SLCoef: super learner coefficients
+\item HazSL: fitted super learner model (if ReturnModels=TRUE)
+}
 }
 \description{
-Title
+Fits cause-specific hazard models for each event type using cross-validated
+super learner ensemble methods. Supports Cox regression, elastic net (glmnet),
+and survivalSL backends.
 }
+\keyword{internal}

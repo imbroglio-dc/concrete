@@ -229,9 +229,9 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, TargetEvent, TargetTime,
 #'
 #' @details
 #' For each cause l, the hazard update is:
-#'   h_l,new(t) = h_l,old(t) * exp(eps / ||PnEIC|| * sum_{j,tau} H_{l,j,tau}(t) * PnEIC_{j,tau})
+#'   h_l,new(t) = h_l,old(t) * exp(eps / ||PnEIC|| * sum_\{j,tau\} H_\{l,j,tau\}(t) * PnEIC_\{j,tau\})
 #'
-#' where H_{l,j,tau} is the clever covariate measuring the sensitivity of the
+#' where H_\{l,j,tau\} is the clever covariate measuring the sensitivity of the
 #' risk F_j(tau) to perturbations in hazard h_l.
 #'
 #' @keywords internal

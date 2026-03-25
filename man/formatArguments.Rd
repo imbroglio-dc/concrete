@@ -7,19 +7,19 @@
 \title{formatArguments}
 \usage{
 formatArguments(
-  DataTable,
-  EventTime,
-  EventType,
-  Treatment,
+  DataTable = NULL,
+  EventTime = NULL,
+  EventType = NULL,
+  Treatment = NULL,
   ID = NULL,
   TargetTime = NULL,
   TargetEvent = NULL,
-  Intervention,
+  Intervention = NULL,
   CVArg = NULL,
   Model = NULL,
   MaxUpdateIter = 500,
   OneStepEps = 0.1,
-  MinNuisance = 5/sqrt(nrow(DataTable))/log(nrow(DataTable)),
+  MinNuisance = NULL,
   Verbose = TRUE,
   GComp = TRUE,
   ReturnModels = TRUE,
@@ -36,17 +36,16 @@ makeITT(...)
 \item{DataTable}{data.table (n x (d + (3:5)); data.table of the observed data, with rows n =
 the number of observations and d = the number of baseline covariates. DataTable must include
 the following columns:
-\itemize{
-\item{"EventTime"}{: numeric; real numbers > 0, the observed event or censoring time}
-\item{"EventType"}{: numeric; the observed event type, censoring events indicated by integers <= 0}
-\item{"Treatment"}{: numeric; the observed treatment value. Binary treatments must be coded as 0, 1}
-\item{"Treatment"}{: numeric; the observed treatment}
+\describe{
+\item{EventTime}{: numeric; real numbers > 0, the observed event or censoring time}
+\item{EventType}{: numeric; the observed event type, censoring events indicated by integers <= 0}
+\item{Treatment}{: numeric; the observed treatment value. Binary treatments must be coded as 0, 1}
 }
 May include
-\itemize{
-\item{"ID"}{: factor, character, or numeric; unique subject id. If ID column is missing, row
+\describe{
+\item{ID}{: factor, character, or numeric; unique subject id. If ID column is missing, row
 numbers will be used as ID. For longitudinal data, ID must be provided}
-\item{"Baseline Covariates"}{: factor, character, or numeric; }
+\item{Baseline Covariates}{: factor, character, or numeric; }
 }}
 
 \item{EventTime}{character: the column name of the observed event or censoring time}
@@ -90,8 +89,8 @@ a template will be generated for the user to amend.}
 
 \item{ReturnModels}{boolean (default: TRUE): return fitted models from the initial estimation stage}
 
-\item{ConcreteArgs}{list (default: NULL, not yet ready) : Use to recheck amended output from previous formatArguments()
-calls. A non-NULL input will cause all other arguments to be ignored.}
+\item{ConcreteArgs}{list (default: NULL): A previously generated "ConcreteArgs" object from a prior
+formatArguments() call. If provided, all other arguments are ignored and the object is re-validated.}
 
 \item{RenameCovs}{boolean (default: TRUE): whether or not to rename covariates}
 
@@ -101,26 +100,26 @@ calls. A non-NULL input will cause all other arguments to be ignored.}
 }
 \value{
 a list of class "ConcreteArgs"
-\itemize{
-\item{Data}{: data.table containing EventTime, EventType, Treatment, and potentially ID and baseline covariates. Has the following attributes}
-\itemize{
+\describe{
+\item{Data}{: data.table containing EventTime, EventType, Treatment, and potentially ID and baseline covariates. Has the following attributes:
+\describe{
 \item{EventTime}{: the column name of the observed event or censoring time}
 \item{EventType}{: the column name of the observed event type. (0 indicating censoring)}
 \item{Treatment}{: the column name of the observed treatment assignment}
 \item{ID}{: the column name of the observed subject id}
 \item{RenameCovs}{: boolean whether or not covariates are renamed}
-}
+}}
 \item{TargetTime}{: numeric vector of target times to evaluate risk/survival}
 \item{TargetEvent}{: numeric vector of target events}
-\item{Regime}{: named list of desired regimes, each tagged with a 'g.star' attribute function}
-\itemize{
+\item{Regime}{: named list of desired regimes, each tagged with a 'g.star' attribute function:
+\describe{
 \item{Regime[[i]]}{: a vector of desired treatment assignments}
 \item{attr(Regime[[i]], "g.star")}{: function of Treatment and Covariates, outputting a vector of desired treatment assignment probabilities}
-}
+}}
 \item{CVFolds}{: list of cross-validation fold assignments in the structure as output by origami::make_folds()}
 \item{Model}{: named list of model specifications, one for each unique 'EventType' and one for the 'Treatment' variable.}
 \item{MaxUpdateIter}{: the number of one-step update steps}
-\item{OneStepEps}{: list of cross-validation fold assignments in the structure as output by origami::make_folds()}
+\item{OneStepEps}{: numeric step size for the one-step TMLE update (default 0.1)}
 \item{MinNuisance}{: numeric lower bound for the propensity score denominator in the efficient influence function}
 \item{Verbose}{: boolean to print additional information}
 \item{GComp}{: boolean to return g-computation formula plug-in estimates}
@@ -128,8 +127,9 @@ a list of class "ConcreteArgs"
 }
 }
 \description{
-formatArguments() checks and reformats inputs into a form that can be interpreted by doConcrete().
-makeITT() returns an Intervention list for a single, binary, point-treatment variable
+formatArguments() validates and formats inputs for TMLE estimation via doConcrete().
+It performs data validation, intervention specification processing, and model setup.
+makeITT() returns an Intervention list for a single, binary, point-treatment variable.
 }
 \section{Functions}{
 \itemize{

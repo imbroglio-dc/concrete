@@ -2,7 +2,7 @@
 % Please edit documentation in R/doTmleUpdate.R
 \name{doTmleUpdate}
 \alias{doTmleUpdate}
-\title{Title}
+\title{Perform TMLE Targeting Step}
 \usage{
 doTmleUpdate(
   Estimates,
@@ -17,24 +17,58 @@ doTmleUpdate(
 )
 }
 \arguments{
-\item{Estimates}{list}
+\item{Estimates}{list; initial estimates from getInitialEstimate(), containing
+Hazards, EvntFreeSurv, PropScore, NuisanceWeight for each regime}
 
-\item{SummEIC}{data.table}
+\item{SummEIC}{data.table; summarized EIC with PnEIC and stopping criterion}
 
-\item{Data}{data.table}
+\item{Data}{data.table; observed data with attribute column names}
 
-\item{TargetEvent}{numeric vector}
+\item{TargetEvent}{numeric vector; event types to target}
 
-\item{TargetTime}{numeric vector}
+\item{TargetTime}{numeric vector; time points to target}
 
-\item{MaxUpdateIter}{numeric}
+\item{MaxUpdateIter}{integer; maximum number of update iterations}
 
-\item{OneStepEps}{numeric}
+\item{OneStepEps}{numeric in (0, 1]; initial step size for updates}
 
-\item{NormPnEIC}{numeric}
+\item{NormPnEIC}{numeric; initial ||PnEIC|| norm}
 
-\item{Verbose}{boolean}
+\item{Verbose}{logical; whether to print convergence diagnostics}
+}
+\value{
+Updated Estimates list with:
+\itemize{
+\item Updated Hazards, EvntFreeSurv, SummEIC, IC for each regime
+\item Attribute TmleConverged: list(converged = TRUE/FALSE, step = integer)
+\item Attribute NormPnEICs: numeric vector of ||PnEIC|| trajectory
+}
 }
 \description{
-Title
+Iteratively updates the initial hazard estimates along the least favorable
+submodel to solve the efficient influence curve equation. This is the core
+"targeting" step that distinguishes TMLE from plug-in estimators.
 }
+\details{
+The update uses a multiplicative perturbation of the hazards:
+h_new(t) = h_old(t) * exp(eps * sum_jk H_jk(t) * PnEIC_jk / ||PnEIC||)
+
+where H_jk is the clever covariate for event j at time k.
+
+Convergence is declared when: |PnEIC_jk| <= seEIC_jk / (sqrt(n) * log(n)) for all j, k
+
+If an update increases ||PnEIC||, the step size is halved and the iteration
+repeats. This ensures monotonic decrease of ||PnEIC|| (up to numerical precision).
+}
+\section{Numerical Stability}{
+
+Several safeguards prevent numerical issues:
+\itemize{
+\item Survival probabilities bounded away from 0 (minimum 1e-12)
+\item NA hazard values replaced with 0 (with warning)
+\item Step size halved if update increases ||PnEIC||
+\item Maximum iteration limit prevents infinite loops
+}
+}
+
+\keyword{internal}

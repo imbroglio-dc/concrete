@@ -7,17 +7,17 @@
 #' @param DataTable data.table (n x (d + (3:5)); data.table of the observed data, with rows n =
 #' the number of observations and d = the number of baseline covariates. DataTable must include
 #' the following columns:
-#' \itemize{
-#'   \item{"EventTime"}{: numeric; real numbers > 0, the observed event or censoring time}
-#'   \item{"EventType"}{: numeric; the observed event type, censoring events indicated by integers <= 0}
-#'   \item{"Treatment"}{: numeric; the observed treatment value. Binary treatments must be coded as 0, 1}
+#' \describe{
+#'   \item{EventTime}{: numeric; real numbers > 0, the observed event or censoring time}
+#'   \item{EventType}{: numeric; the observed event type, censoring events indicated by integers <= 0}
+#'   \item{Treatment}{: numeric; the observed treatment value. Binary treatments must be coded as 0, 1}
 #' }
 #' May include
-#' \itemize{
-#'   \item{"ID"}{: factor, character, or numeric; unique subject id. If ID column is missing, row
+#' \describe{
+#'   \item{ID}{: factor, character, or numeric; unique subject id. If ID column is missing, row
 #'   numbers will be used as ID. For longitudinal data, ID must be provided}
-# #'   \item{"LongTime"}{: numeric; Specifies monitoring times for longitudinal data structures}
-#'   \item{"Baseline Covariates"}{: factor, character, or numeric; }
+# #'   \item{LongTime}{: numeric; Specifies monitoring times for longitudinal data structures}
+#'   \item{Baseline Covariates}{: factor, character, or numeric; }
 #' }
 # #' @param DataStructure formula (not ready): e.g. Surv(time, type) ~ Intervention(trt) + ...
 #' @param EventTime character: the column name of the observed event or censoring time
@@ -53,23 +53,22 @@
 #' @param ... ...
 #'
 #' @return a list of class "ConcreteArgs"
-#' \itemize{
-#'   \item{Data}{: data.table containing EventTime, EventType, Treatment, and potentially ID and baseline covariates. Has the following attributes}
-#'   \itemize{
+#' \describe{
+#'   \item{Data}{: data.table containing EventTime, EventType, Treatment, and potentially ID and baseline covariates. Has the following attributes:
+#'   \describe{
 #'     \item{EventTime}{: the column name of the observed event or censoring time}
 #'     \item{EventType}{: the column name of the observed event type. (0 indicating censoring)}
 #'     \item{Treatment}{: the column name of the observed treatment assignment}
 #'     \item{ID}{: the column name of the observed subject id}
-# #'     \item{LongTime}{: the column name of the observed event type. (0 indicating censoring)}
 #'     \item{RenameCovs}{: boolean whether or not covariates are renamed}
-#'   }
+#'   }}
 #'   \item{TargetTime}{: numeric vector of target times to evaluate risk/survival}
 #'   \item{TargetEvent}{: numeric vector of target events}
-#'   \item{Regime}{: named list of desired regimes, each tagged with a 'g.star' attribute function}
-#'     \itemize{
-#'       \item{Regime\[\[i\]\]}{: a vector of desired treatment assignments}
-#'       \item{attr(Regime\[\[i\]\], "g.star")}{: function of Treatment and Covariates, outputting a vector of desired treatment assignment probabilities}
-#'     }
+#'   \item{Regime}{: named list of desired regimes, each tagged with a 'g.star' attribute function:
+#'   \describe{
+#'     \item{Regime\[\[i\]\]}{: a vector of desired treatment assignments}
+#'     \item{attr(Regime\[\[i\]\], "g.star")}{: function of Treatment and Covariates, outputting a vector of desired treatment assignment probabilities}
+#'   }}
 #'   \item{CVFolds}{: list of cross-validation fold assignments in the structure as output by origami::make_folds()}
 #'   \item{Model}{: named list of model specifications, one for each unique 'EventType' and one for the 'Treatment' variable.}
 #'   \item{MaxUpdateIter}{: the number of one-step update steps}
@@ -260,16 +259,27 @@ makeConcreteArgs <- function(DataTable, EventTime, EventType, Treatment, Interve
 }
 
 
+coerceBoolean <- function(x) {
+  if (is.logical(x) && length(x) == 1 && !is.na(x)) return(x)
+  if (is.numeric(x) && length(x) == 1 && x %in% c(0, 1)) return(as.logical(x))
+  if (is.character(x) && length(x) == 1) {
+    xl <- trimws(tolower(x))
+    if (xl %in% c("true",  "yes", "y", "1")) return(TRUE)
+    if (xl %in% c("false", "no",  "n", "0")) return(FALSE)
+  }
+  return(NULL)
+}
+
 checkBoolean <- function(ArgList, Envir) {
   lapply(seq_along(ArgList), function(i) {
-    ArgOK <- try(all(is.logical(ArgList[[i]]), length(ArgList[[i]]) == 1, 
-                     !is.na(ArgList[[i]])))
-    if (any(inherits(ArgOK, "try-error"), !ArgOK, is.null(ArgOK))) {
-      message("Argument '", names(ArgList)[i], "' must be either TRUE or FALSE, ", 
-              "so has been set to FALSE by default\n", sep = "")
+    val <- coerceBoolean(ArgList[[i]])
+    if (is.null(val)) {
+      warning("Argument '", names(ArgList)[i], "' must be TRUE or FALSE; ",
+              "could not coerce '", ArgList[[i]], "', so has been set to FALSE.",
+              call. = FALSE)
       assign(names(ArgList)[i], FALSE, envir = Envir)
     } else {
-      assign(names(ArgList)[i], ArgList[[i]], envir = Envir)
+      assign(names(ArgList)[i], val, envir = Envir)
     }
   })
   invisible(ArgList)
@@ -280,9 +290,6 @@ formatDataTable <- function(DT, EventTime, EventType, Treatment, ID, LongTime, V
     DT <- try(data.table::as.data.table(DT))
   if (!inherits(DT, "data.table"))
     stop("CovDataTable must be a data.table or coercible into a data.table.")
-  if (any(is.infinite(unlist(DT)), anyNA(unlist(DT))))
-    stop("CovDataTable contains infinite or missing values; regression models may break")
-  
   checkEventTime(EventTime = EventTime, DataTable = DT)
   checkEventType(EventType = EventType, DataTable = DT)
   checkTreatment(Treatment = Treatment, EventType = EventType, DataTable = DT)
@@ -295,7 +302,26 @@ formatDataTable <- function(DT, EventTime, EventType, Treatment, ID, LongTime, V
   # OrigCovDT <- attr(DT, "OrigCovDT")
   SpecialCols <- c(ID, EventTime, EventType, Treatment, LongTime)
   CovNames <- setdiff(colnames(DT), SpecialCols)
-  
+
+  if (length(CovNames) > 0) {
+    CovDTcheck <- DT[, .SD, .SDcols = CovNames]
+    naByCol   <- vapply(CovDTcheck, anyNA,        logical(1))
+    infByCol  <- vapply(CovDTcheck, function(x) is.numeric(x) && any(is.infinite(x)), logical(1))
+    badCols   <- CovNames[naByCol | infByCol]
+    if (length(badCols) > 0) {
+      naBad  <- CovNames[naByCol]
+      infBad <- CovNames[infByCol]
+      msg <- character(0)
+      if (length(naBad)  > 0) msg <- c(msg, paste0("missing values in: ", paste(naBad,  collapse = ", ")))
+      if (length(infBad) > 0) msg <- c(msg, paste0("infinite values in: ", paste(infBad, collapse = ", ")))
+      stop("Covariate columns contain ", paste(msg, collapse = "; "), ". ",
+           "Regression models cannot proceed with missing or infinite covariate values. ",
+           "You may either (1) impute missing values before calling formatArguments(), or ", 
+           "(2) remove rows with missing covariates. Note that both choices have implications", 
+           "so choose the approach that is most defensible given your data-generating process.")
+    }
+  }
+
   if (RenameCovs) {
     if (is.null(attr(DT, "CovNames"))) {
       CovDT <- getCovDataTable(DataTable = DT,
@@ -333,9 +359,13 @@ checkEventTime <- function(EventTime, DataTable = NULL) {
     tmp <- try(DataTable[[EventTime]])
     if (inherits(tmp, "try-error") | is.null(tmp))
       stop("No column named '", EventTime, "' was found in the supplied DataTable")
-    if (any(!is.numeric(tmp), try(tmp <= 0), is.infinite(tmp),
-            inherits(try(tmp <= 0), "try-error"), is.list(tmp)))
-      stop("The 'EventTime' column must be finite, positive values without missingness.")
+    if (anyNA(tmp))
+      stop("The '", EventTime, "' (EventTime) column contains missing values. ",
+           "If these rows represent censored observations, encode them with the last ",
+           "known follow-up time as EventTime and EventType = 0 (censoring indicator). ",
+           "Rows with truly unknown event times cannot be included and should be removed.")
+    if (!is.numeric(tmp) || is.list(tmp) || any(is.infinite(tmp)) || any(tmp <= 0))
+      stop("The '", EventTime, "' (EventTime) column must contain finite, positive numeric values.")
   } else
     stop("`EventTime` must be the name of the column containing the observed event times.")
   invisible(NULL)
@@ -346,12 +376,17 @@ checkEventType <- function(EventType, DataTable = NULL) {
     tmp <- try(DataTable[[EventType]])
     if (inherits(tmp, "try-error") | is.null(tmp))
       stop("No column named '", EventType, "' was found in the supplied DataTable.")
-    if (any(!is.numeric(tmp), try(tmp < 0), inherits(try(tmp < 0), "try-error"), is.list(tmp)))
-      stop("The 'EventType' column must be finite, non-negative values without missingness, ",
-           "with 0 indicating censoring")
+    if (anyNA(tmp))
+      stop("The '", EventType, "' (EventType) column contains missing values. ",
+           "Censored observations should be encoded as EventType = 0, not NA. ",
+           "If these NAs represent censoring, replace them with 0. ",
+           "Rows with truly unknown event types cannot be included and should be removed.")
+    if (!is.numeric(tmp) || is.list(tmp) || any(tmp < 0))
+      stop("The '", EventType, "' (EventType) column must contain finite, non-negative integers, ",
+           "with 0 indicating censoring.")
   } else
-    stop("`EventType` must be the name of the column containing the observed event types (",
-         "with 0 indicating the onset of right censoring).")
+    stop("`EventType` must be the name of the column containing the observed event types ",
+         "(with 0 indicating the onset of right censoring).")
   invisible(NULL)
 }
 
@@ -368,6 +403,11 @@ checkTreatment <- function(Treatment, EventType, DataTable = NULL) {
            "Rename the treatment column(s) or recode EventType values to different integers.")
     attr(tmp, "var.name") <- Treatment
     apply(tmp, 2, function(trt) {
+      if (anyNA(trt))
+        stop("The Treatment column(s) contain missing values. Missing treatment assignments ",
+             "cannot be handled automatically as the causal interpretation depends entirely on ",
+             "why treatment is missing (e.g. informative vs. non-informative dropout). ",
+             "Please resolve missing treatments before proceeding.")
       if (any(!is.numeric(trt), is.nan(trt), is.infinite(trt), is.list(trt)))
         stop("Treatment must be a numeric vector with finite values. Encode binary variables ",
              "as 0 or 1 and encode multinomial (factor) variables as integers.")
@@ -677,16 +717,29 @@ getRegime <- function(Intervention, Data) {
 }
 
 getTargetEvent <- function(TargetEvent, Data) {
+  # NOTE: TargetEvent controls which events are *targeted* by TMLE (i.e. for which
+  # marginal cumulative incidence is estimated). Downstream code (hazard estimation,
+  # EIC computation) must still iterate over ALL non-censoring UniqueEvents as
+  # competing risks, regardless of which subset is targeted here. If that logic
+  # changes, revisit how UniqueEvents vs TargetEvent is used in getInitialEstimate,
+  # getEIC, and doTmleUpdate.
   UniqueEvents <- sort(unique(Data[[attr(Data, "EventType")]]))
-  if (is.null(TargetEvent))
-    TargetEvent <- UniqueEvents[UniqueEvents > 0]
-  TargetEvent <- UniqueEvents[UniqueEvents != 0]
-  if (any(!is.vector(TargetEvent), !is.numeric(TargetEvent), is.list(TargetEvent),
-          length(setdiff(TargetEvent, UniqueEvents)) > 0))
-    stop("TargetEvent must be a subset of the observed event types,",
-         " DataTable[[\"", attr(Data, "EventType"), "\"]]): ", 
-         paste0(UniqueEvents, collapse = ", "))
-  return(TargetEvent)
+  NonCensoringEvents <- UniqueEvents[UniqueEvents > 0]
+
+  if (is.null(TargetEvent)) {
+    return(NonCensoringEvents)
+  }
+
+  if (any(!is.vector(TargetEvent), !is.numeric(TargetEvent), is.list(TargetEvent)))
+    stop("TargetEvent must be a numeric vector of event types.")
+
+  invalid <- setdiff(TargetEvent, NonCensoringEvents)
+  if (length(invalid) > 0)
+    stop("TargetEvent contains values not found among observed non-censoring event types (",
+         paste0(NonCensoringEvents, collapse = ", "), "): ",
+         paste0(invalid, collapse = ", "))
+
+  return(sort(unique(TargetEvent)))
 }
 
 getTargetTime <- function(TargetTime, TargetEvent, Data) {
@@ -769,7 +822,8 @@ getCVFolds <- function(CVArg, Data, CVSeed = sample(0:1e8, 1)) {
       if (is.null(CVArg[["strata_ids"]]))
         CVArg[["strata_ids"]] <- Data[[attr(Data, "EventType")]]
     } else {
-      message("CVArg input is not correctly formatted; default CVFolds have been generated.")
+      warning("CVArg input is not correctly formatted; default CVFolds have been generated.",
+              call. = FALSE)
     }
   }
   set.seed(CVSeed)
@@ -882,7 +936,7 @@ makeModelList <- function(Treatment, EventTime, EventType, UniqueEvents, Model, 
         foo <- utils::capture.output(suppressMessages(SLLrnrs <- SuperLearner::listWrappers()))
         TrtLrnrs <- unlist(Model[[Trt]], recursive = TRUE)
         NonDefaultLrnrs <- TrtLrnrs[which(!(TrtLrnrs %in% SLLrnrs))]
-        if (length(NonDefaultLrnrs > 0) & Verbose) {
+        if (length(NonDefaultLrnrs) > 0 & Verbose) {
           message("These candidate learners are not in the base SuperLearner package: ",
               paste0(NonDefaultLrnrs, collapse = ","), "\n")
         }

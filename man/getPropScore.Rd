@@ -2,7 +2,7 @@
 % Please edit documentation in R/getPropScore.R
 \name{getPropScore}
 \alias{getPropScore}
-\title{getPropScore}
+\title{Estimate Propensity Scores for Treatment Assignment}
 \usage{
 getPropScore(
   TrtVal,
@@ -16,22 +16,46 @@ getPropScore(
 )
 }
 \arguments{
-\item{TrtVal}{numeric vector}
+\item{TrtVal}{data.table; observed treatment values (n x p for p treatment variables)}
 
-\item{CovDT}{data.table}
+\item{CovDT}{data.table; baseline covariates for prediction}
 
-\item{TrtModel}{list or fitted object}
+\item{TrtModel}{list; SuperLearner library specification for each treatment variable,
+or a pre-fitted SuperLearner object}
 
-\item{MinNuisance}{numeric}
+\item{MinNuisance}{numeric in (0, 1); minimum propensity score (for documentation;
+actual truncation occurs in getInitialEstimate)}
 
-\item{Regime}{list}
+\item{Regime}{list; intervention specifications, each with g.star function}
 
-\item{CVFolds}{list}
+\item{CVFolds}{list; cross-validation fold assignments}
 
-\item{TrtLoss}{character or function(A, g.A)}
+\item{TrtLoss}{character or function (optional); loss function for super learner.
+Currently unused; defaults to binomial deviance for binary, MSE for continuous.}
 
-\item{ReturnModels}{boolean}
+\item{ReturnModels}{logical; if TRUE, store fitted SuperLearner objects}
+}
+\value{
+List of propensity scores, one element per intervention regime.
+Each element is a numeric vector of length n with attributes:
+\itemize{
+\item g.star.intervention: P(A = a*|W) under the intervention
+\item g.star.obs: P(A = A_obs|W) for observed treatment
+}
+List attributes: TrtFit (fitted models if ReturnModels), warnings (any SuperLearner warnings)
 }
 \description{
-getPropScore
+Estimates P(A|W), the conditional probability of treatment given covariates,
+using cross-validated super learner. Computes both the propensity for the
+observed treatment and for the intervention assignment (g.star).
 }
+\details{
+For binary treatment: uses binomial family SuperLearner
+For continuous treatment: uses Gaussian family (not fully implemented)
+For multiple treatment variables: estimates joint propensity as product of conditionals
+
+The g.star function from each Regime computes the intervention-specific
+propensity: typically 1(A = a*) for static interventions, but can be
+more complex for dynamic or stochastic interventions.
+}
+\keyword{internal}

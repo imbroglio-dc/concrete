@@ -2,7 +2,7 @@
 % Please edit documentation in R/getEIC.R
 \name{getEIC}
 \alias{getEIC}
-\title{get EICs}
+\title{Compute Efficient Influence Curves for TMLE}
 \usage{
 getEIC(
   Estimates,
@@ -15,20 +15,40 @@ getEIC(
 )
 }
 \arguments{
-\item{Estimates}{list}
+\item{Estimates}{list of estimation results for each intervention regime,
+containing Hazards, EvntFreeSurv, PropScore, and NuisanceWeight}
 
-\item{Data}{data.table}
+\item{Data}{data.table of observed data with EventTime and EventType attributes}
 
-\item{Regime}{list}
+\item{Regime}{list of intervention regime specifications (currently unused but
+passed for consistency)}
 
-\item{TargetEvent}{numeric vector}
+\item{TargetEvent}{numeric vector of event types to target}
 
-\item{TargetTime}{numeric vector}
+\item{TargetTime}{numeric vector of times at which to evaluate estimands}
 
-\item{MinNuisance}{numeric}
+\item{MinNuisance}{numeric; minimum value for propensity score truncation
+(passed for documentation; actual truncation happens earlier)}
 
-\item{GComp}{boolean}
+\item{GComp}{logical; if TRUE, also compute g-computation plug-in estimates}
+}
+\value{
+Modified Estimates list with added components for each regime:
+\itemize{
+\item SummEIC: data.table summarizing IC (PnEIC, seEIC) by Time and Event
+\item IC: data.table of individual-level IC values
+\item GCompEst: (if GComp=TRUE) g-computation estimates
+}
 }
 \description{
-get EICs
+Calculates the efficient influence curve (EIC) for each intervention regime,
+target event, and target time combination. The EIC is used for both variance
+estimation and the TMLE targeting step.
 }
+\details{
+The efficient influence curve for the cumulative incidence function under
+intervention is derived from the nonparametric efficiency bound. It involves
+the clever covariate (h) which depends on the cause-specific hazards and
+overall survival function.
+}
+\keyword{internal}
