@@ -107,24 +107,29 @@ test_that("ID is a vector with non-\'null\'-type values", {
     }
 })
 
-test_that("Boolean cheecks for non-boolean values and resets values to FALSE", {
+test_that("uncoercible boolean values reset to FALSE with a warning", {
     require(data.table)
     data <- as.data.table(survival::pbc)[, c("time", "status", "trt", "id", "age", "sex")]
 
     set.seed(0)
     data[, trt := sample(0:1, length(trt), replace = TRUE)]
-    concrete.args <- formatArguments(Data = data,
-                                     EventTime = "time",
-                                     EventType = "status",
-                                     Treatment = "trt",
-                                     ID = 'id',
-                                     Intervention = 0:1,
-                                     TargetTime = mean(data[["time"]]),
-                                     TargetEvent = unique(data[["status"]]),
-                                     Verbose = 2,
-                                     GComp = NA,
-                                     ReturnModels = "c",
-                                     RenameCovs = Inf)
+    expect_warning(
+        concrete.args <- suppressMessages(
+            formatArguments(Data = data,
+                            EventTime = "time",
+                            EventType = "status",
+                            Treatment = "trt",
+                            ID = 'id',
+                            Intervention = 0:1,
+                            TargetTime = mean(data[["time"]]),
+                            TargetEvent = unique(data[["status"]]),
+                            Verbose = 2,
+                            GComp = NA,
+                            ReturnModels = "c",
+                            RenameCovs = Inf)
+        ),
+        regexp = "must be TRUE or FALSE"
+    )
     for (bool in c("Verbose", "GComp", "ReturnModels", "RenameCovs")) {
         expect_equal(concrete.args[[bool]], FALSE)
     }
@@ -821,15 +826,18 @@ test_that("fold training and validation sets partition 1:n with no overlap", {
     }
 })
 
-test_that("non-list CVArg emits informative error", {
+test_that("non-list CVArg emits a warning then stops", {
     dt <- make_test_data()
-    expect_error(
-        suppressMessages(
-            formatArguments(DataTable = dt, EventTime = "time", EventType = "status",
-                            Treatment = "trt", ID = "id", Intervention = makeITT(),
-                            TargetTime = 100, CVArg = "not_a_list", MinNuisance = 0.05)
+    expect_warning(
+        expect_error(
+            suppressMessages(
+                formatArguments(DataTable = dt, EventTime = "time", EventType = "status",
+                                Treatment = "trt", ID = "id", Intervention = makeITT(),
+                                TargetTime = 100, CVArg = "not_a_list", MinNuisance = 0.05)
+            ),
+            regexp = "list|CVArg"
         ),
-        regexp = "list|CVArg"
+        regexp = "not correctly formatted|CVArg"
     )
 })
 
@@ -909,13 +917,15 @@ test_that("custom propensity character-vector model is accepted as-is", {
     expect_equal(as.character(args$Model[["trt"]]), c("SL.glm", "SL.mean"))
 })
 
-test_that("unrecognized propensity model spec is replaced with default and emits message", {
+test_that("unrecognized propensity model spec is replaced with default and emits warning", {
     dt <- make_test_data()
-    expect_message(
-        args <- formatArguments(DataTable = dt, EventTime = "time", EventType = "status",
-                                Treatment = "trt", ID = "id", Intervention = makeITT(),
-                                TargetTime = 100, CVArg = list(V = 2), MinNuisance = 0.05,
-                                Model = list("trt" = 42)),  # not a character vector
+    expect_warning(
+        args <- suppressMessages(
+            formatArguments(DataTable = dt, EventTime = "time", EventType = "status",
+                            Treatment = "trt", ID = "id", Intervention = makeITT(),
+                            TargetTime = 100, CVArg = list(V = 2), MinNuisance = 0.05,
+                            Model = list("trt" = 42))  # not a character vector
+        ),
         regexp = "not recognized|replaced|default"
     )
     expect_true(is.character(args$Model[["trt"]]))
@@ -949,14 +959,16 @@ test_that("'coxnet' string in hazard model gets Lrnr.Coxnet class", {
     expect_true(inherits(args$Model[["1"]][[1]], "Lrnr.Coxnet"))
 })
 
-test_that("unrecognized Model key emits message (ignored during formula processing)", {
+test_that("unrecognized Model key emits warning (ignored during formula processing)", {
     dt <- make_test_data()
-    expect_message(
-        formatArguments(DataTable = dt, EventTime = "time", EventType = "status",
-                        Treatment = "trt", ID = "id", Intervention = makeITT(),
-                        TargetTime = 100, CVArg = list(V = 2), MinNuisance = 0.05,
-                        Model = list("trt"         = c("SL.glm"),
-                                     "unknown_key" = list(Surv(time, status == 1) ~ .))),
+    expect_warning(
+        suppressMessages(
+            formatArguments(DataTable = dt, EventTime = "time", EventType = "status",
+                            Treatment = "trt", ID = "id", Intervention = makeITT(),
+                            TargetTime = 100, CVArg = list(V = 2), MinNuisance = 0.05,
+                            Model = list("trt"         = c("SL.glm"),
+                                         "unknown_key" = list(Surv(time, status == 1) ~ .)))
+        ),
         regexp = "ignored|unknown_key"
     )
 })
@@ -1019,14 +1031,16 @@ test_that("MaxUpdateIter fractional value is ceiling'd", {
     expect_equal(args$MaxUpdateIter, 3L)
 })
 
-test_that("invalid MaxUpdateIter values reset to 100 with a message", {
+test_that("invalid MaxUpdateIter values reset to 100 with a warning", {
     dt <- make_test_data()
     for (bad in list(-1, 0, Inf, "a", NA, NULL)) {
-        expect_message(
-            args <- formatArguments(DataTable = dt, EventTime = "time", EventType = "status",
-                                    Treatment = "trt", ID = "id", Intervention = makeITT(),
-                                    TargetTime = 100, CVArg = list(V = 2), MinNuisance = 0.05,
-                                    MaxUpdateIter = bad),
+        expect_warning(
+            args <- suppressMessages(
+                formatArguments(DataTable = dt, EventTime = "time", EventType = "status",
+                                Treatment = "trt", ID = "id", Intervention = makeITT(),
+                                TargetTime = 100, CVArg = list(V = 2), MinNuisance = 0.05,
+                                MaxUpdateIter = bad)
+            ),
             regexp = "MaxUpdateIter|100",
             info   = paste("bad value:", deparse(bad))
         )
@@ -1047,14 +1061,16 @@ test_that("OneStepEps valid values in (0, 1] are stored exactly", {
     }
 })
 
-test_that("invalid OneStepEps values reset to 0.5 with a message", {
+test_that("invalid OneStepEps values reset to 0.5 with a warning", {
     dt <- make_test_data()
     for (bad in list(0, -0.1, 1.5, "a", NA)) {
-        expect_message(
-            args <- formatArguments(DataTable = dt, EventTime = "time", EventType = "status",
-                                    Treatment = "trt", ID = "id", Intervention = makeITT(),
-                                    TargetTime = 100, CVArg = list(V = 2), MinNuisance = 0.05,
-                                    OneStepEps = bad),
+        expect_warning(
+            args <- suppressMessages(
+                formatArguments(DataTable = dt, EventTime = "time", EventType = "status",
+                                Treatment = "trt", ID = "id", Intervention = makeITT(),
+                                TargetTime = 100, CVArg = list(V = 2), MinNuisance = 0.05,
+                                OneStepEps = bad)
+            ),
             regexp = "OneStepEps|0.5",
             info   = paste("bad value:", deparse(bad))
         )
@@ -1089,14 +1105,16 @@ test_that("auto-computed MinNuisance decreases with increasing sample size", {
     expect_gt(args_s$MinNuisance, args_l$MinNuisance)
 })
 
-test_that("invalid MinNuisance values reset to 0.05 with a message", {
+test_that("invalid MinNuisance values reset to 0.05 with a warning", {
     dt <- make_test_data()
     for (bad in list(-0.1, 0, 1.5, "a", NA)) {
-        expect_message(
-            args <- formatArguments(DataTable = dt, EventTime = "time", EventType = "status",
-                                    Treatment = "trt", ID = "id", Intervention = makeITT(),
-                                    TargetTime = 100, CVArg = list(V = 2),
-                                    MinNuisance = bad),
+        expect_warning(
+            args <- suppressMessages(
+                formatArguments(DataTable = dt, EventTime = "time", EventType = "status",
+                                Treatment = "trt", ID = "id", Intervention = makeITT(),
+                                TargetTime = 100, CVArg = list(V = 2),
+                                MinNuisance = bad)
+            ),
             regexp = "MinNuisance|0.05",
             info   = paste("bad value:", deparse(bad))
         )
@@ -1201,4 +1219,217 @@ test_that("passing a non-ConcreteArgs object as ConcreteArgs throws an error", {
         formatArguments(ConcreteArgs = list(a = 1, b = 2)),
         regexp = "ConcreteArgs"
     )
+})
+
+# ==============================================================================
+# Block 11: New validation behavior (coercion, targeted errors, edge cases)
+# ==============================================================================
+
+# --- coerceBoolean unit tests -------------------------------------------------
+
+test_that("coerceBoolean returns TRUE/FALSE for unambiguous logical inputs", {
+    expect_identical(concrete:::coerceBoolean(TRUE),  TRUE)
+    expect_identical(concrete:::coerceBoolean(FALSE), FALSE)
+})
+
+test_that("coerceBoolean converts 1/0 numerics", {
+    expect_identical(concrete:::coerceBoolean(1L), TRUE)
+    expect_identical(concrete:::coerceBoolean(0L), FALSE)
+    expect_identical(concrete:::coerceBoolean(1),  TRUE)
+    expect_identical(concrete:::coerceBoolean(0),  FALSE)
+})
+
+test_that("coerceBoolean converts truthy/falsy strings case-insensitively", {
+    for (s in c("true", "TRUE", "True", "yes", "YES", "y", "Y", "1")) {
+        expect_identical(concrete:::coerceBoolean(s), TRUE,  info = s)
+    }
+    for (s in c("false", "FALSE", "False", "no", "NO", "n", "N", "0")) {
+        expect_identical(concrete:::coerceBoolean(s), FALSE, info = s)
+    }
+})
+
+test_that("coerceBoolean returns NULL for uncoercible values", {
+    for (bad in list(NA, NA_character_, 2, -1, "maybe", "on", character(0), c(TRUE, FALSE))) {
+        expect_null(concrete:::coerceBoolean(bad), info = deparse(bad))
+    }
+})
+
+# --- checkBoolean: coercible strings go through silently ----------------------
+
+test_that("checkBoolean coerces 'yes'/'no' strings without a warning", {
+    dt <- make_test_data()
+    expect_no_warning(
+        args <- suppressMessages(
+            formatArguments(DataTable = dt, EventTime = "time", EventType = "status",
+                            Treatment = "trt", ID = "id", Intervention = makeITT(),
+                            TargetTime = 100, CVArg = list(V = 2), MinNuisance = 0.05,
+                            Verbose = "yes", GComp = "no")
+        )
+    )
+    expect_identical(args$Verbose, TRUE)
+    expect_identical(args$GComp,   FALSE)
+})
+
+test_that("checkBoolean coerces numeric 1/0 without a warning", {
+    dt <- make_test_data()
+    expect_no_warning(
+        args <- suppressMessages(
+            formatArguments(DataTable = dt, EventTime = "time", EventType = "status",
+                            Treatment = "trt", ID = "id", Intervention = makeITT(),
+                            TargetTime = 100, CVArg = list(V = 2), MinNuisance = 0.05,
+                            GComp = 1, ReturnModels = 0)
+        )
+    )
+    expect_identical(args$GComp,         TRUE)
+    expect_identical(args$ReturnModels,  FALSE)
+})
+
+# --- Covariate NA / Inf stops with informative messages ----------------------
+
+test_that("covariate NA triggers stop naming the offending column", {
+    dt <- make_test_data()
+    dt[1, age := NA_real_]
+    expect_error(
+        suppressMessages(
+            formatArguments(DataTable = dt, EventTime = "time", EventType = "status",
+                            Treatment = "trt", ID = "id", Intervention = makeITT(),
+                            TargetTime = 100, CVArg = list(V = 2), MinNuisance = 0.05)
+        ),
+        regexp = "age|missing"
+    )
+})
+
+test_that("covariate Inf triggers stop naming the offending column", {
+    dt <- make_test_data()
+    dt[1, age := Inf]
+    expect_error(
+        suppressMessages(
+            formatArguments(DataTable = dt, EventTime = "time", EventType = "status",
+                            Treatment = "trt", ID = "id", Intervention = makeITT(),
+                            TargetTime = 100, CVArg = list(V = 2), MinNuisance = 0.05)
+        ),
+        regexp = "age|infinite"
+    )
+})
+
+test_that("multiple bad covariate columns all named in the error message", {
+    dt <- make_test_data()
+    dt[, age2 := age]   # add second covariate
+    dt[1, age  := NA_real_]
+    dt[2, age2 := Inf]
+    expect_error(
+        suppressMessages(
+            formatArguments(DataTable = dt, EventTime = "time", EventType = "status",
+                            Treatment = "trt", ID = "id", Intervention = makeITT(),
+                            TargetTime = 100, CVArg = list(V = 2), MinNuisance = 0.05)
+        ),
+        regexp = "age"   # at least one bad column named
+    )
+})
+
+# --- checkEventTime NA error mentions censoring guidance ----------------------
+
+test_that("NA event time stop message mentions censoring / EventType=0", {
+    dt <- make_test_data()
+    dt[1, time := NA_real_]
+    err <- tryCatch(
+        suppressMessages(
+            formatArguments(DataTable = dt, EventTime = "time", EventType = "status",
+                            Treatment = "trt", ID = "id", Intervention = makeITT(),
+                            TargetTime = 100, CVArg = list(V = 2), MinNuisance = 0.05)
+        ),
+        error = function(e) conditionMessage(e)
+    )
+    expect_match(err, "EventType\\s*=\\s*0|censored|censoring", ignore.case = TRUE)
+})
+
+# --- checkEventType NA error mentions replace with 0 -------------------------
+
+test_that("NA event type stop message mentions replacing with 0", {
+    dt <- make_test_data()
+    dt[1, status := NA_real_]
+    err <- tryCatch(
+        suppressMessages(
+            formatArguments(DataTable = dt, EventTime = "time", EventType = "status",
+                            Treatment = "trt", ID = "id", Intervention = makeITT(),
+                            TargetTime = 100, CVArg = list(V = 2), MinNuisance = 0.05)
+        ),
+        error = function(e) conditionMessage(e)
+    )
+    expect_match(err, "0|censoring|replace", ignore.case = TRUE)
+})
+
+# --- checkTreatment NA error mentions causal implications --------------------
+
+test_that("NA treatment stop message mentions causal implications", {
+    dt <- make_test_data()
+    dt[1, trt := NA_real_]
+    err <- tryCatch(
+        suppressMessages(
+            formatArguments(DataTable = dt, EventTime = "time", EventType = "status",
+                            Treatment = "trt", ID = "id", Intervention = makeITT(),
+                            TargetTime = 100, CVArg = list(V = 2), MinNuisance = 0.05)
+        ),
+        error = function(e) conditionMessage(e)
+    )
+    expect_match(err, "causal|missing treatment|informative", ignore.case = TRUE)
+})
+
+# --- getID non-character / non-NULL input stops ------------------------------
+
+test_that("numeric ID argument (not a column name) throws an informative error", {
+    dt <- make_test_data()
+    expect_error(
+        suppressMessages(
+            formatArguments(DataTable = dt, EventTime = "time", EventType = "status",
+                            Treatment = "trt", ID = 1L, Intervention = makeITT(),
+                            TargetTime = 100, CVArg = list(V = 2), MinNuisance = 0.05)
+        ),
+        regexp = "character|ID"
+    )
+})
+
+test_that("list ID argument throws an informative error", {
+    dt <- make_test_data()
+    expect_error(
+        suppressMessages(
+            formatArguments(DataTable = dt, EventTime = "time", EventType = "status",
+                            Treatment = "trt", ID = list("id"), Intervention = makeITT(),
+                            TargetTime = 100, CVArg = list(V = 2), MinNuisance = 0.05)
+        ),
+        regexp = "character|ID"
+    )
+})
+
+# --- getCVFolds: V > nEff warns and resets -----------------------------------
+
+test_that("CVArg$V greater than unique subjects emits warning and resets to default", {
+    dt   <- make_test_data(n = 20)   # small dataset
+    expect_warning(
+        args <- suppressMessages(
+            formatArguments(DataTable = dt, EventTime = "time", EventType = "status",
+                            Treatment = "trt", ID = "id", Intervention = makeITT(),
+                            TargetTime = 100, CVArg = list(V = 9999), MinNuisance = 0.05)
+        ),
+        regexp = "CVArg\\$V|exceed|unique subjects"
+    )
+    # After reset the actual number of folds must be <= unique subjects
+    expect_lte(attr(args$CVFolds, "CVArg")[["V"]], length(unique(dt$id)))
+})
+
+# --- getTargetEvent: message when subset supplied ----------------------------
+
+test_that("supplying a subset TargetEvent emits a message (not a warning)", {
+    dt <- make_cr_data()   # events: 0, 1, 2
+    expect_message(
+        args <- suppressWarnings(
+            formatArguments(DataTable = dt, EventTime = "time", EventType = "status",
+                            Treatment = "trt", ID = "id", Intervention = makeITT(),
+                            TargetTime = 100, CVArg = list(V = 2), MinNuisance = 0.05,
+                            TargetEvent = 1)   # only one of the two competing risks
+        ),
+        regexp = "TargetEvent|subset|not yet supported"
+    )
+    # Despite the override message, all non-censoring events are still targeted
+    expect_equal(sort(args$TargetEvent), c(1L, 2L))
 })

@@ -17,25 +17,33 @@ import(origami)
 import(survival)
 importFrom(MASS,mvrnorm)
 importFrom(Rcpp,evalCpp)
-importFrom(grDevices,dev.flush)
-importFrom(grDevices,dev.hold)
-importFrom(grDevices,devAskNewPage)
+importFrom(grDevices,
+  dev.flush,
+  dev.hold,
+  devAskNewPage
+)
 importFrom(graphics,abline)
 importFrom(nleqslv,nleqslv)
-importFrom(stats,as.formula)
-importFrom(stats,binomial)
-importFrom(stats,cor)
-importFrom(stats,cov)
-importFrom(stats,density)
-importFrom(stats,gaussian)
-importFrom(stats,model.matrix)
-importFrom(stats,predict)
-importFrom(stats,qnorm)
-importFrom(stats,quantile)
-importFrom(stats,var)
-importFrom(survival,Surv)
-importFrom(survival,coxph)
-importFrom(utils,capture.output)
-importFrom(utils,head)
-importFrom(utils,tail)
+importFrom(stats,
+  as.formula,
+  binomial,
+  cor,
+  cov,
+  density,
+  gaussian,
+  model.matrix,
+  predict,
+  qnorm,
+  quantile,
+  var
+)
+importFrom(survival,
+  Surv,
+  coxph
+)
+importFrom(utils,
+  capture.output,
+  head,
+  tail
+)
 useDynLib(concrete)

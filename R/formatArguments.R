@@ -409,7 +409,7 @@ checkTreatment <- function(Treatment, EventType, DataTable = NULL) {
              "cannot be handled automatically as the causal interpretation depends entirely on ",
              "why treatment is missing (e.g. informative vs. non-informative dropout). ",
              "Please resolve missing treatments before proceeding.")
-      if (any(!is.numeric(trt), is.nan(trt), is.infinite(trt), is.list(trt)))
+      if (!is.numeric(trt) || any(is.infinite(trt)) || is.list(trt))
         stop("Treatment must be a numeric vector with finite values. Encode binary variables ",
              "as 0 or 1 and encode multinomial (factor) variables as integers.")
     })
@@ -427,8 +427,10 @@ getID <- function(ID, DataTable = NULL) {
     if (inherits(IDVal, "try-error") | is.null(IDVal))
       stop("No column named '", ID, "' was found in the supplied data. Check spelling ",
            "or input argument into DataTable")
+  } else {
+    stop("The `ID` argument must be a character string naming the subject ID column, or NULL.")
   }
-  if (any(is.list(IDVal), is.null(IDVal), is.nan(IDVal), is.na(IDVal)))
+  if (is.list(IDVal) || anyNA(IDVal))
     stop("ID column must not include missing values")
   return(list(IDVal = IDVal, IDName = ID))
 }
@@ -731,6 +733,11 @@ getTargetEvent <- function(TargetEvent, Data) {
   if (!is.null(TargetEvent)) {
     if (any(!is.vector(TargetEvent), !is.numeric(TargetEvent), is.list(TargetEvent)))
       stop("TargetEvent must be a numeric vector of event types.")
+    if (!setequal(TargetEvent, NonCensoringEvents))
+      message("TargetEvent = c(", paste(sort(TargetEvent), collapse = ", "), ") was supplied, ",
+              "but targeting a subset of competing risks is not yet supported. ",
+              "All non-censoring event types (", paste(NonCensoringEvents, collapse = ", "),
+              ") will be targeted.", call. = FALSE)
   }
 
   return(NonCensoringEvents)
@@ -746,7 +753,7 @@ getTargetTime <- function(TargetTime, TargetEvent, Data) {
   MinTime <- MinTime[["TimeVal"]]
   
   if (!is.null(TargetTime)) {
-    if (any(!is.vector(TargetTime), !is.numeric(TargetTime), is.list(TargetTime), try(TargetTime <= 0)))
+    if (!is.numeric(TargetTime) || is.list(TargetTime) || any(TargetTime <= 0))
       stop("TargetTime must be a positive numeric vector.")
     if (max(TargetTime) > MaxTime)
       stop("TargetTime must not target times after which all individuals are Censored, ", MaxTime)
@@ -764,18 +771,18 @@ getTargetTime <- function(TargetTime, TargetEvent, Data) {
 
 #' Determine default number of CV folds based on effective sample size
 #'
-#' Uses adaptive fold selection: fewer folds for small samples to ensure
-#' sufficient data per fold, more folds for larger samples to reduce variance.
+#' Uses adaptive fold selection: LOOCV for very small samples, stepping down
+#' to fewer folds as sample size grows to reduce computation.
 #'
 #' @param nEff integer; effective number of observations (unique IDs)
 #' @return integer; recommended number of cross-validation folds (V)
 #' @details
-#' The formula uses a piecewise linear function:
+#' The formula produces:
 #' \itemize{
-#'   \item n <= 30: V = n - 17 (minimum 3 folds for n=20)
-#'   \item 30 < n <= 500: V = 13 (10 + 3)
-#'   \item 500 < n <= 5000: V = 8 (5 + 3)
-#'   \item 5000 < n <= 10000: V = 5 (2 + 3)
+#'   \item n <= 30: V = n (leave-one-out CV)
+#'   \item 30 < n <= 500: V = 20
+#'   \item 500 < n <= 5000: V = 10
+#'   \item 5000 < n <= 10000: V = 5
 #'   \item n > 10000: V = 3
 #' }
 #' @keywords internal
@@ -809,6 +816,13 @@ getCVFolds <- function(CVArg, Data, CVSeed = sample(0:1e8, 1)) {
         CVArg[["n"]] <- nrow(Data)
       if (is.null(CVArg[["V"]]))
         CVArg[["V"]] <- V
+      if (!is.null(CVArg[["V"]]) && CVArg[["V"]] > nEff) {
+        V <- getDefaultCVFolds(nEff)
+        warning("CVArg$V (", CVArg[["V"]], ") cannot exceed the number of unique subjects (",
+             nEff, "). Using default fold calculation based on effective sample size, which ", 
+             "results in CVArg$V = ", V, ".")
+        CVArg[["V"]] <- V
+      }
       if (is.null(CVArg[["fold_fun"]]))
         CVArg[["fold_fun"]] <- origami::folds_vfold
       if (is.null(CVArg[["cluster_ids"]]))
@@ -850,9 +864,9 @@ getModel <- function(Model, Data, Verbose) {
   CovNamesChanged <- FALSE
   for (FitVar in names(Model)) {
     if (!(FitVar %in% c(Treatment, UniqueEvents))) {
-      message("The Model[['", FitVar,"']] specification will be ignored. Check that model ",
-          "specifications are named correspondingly to the treatment variable, or the ",
-          "numeric value representing a censoring or event type\n")
+      warning("The Model[['", FitVar, "']] does not match any treatment variable", 
+      " name or numeric event type value. This model specification will be ", 
+      "ignored. Check Model argument input.", call. = FALSE)
     } else {
       if (FitVar %in% UniqueEvents) {
         # Skip survivalSL specs - they don't need formula processing
@@ -936,8 +950,10 @@ makeModelList <- function(Treatment, EventTime, EventType, UniqueEvents, Model, 
         }
       } else {
         if (!is.null(Model[[Trt]]))
-          message("Model specification for \"", Trt, "\" is not recognized and will be ", 
-              "replaced with the default SuperLearner libraries.\n", sep = "")
+          warning("Model specification for '", Trt, "' is not recognized and will be ",
+                  "replaced with the default SuperLearner libraries (SL.xgboost, SL.glmnet). ",
+                  "Provide a character vector of SuperLearner wrapper names.",
+                  call. = FALSE)
         Model[[Trt]] <- c("SL.xgboost", "SL.glmnet")
       }
       attr(Model[[Trt]], "Backend") <- "SuperLearner"
@@ -974,7 +990,8 @@ getMaxUpdateIter <- function(MaxUpdateIter) {
   MaxUpdateIterOK <- try(all(is.numeric(MaxUpdateIter), length(MaxUpdateIter) == 1,
                              MaxUpdateIter > 0, !is.infinite(MaxUpdateIter)))
   if (any(inherits(MaxUpdateIterOK, "try-error"), is.null(MaxUpdateIterOK), !MaxUpdateIterOK)) {
-    message("MaxUpdateIter must a positive, finite whole number, so has been set to 100\n")
+    warning("MaxUpdateIter must be a positive, finite whole number; has been set to 100.",
+            call. = FALSE)
     MaxUpdateIter <- 100
   }
   return(ceiling(MaxUpdateIter))
@@ -984,7 +1001,8 @@ checkOneStepEps <- function(OneStepEps) {
   OneStepEpsOK <- try(all(is.numeric(OneStepEps), length(OneStepEps) == 1,
                           OneStepEps > 0, OneStepEps <= 1))
   if (any(inherits(OneStepEpsOK, "try-error"), !OneStepEpsOK, is.null(OneStepEpsOK))) {
-    message("OneStepEps must a positive number between (0, 1], so has been set to 0.5\n")
+    warning("OneStepEps must be a positive number in (0, 1]; has been set to 0.5.",
+            call. = FALSE)
     OneStepEps <- 0.5
   }
   return(OneStepEps)
@@ -994,7 +1012,8 @@ getMinNuisance <- function(MinNuisance = 0.05) {
   MinNuisanceOK <- try(all(is.numeric(MinNuisance), length(MinNuisance) == 1,
                            MinNuisance > 0, MinNuisance <= 1))
   if (any(inherits(MinNuisanceOK, "try-error"), !MinNuisanceOK, is.null(MinNuisanceOK))) {
-    message("MinNuisance must a positive number between (0, 1], so has been set to 0.05\n")
+    warning("MinNuisance must be a positive number in (0, 1]; has been set to 0.05.",
+            call. = FALSE)
     MinNuisance <- 0.05
   }
   return(MinNuisance)

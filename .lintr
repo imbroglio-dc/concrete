@@ -1,0 +1,12 @@
+linters: linters_with_defaults(
+  # Package uses camelCase throughout — do not enforce snake_case
+  object_name_linter = object_name_linter(styles = c("camelCase", "ALLCAPS", "dotted.case")),
+  # Longer lines are acceptable for statistical formula code
+  line_length_linter = line_length_linter(length = 120L),
+  # Long argument names are common in statistical R code
+  object_length_linter = object_length_linter(length = 40L),
+  # Statistical code legitimately comments out reference formula variants
+  commented_code_linter = NULL,
+  # Complex TMLE logic is inherently multi-branch; cyclomatic complexity is expected
+  cyclocomp_linter = NULL
+  )
