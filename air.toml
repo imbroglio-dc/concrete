@@ -1,0 +1,8 @@
+[format]
+line-width = 120
+indent-width = 2
+indent-style = "space"
+line-ending = "lf"
+persistent-line-breaks = true
+# Auto-generated files (R/RcppExports.R) are excluded by Air's defaults
+default-exclude = true

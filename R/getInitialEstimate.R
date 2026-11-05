@@ -32,56 +32,65 @@
 #' potential bias-variance tradeoff in TMLE.
 #'
 #' @keywords internal
-getInitialEstimate <- function(Data, Model, CVFolds, MinNuisance, TargetEvent, TargetTime,
-                               Regime, ReturnModels) {
-    Time <- NULL
-    TimeVal <- Data[[attr(Data, "EventTime")]]
-    Censored <- any(Data[[attr(Data, "EventType")]] <= 0)
-    
-    ## Propensity Scores for Regimes of Interest ----
-    message("\nEstimating Treatment Propensity:\n")
-    PropScores <- getPropScore(TrtVal = Data[, .SD, .SDcols = attr(Data, "Treatment")], 
-                               CovDT = subset(Data, select = attr(Data, "CovNames")[["ColName"]]), 
-                               TrtModel = Model[which(names(Model) %in% attr(Data, "Treatment"))],
-                               MinNuisance = MinNuisance, Regime = Regime, CVFolds = CVFolds, 
-                               TrtLoss = NULL, ReturnModels = ReturnModels)
-    InitFits <- attr(PropScores, "TrtFit")
-    
-    ## hazards: Events & censoring ----
-    ## baseline hazards for obs times + target times ----
-    HazTimes <- sort(unique(c(TargetTime, TimeVal)))
-    HazTimes <- HazTimes[HazTimes <= max(TargetTime)]
-    Hazards <- data.table("Time" = c(0, HazTimes))
-    
-    message("\nEstimating Hazards:\n")
-    HazFits <- getHazFit(Data = Data, Model = Model, CVFolds = CVFolds, Hazards = Hazards, 
-                         ReturnModels = ReturnModels)
-    InitFits <- c(InitFits, lapply(HazFits, function(HF) return(attr(HF, "HazSL"))))
-    HazSurvPreds <- getHazSurvPred(Data = Data, HazFits = HazFits, MinNuisance = MinNuisance,
-                                   TargetEvent = TargetEvent, TargetTime = TargetTime,
-                                   Regime = Regime)
-    InitialEstimates <- lapply(seq_along(PropScores), function(a) {
-        if (Censored) {
-            NuisanceDenom <- sapply(seq_along(PropScores[[a]]), function(i) {
-                PropScores[[a]][i] * HazSurvPreds[[a]][["Survival"]][["LaggedCensSurv"]][, i]
-            })   
-        } else {
-            Srv <- HazSurvPreds[[a]][["Survival"]][["TotalSurv"]]
-            NuisanceDenom <- matrix(PropScores[[a]], nrow = nrow(Srv), ncol = ncol(Srv), byrow = TRUE) 
-        }
-        NuisanceWeight <- 1 / truncNuisanceWeight(NuisanceDenom = NuisanceDenom, 
-                                                  MinNuisance = MinNuisance, 
-                                                  RegimeName = names(PropScores)[a])
-        return(list("PropScore" = PropScores[[a]],
-                    "Hazards" = HazSurvPreds[[a]][["Hazards"]],
-                    "EvntFreeSurv" = HazSurvPreds[[a]][["Survival"]][["TotalSurv"]],
-                    "NuisanceWeight" = NuisanceWeight))
-    })
-    
-    names(InitialEstimates) <- names(Regime)
-    attr(InitialEstimates, "Times") <- Hazards[["Time"]]
-    attr(InitialEstimates, "InitFits") <- InitFits
-    return(InitialEstimates)
+getInitialEstimate <- function(Data, Model, CVFolds, MinNuisance, TargetEvent, TargetTime, Regime, ReturnModels) {
+  Time <- NULL
+  TimeVal <- Data[[attr(Data, "EventTime")]]
+  Censored <- any(Data[[attr(Data, "EventType")]] <= 0)
+
+  ## Propensity Scores for Regimes of Interest ----
+  message("\nEstimating Treatment Propensity:\n")
+  PropScores <- getPropScore(
+    TrtVal = Data[, .SD, .SDcols = attr(Data, "Treatment")],
+    CovDT = subset(Data, select = attr(Data, "CovNames")[["ColName"]]),
+    TrtModel = Model[which(names(Model) %in% attr(Data, "Treatment"))],
+    MinNuisance = MinNuisance,
+    Regime = Regime,
+    CVFolds = CVFolds,
+    TrtLoss = NULL,
+    ReturnModels = ReturnModels
+  )
+  InitFits <- attr(PropScores, "TrtFit")
+
+  ## hazards: Events & censoring ----
+  ## baseline hazards for obs times + target times ----
+  HazTimes <- sort(unique(c(TargetTime, TimeVal)))
+  HazTimes <- HazTimes[HazTimes <= max(TargetTime)]
+  Hazards <- data.table("Time" = c(0, HazTimes))
+
+  message("\nEstimating Hazards:\n")
+  HazFits <- getHazFit(Data = Data, Model = Model, CVFolds = CVFolds, Hazards = Hazards, ReturnModels = ReturnModels)
+  InitFits <- c(InitFits, lapply(HazFits, function(HF) return(attr(HF, "HazSL"))))
+  HazSurvPreds <- getHazSurvPred(
+    Data = Data,
+    HazFits = HazFits,
+    MinNuisance = MinNuisance,
+    TargetEvent = TargetEvent,
+    TargetTime = TargetTime,
+    Regime = Regime
+  )
+  InitialEstimates <- lapply(seq_along(PropScores), function(a) {
+    if (Censored) {
+      NuisanceDenom <- sapply(seq_along(PropScores[[a]]), function(i) {
+        PropScores[[a]][i] * HazSurvPreds[[a]][["Survival"]][["LaggedCensSurv"]][, i]
+      })
+    } else {
+      Srv <- HazSurvPreds[[a]][["Survival"]][["TotalSurv"]]
+      NuisanceDenom <- matrix(PropScores[[a]], nrow = nrow(Srv), ncol = ncol(Srv), byrow = TRUE)
+    }
+    NuisanceWeight <- 1 /
+      truncNuisanceWeight(NuisanceDenom = NuisanceDenom, MinNuisance = MinNuisance, RegimeName = names(PropScores)[a])
+    return(list(
+      "PropScore" = PropScores[[a]],
+      "Hazards" = HazSurvPreds[[a]][["Hazards"]],
+      "EvntFreeSurv" = HazSurvPreds[[a]][["Survival"]][["TotalSurv"]],
+      "NuisanceWeight" = NuisanceWeight
+    ))
+  })
+
+  names(InitialEstimates) <- names(Regime)
+  attr(InitialEstimates, "Times") <- Hazards[["Time"]]
+  attr(InitialEstimates, "InitFits") <- InitFits
+  return(InitialEstimates)
 }
 
 #' Truncate Nuisance Weights for Numerical Stability
@@ -117,51 +126,69 @@ getInitialEstimate <- function(Data, Model, CVFolds, MinNuisance, TargetEvent, T
 #'
 #' @keywords internal
 truncNuisanceWeight <- function(NuisanceDenom, MinNuisance, RegimeName) {
-    if (is.function(MinNuisance)) {
-        warning("MinNuisance functions are not yet supported. Using default: ",
-                "5 / (sqrt(n) * log(n)).", call. = FALSE)
-        MinNuisance <- 5 / log(ncol(NuisanceDenom)) / sqrt(ncol(NuisanceDenom))
-    }
-    if (is.numeric(MinNuisance) & length(MinNuisance) == 1) {
-        if (MinNuisance < 1 & MinNuisance > 0) {
-            if (min(NuisanceDenom) < MinNuisance) {
-                pct_subjects <- round(mean(apply(NuisanceDenom, 2, function(subj) any(subj < MinNuisance)), 3) * 100)
-                pct_total <- round(mean(NuisanceDenom < MinNuisance), 3) * 100
-                PositivityWarning <- paste0(
-                    "For Intervention \"", RegimeName, "\": ",
-                    pct_subjects, "% of subjects had at least one nuisance weight < ",
-                    signif(MinNuisance, 3), "; ", pct_total, "% of all weights truncated")
+  if (is.function(MinNuisance)) {
+    warning("MinNuisance functions are not yet supported. Using default: ", "5 / (sqrt(n) * log(n)).", call. = FALSE)
+    MinNuisance <- 5 / log(ncol(NuisanceDenom)) / sqrt(ncol(NuisanceDenom))
+  }
+  if (is.numeric(MinNuisance) & length(MinNuisance) == 1) {
+    if (MinNuisance < 1 & MinNuisance > 0) {
+      if (min(NuisanceDenom) < MinNuisance) {
+        pct_subjects <- round(mean(apply(NuisanceDenom, 2, function(subj) any(subj < MinNuisance)), 3) * 100)
+        pct_total <- round(mean(NuisanceDenom < MinNuisance), 3) * 100
+        PositivityWarning <- paste0(
+          "For Intervention \"",
+          RegimeName,
+          "\": ",
+          pct_subjects,
+          "% of subjects had at least one nuisance weight < ",
+          signif(MinNuisance, 3),
+          "; ",
+          pct_total,
+          "% of all weights truncated"
+        )
 
-                # Add severity guidance
-                if (pct_subjects > 10) {
-                    PositivityWarning <- paste0(PositivityWarning,
-                        ". WARNING: High truncation rate suggests potential positivity violations.")
-                }
-
-                attr(NuisanceDenom, "original") <- NuisanceDenom
-                attr(NuisanceDenom, "message") <- PositivityWarning
-                NuisanceDenom[NuisanceDenom < MinNuisance] <- MinNuisance
-            } else {
-                attr(NuisanceDenom, "message") <- paste0(
-                    "For Intervention \"", RegimeName, "\": ",
-                    "no nuisance weights below threshold (", signif(MinNuisance, 3), ")")
-            }
-
-        } else {
-            warning("MinNuisance must be in (0, 1). Current value: ", MinNuisance,
-                    ". Nuisance weights will NOT be truncated, which may cause ",
-                    "numerical instability if propensity scores approach 0 or 1.",
-                    call. = FALSE)
-            attr(NuisanceDenom, "message") <- paste0(
-                "MinNuisance=", MinNuisance, " invalid (must be in (0,1)). ",
-                "Weights not truncated - results may be unstable.")
+        # Add severity guidance
+        if (pct_subjects > 10) {
+          PositivityWarning <- paste0(
+            PositivityWarning,
+            ". WARNING: High truncation rate suggests potential positivity violations."
+          )
         }
+
+        attr(NuisanceDenom, "original") <- NuisanceDenom
+        attr(NuisanceDenom, "message") <- PositivityWarning
+        NuisanceDenom[NuisanceDenom < MinNuisance] <- MinNuisance
+      } else {
+        attr(NuisanceDenom, "message") <- paste0(
+          "For Intervention \"",
+          RegimeName,
+          "\": ",
+          "no nuisance weights below threshold (",
+          signif(MinNuisance, 3),
+          ")"
+        )
+      }
+    } else {
+      warning(
+        "MinNuisance must be in (0, 1). Current value: ",
+        MinNuisance,
+        ". Nuisance weights will NOT be truncated, which may cause ",
+        "numerical instability if propensity scores approach 0 or 1.",
+        call. = FALSE
+      )
+      attr(NuisanceDenom, "message") <- paste0(
+        "MinNuisance=",
+        MinNuisance,
+        " invalid (must be in (0,1)). ",
+        "Weights not truncated - results may be unstable."
+      )
     }
-    return(NuisanceDenom)
+  }
+  return(NuisanceDenom)
 }
 
-# screenCovRanger <- function(Data, j, nVar =  10, min.node.size = 3, mtry = floor(sqrt(ncol(Data))), 
-#                             write.forest = FALSE, oob.error = FALSE, importance = "impurity", ...) 
+# screenCovRanger <- function(Data, j, nVar =  10, min.node.size = 3, mtry = floor(sqrt(ncol(Data))),
+#                             write.forest = FALSE, oob.error = FALSE, importance = "impurity", ...)
 # {
 #     if (!requireNamespace("ranger", quietly = TRUE)) {
 #         stop("screenCovRanger requires the 'ranger' package")
@@ -170,14 +197,13 @@ truncNuisanceWeight <- function(NuisanceDenom, MinNuisance, RegimeName) {
 #     TrtCol <- attr(Data, "Treatment")
 #     TimeCol <- attr(Data, "EventTime")
 #     TypeCol <- attr(Data, "EventType")
-#     
+#
 #     SurvFormula <- paste0("Surv(time=", TimeCol, ", event=", TypeCol, "==", j, ")~.")
-#     FitRanger <- ranger::ranger(formula = as.formula(SurvFormula), 
-#                                 data = Data[, .SD, .SDcols = setdiff(colnames(Data), c(TrtCol, IDCol))], 
-#                                 min.node.size = min.node.size, write.forest = write.forest, 
+#     FitRanger <- ranger::ranger(formula = as.formula(SurvFormula),
+#                                 data = Data[, .SD, .SDcols = setdiff(colnames(Data), c(TrtCol, IDCol))],
+#                                 min.node.size = min.node.size, write.forest = write.forest,
 #                                 mtry = mtry, oob.error = oob.error, importance = importance)
-#     
+#
 #     CovSelected <- rank(-FitRanger$variable.importance, na.last = NA, ties.method = "first") <= nVar
 #     return(CovSelected)
 # }
-

@@ -32,39 +32,46 @@
 #' @importFrom stats var
 #' @keywords internal
 getEIC <- function(Estimates, Data, Regime, TargetEvent, TargetTime, MinNuisance, GComp = FALSE) {
-    EvalTimes <- attr(Estimates, "Times")
-    # Censored <- 0 %in% Data[[attr(Data, "EventType")]]
-    T.tilde <- Data[[attr(Data, "EventTime")]]
-    Delta <- Data[[attr(Data, "EventType")]]
+  EvalTimes <- attr(Estimates, "Times")
+  # Censored <- 0 %in% Data[[attr(Data, "EventType")]]
+  T.tilde <- Data[[attr(Data, "EventTime")]]
+  Delta <- Data[[attr(Data, "EventType")]]
 
-    # Validate inputs
-    if (length(TargetEvent) == 0) {
-        stop("TargetEvent is empty. Specify at least one event type to target.",
-             call. = FALSE)
+  # Validate inputs
+  if (length(TargetEvent) == 0) {
+    stop("TargetEvent is empty. Specify at least one event type to target.", call. = FALSE)
+  }
+  if (length(TargetTime) == 0) {
+    stop("TargetTime is empty. Specify at least one time point to target.", call. = FALSE)
+  }
+
+  for (a in seq_along(Estimates)) {
+    NuisanceWeight <- Estimates[[a]][["NuisanceWeight"]]
+    GStar <- attr(Estimates[[a]][["PropScore"]], "g.star.obs")
+    Hazards <- Estimates[[a]][["Hazards"]]
+    TotalSurv <- Estimates[[a]][["EvntFreeSurv"]]
+
+    IC.a <- getIC(
+      GStar = GStar,
+      Hazards = Hazards,
+      TotalSurv = TotalSurv,
+      NuisanceWeight = NuisanceWeight,
+      TargetEvent = TargetEvent,
+      TargetTime = TargetTime,
+      T.tilde = T.tilde,
+      Delta = Delta,
+      EvalTimes = EvalTimes,
+      GComp = GComp
+    )
+
+    if (GComp) {
+      Estimates[[a]][["GCompEst"]] <- getGComp(EvalTimes, Hazards, TotalSurv, TargetTime)
     }
-    if (length(TargetTime) == 0) {
-        stop("TargetTime is empty. Specify at least one time point to target.",
-             call. = FALSE)
-    }
 
-    for (a in seq_along(Estimates)) {
-        NuisanceWeight <- Estimates[[a]][["NuisanceWeight"]]
-        GStar <- attr(Estimates[[a]][["PropScore"]], "g.star.obs")
-        Hazards <- Estimates[[a]][["Hazards"]]
-        TotalSurv <- Estimates[[a]][["EvntFreeSurv"]]
-
-        IC.a <- getIC(GStar = GStar, Hazards = Hazards, TotalSurv = TotalSurv,
-                      NuisanceWeight = NuisanceWeight, TargetEvent = TargetEvent,
-                      TargetTime = TargetTime, T.tilde = T.tilde,
-                      Delta = Delta, EvalTimes = EvalTimes, GComp = GComp)
-
-        if (GComp)
-            Estimates[[a]][["GCompEst"]] <- getGComp(EvalTimes, Hazards, TotalSurv, TargetTime)
-
-        Estimates[[a]][["SummEIC"]] <- summarizeIC(IC.a)
-        Estimates[[a]][["IC"]] <- IC.a
-    }
-    return(Estimates)
+    Estimates[[a]][["SummEIC"]] <- summarizeIC(IC.a)
+    Estimates[[a]][["IC"]] <- IC.a
+  }
+  return(Estimates)
 }
 
 #' Compute Individual-Level Efficient Influence Curves
@@ -96,62 +103,82 @@ getEIC <- function(Estimates, Data, Regime, TargetEvent, TargetTime, MinNuisance
 #' - Subset of nuisance weights
 #'
 #' @keywords internal
-getIC <- function(GStar, Hazards, TotalSurv, NuisanceWeight, TargetEvent, TargetTime,
-                  T.tilde, Delta, EvalTimes, GComp) {
-    GStar <- as.numeric(unlist(GStar))
+getIC <- function(
+  GStar,
+  Hazards,
+  TotalSurv,
+  NuisanceWeight,
+  TargetEvent,
+  TargetTime,
+  T.tilde,
+  Delta,
+  EvalTimes,
+  GComp
+) {
+  GStar <- as.numeric(unlist(GStar))
 
-    # Delegate all heavy computation to C++ (computeIC).
-    # Math: for each (j, tau), IC[i] = point_mass[i] - integral[i] + F_j(tau,i) - mean(F_j(tau))
-    # where the loop over L hazard causes is collapsed using h_total = sum_l h_l.
-    # See rcpp_getCleverCovariate.cpp::computeIC for details.
-    res <- computeIC(
-        Hazards        = Hazards,
-        TotalSurv      = TotalSurv,
-        NuisanceWeight = NuisanceWeight,
-        GStar          = GStar,
-        T_tilde        = T.tilde,
-        Delta          = as.integer(Delta),
-        EvalTimes      = EvalTimes,
-        TargetEvent    = as.integer(TargetEvent),
-        TargetTime     = TargetTime
-    )
+  # Delegate all heavy computation to C++ (computeIC).
+  # Math: for each (j, tau), IC[i] = point_mass[i] - integral[i] + F_j(tau,i) - mean(F_j(tau))
+  # where the loop over L hazard causes is collapsed using h_total = sum_l h_l.
+  # See rcpp_getCleverCovariate.cpp::computeIC for details.
+  res <- computeIC(
+    Hazards = Hazards,
+    TotalSurv = TotalSurv,
+    NuisanceWeight = NuisanceWeight,
+    GStar = GStar,
+    T_tilde = T.tilde,
+    Delta = as.integer(Delta),
+    EvalTimes = EvalTimes,
+    TargetEvent = as.integer(TargetEvent),
+    TargetTime = TargetTime
+  )
 
-    # res$IC is N x (J*K); res$Time and res$Event label each column
-    N <- nrow(res$IC)
-    IC.a <- rbindlist(lapply(seq_len(ncol(res$IC)), function(k) {
-        ic_vals <- res$IC[, k]
-        if (anyNA(ic_vals))
-            stop("IC overflow: either increase MinNuisance or specify a target estimand",
-                 " (Target Event, Target Time, & Intervention) with more support in the data.")
-        data.table(ID = seq_len(N), Time = res$Time[k], Event = res$Event[k], IC = ic_vals)
-    }))
-    return(IC.a)
+  # res$IC is N x (J*K); res$Time and res$Event label each column
+  N <- nrow(res$IC)
+  IC.a <- rbindlist(lapply(seq_len(ncol(res$IC)), function(k) {
+    ic_vals <- res$IC[, k]
+    if (anyNA(ic_vals)) {
+      stop(
+        "IC overflow: either increase MinNuisance or specify a target estimand",
+        " (Target Event, Target Time, & Intervention) with more support in the data."
+      )
+    }
+    data.table(ID = seq_len(N), Time = res$Time[k], Event = res$Event[k], IC = ic_vals)
+  }))
+  return(IC.a)
 }
 
 getGComp <- function(EvalTimes, Hazards, TotalSurv, TargetTime) {
-    F.j.tau <- Event <- Time <- NULL
-    Risks <- do.call(rbind, lapply(Hazards, function(haz.j) {
-        Risk.a <- sapply(1:ncol(haz.j), function(i) {
-            cumsum(TotalSurv[, i] * haz.j[, i])
-        })
-        Risk.a <- cbind("Event" = as.numeric(attr(haz.j, "j")),
-                        "Time" = EvalTimes[EvalTimes %in% TargetTime],
-                        "F.j.tau" = rowMeans(subset(Risk.a, EvalTimes %in% TargetTime)))
-        return(Risk.a)
-    }))
-    Risks <- as.data.table(Risks)
-    Risks <- rbind(Risks, Risks[, list("Event" = -1, "F.j.tau" = 1 - sum(F.j.tau)), by = "Time"])
-    return(Risks[, list("Event" = Event, "Time" = Time, "Risk" = F.j.tau)])
+  F.j.tau <- Event <- Time <- NULL
+  Risks <- do.call(
+    rbind,
+    lapply(Hazards, function(haz.j) {
+      Risk.a <- sapply(1:ncol(haz.j), function(i) {
+        cumsum(TotalSurv[, i] * haz.j[, i])
+      })
+      Risk.a <- cbind(
+        "Event" = as.numeric(attr(haz.j, "j")),
+        "Time" = EvalTimes[EvalTimes %in% TargetTime],
+        "F.j.tau" = rowMeans(subset(Risk.a, EvalTimes %in% TargetTime))
+      )
+      return(Risk.a)
+    })
+  )
+  Risks <- as.data.table(Risks)
+  Risks <- rbind(Risks, Risks[, list("Event" = -1, "F.j.tau" = 1 - sum(F.j.tau)), by = "Time"])
+  return(Risks[, list("Event" = Event, "Time" = Time, "Risk" = F.j.tau)])
 }
 
 summarizeIC <- function(IC.a) {
-    IC <- NULL
-    IC.a <- rbind(IC.a,
-                  IC.a[, list("Event" = -1, "IC" = -sum(IC)), by = c("ID", "Time")])
-    summIC <- IC.a[, list("PnEIC" = mean(IC), 
-                          "seEIC" = sqrt(mean(IC^2)),
-                          "seEIC/(sqrt(n)log(n))" = 
-                            sqrt(mean(IC^2)) / (sqrt(.N) * log(.N))),
-                   by = c("Time", "Event")]
-    return(summIC)
+  IC <- NULL
+  IC.a <- rbind(IC.a, IC.a[, list("Event" = -1, "IC" = -sum(IC)), by = c("ID", "Time")])
+  summIC <- IC.a[,
+    list(
+      "PnEIC" = mean(IC),
+      "seEIC" = sqrt(mean(IC^2)),
+      "seEIC/(sqrt(n)log(n))" = sqrt(mean(IC^2)) / (sqrt(.N) * log(.N))
+    ),
+    by = c("Time", "Event")
+  ]
+  return(summIC)
 }
