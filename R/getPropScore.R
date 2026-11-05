@@ -19,12 +19,13 @@
 #' @return List of propensity scores, one element per intervention regime.
 #'   Each element is a numeric vector of length n with attributes:
 #'   \itemize{
-#'     \item \code{g.star.obs}: g*(A_obs | W) — P(observed A matches regime | W).
-#'       Used in the EIC and TMLE update step.
-#'     \item \code{g.star.intervention}: g*(A* | W) — P(regime assignment | W) under
-#'       the target intervention. For static ITT interventions this is identically 1,
-#'       but it is retained for future support of stochastic interventions, where the
-#'       probability of receiving the target regime varies across subjects.
+#'     \item \code{g.star.obs}: g*(A_obs | W) - P(observed A matches regime | W).
+#'       Used in the efficient influence curve (an observed-data score).
+#'     \item \code{g.star.intervention}: g*(A* | W) - P(regime assignment | W) under
+#'       the target intervention. Used for the TMLE hazard update direction, which
+#'       fluctuates the counterfactual hazards of every subject. For static ITT
+#'       interventions this is identically 1; for stochastic interventions it varies
+#'       across subjects.
 #'   }
 #'   List attributes:
 #'   \itemize{
@@ -90,7 +91,7 @@ getPropScore <- function(TrtVal, CovDT, TrtModel, MinNuisance, Regime,
                     SLArgs[["family"]] <- "gaussian"
                     warning("Treatment '", trt_name, "' has ", n_unique_y,
                             " unique values; fitting propensity score with Gaussian family. ",
-                            "Continuous treatment support is incomplete — interpret results carefully.",
+                            "Continuous treatment support is incomplete - interpret results carefully.",
                             call. = FALSE)
                 }
                 # Strip non-standard attributes (e.g., "Backend") before passing to SuperLearner
@@ -207,7 +208,7 @@ getPropScore <- function(TrtVal, CovDT, TrtModel, MinNuisance, Regime,
                  call. = FALSE)
         }
 
-        # g.star.obs: g*(A_obs | W) — used directly in the EIC and TMLE update
+        # g.star.obs: g*(A_obs | W) - used in the EIC (observed-data score)
         attr(PropScore, "g.star.obs") <- tryCatch(
             g_star_fn(TrtVal, CovDT, PropScore, a),
             error = function(e) {
@@ -217,10 +218,10 @@ getPropScore <- function(TrtVal, CovDT, TrtModel, MinNuisance, Regime,
             }
         )
 
-        # g.star.intervention: g*(A* | W) — probability that the intervention assigns
-        # the target treatment value to each subject.  For static ITT interventions this
-        # is identically 1, but it is retained for future support of stochastic
-        # interventions where the targeting probability varies across subjects.
+        # g.star.intervention: g*(A* | W) - probability that the intervention assigns
+        # the target treatment value to each subject. Used for the TMLE hazard update
+        # direction. For static ITT interventions this is identically 1; for
+        # stochastic interventions it varies across subjects.
         attr(PropScore, "g.star.intervention") <- tryCatch(
             g_star_fn(a, CovDT, PropScore, a),
             error = function(e) {

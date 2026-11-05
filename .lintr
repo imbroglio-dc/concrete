@@ -9,4 +9,4 @@ linters: linters_with_defaults(
   commented_code_linter = NULL,
   # Complex TMLE logic is inherently multi-branch; cyclomatic complexity is expected
   cyclocomp_linter = NULL
-)
+  )

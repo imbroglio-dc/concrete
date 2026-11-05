@@ -13,16 +13,16 @@ getDefaultCVFolds(nEff)
 integer; recommended number of cross-validation folds (V)
 }
 \description{
-Uses adaptive fold selection: fewer folds for small samples to ensure
-sufficient data per fold, more folds for larger samples to reduce variance.
+Uses adaptive fold selection: LOOCV for very small samples, stepping down
+to fewer folds as sample size grows to reduce computation.
 }
 \details{
-The formula uses a piecewise linear function:
+The formula produces:
 \itemize{
-\item n <= 30: V = n - 17 (minimum 3 folds for n=20)
-\item 30 < n <= 500: V = 13 (10 + 3)
-\item 500 < n <= 5000: V = 8 (5 + 3)
-\item 5000 < n <= 10000: V = 5 (2 + 3)
+\item n <= 30: V = n (leave-one-out CV)
+\item 30 < n <= 500: V = 20
+\item 500 < n <= 5000: V = 10
+\item 5000 < n <= 10000: V = 5
 \item n > 10000: V = 3
 }
 }

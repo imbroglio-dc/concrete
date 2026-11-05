@@ -8,6 +8,10 @@
 # User-specific files
 .Ruserdata
 
+# Claude Code (local AI tooling; not part of the package)
+.claude/
+CLAUDE.md
+
 # Example code in package build process
 *-Ex.R
 
