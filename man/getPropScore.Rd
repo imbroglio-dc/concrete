@@ -26,7 +26,7 @@ or a pre-fitted SuperLearner object}
 \item{MinNuisance}{numeric in (0, 1); minimum propensity score (for documentation;
 actual truncation occurs in getInitialEstimate)}
 
-\item{Regime}{list; intervention specifications, each with g.star function}
+\item{Regime}{list; intervention specifications, each with a g.star attribute}
 
 \item{CVFolds}{list; cross-validation fold assignments}
 
@@ -39,10 +39,21 @@ Currently unused; defaults to binomial deviance for binary, MSE for continuous.}
 List of propensity scores, one element per intervention regime.
 Each element is a numeric vector of length n with attributes:
 \itemize{
-\item g.star.intervention: P(A = a*|W) under the intervention
-\item g.star.obs: P(A = A_obs|W) for observed treatment
+\item \code{g.star.obs}: g*(A_obs | W) - P(observed A matches regime | W).
+Used in the efficient influence curve (an observed-data score).
+\item \code{g.star.intervention}: g*(A* | W) - P(regime assignment | W) under
+the target intervention. Used for the TMLE hazard update direction, which
+fluctuates the counterfactual hazards of every subject. For static ITT
+interventions this is identically 1; for stochastic interventions it varies
+across subjects.
 }
-List attributes: TrtFit (fitted models if ReturnModels), warnings (any SuperLearner warnings)
+List attributes:
+\itemize{
+\item \code{TrtFit}: fitted SuperLearner object(s) (if \code{ReturnModels = TRUE}),
+or a descriptive string otherwise
+\item \code{SLWarnings}: named list (one element per treatment variable) of any
+warnings emitted during SuperLearner fitting; empty character vectors when none
+}
 }
 \description{
 Estimates P(A|W), the conditional probability of treatment given covariates,
@@ -50,12 +61,11 @@ using cross-validated super learner. Computes both the propensity for the
 observed treatment and for the intervention assignment (g.star).
 }
 \details{
-For binary treatment: uses binomial family SuperLearner
-For continuous treatment: uses Gaussian family (not fully implemented)
-For multiple treatment variables: estimates joint propensity as product of conditionals
+For binary treatment: uses binomial family SuperLearner.
+For continuous treatment: uses Gaussian family (not fully implemented; use with caution).
+For multiple treatment variables: estimates joint propensity as product of conditionals.
 
-The g.star function from each Regime computes the intervention-specific
-propensity: typically 1(A = a*) for static interventions, but can be
-more complex for dynamic or stochastic interventions.
+Raw P(A=1|W) predictions are computed once per treatment variable and reused across
+all intervention regimes, avoiding redundant SuperLearner predict calls.
 }
 \keyword{internal}

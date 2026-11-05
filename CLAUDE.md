@@ -209,3 +209,6 @@ These plugins are installed and should be used proactively:
 | `superpowers:systematic-debugging` | When a statistical test fails unexpectedly |
 | `superpowers:test-driven-development` | Before implementing changes to the estimation pipeline |
 | `superpowers:requesting-code-review` | After any non-trivial implementation |
+
+## Conventions
+- Simulations: always leave at least 1 CPU core free for other tasks (e.g. `ncores <- max(1, parallel::detectCores() - 1)`; never use all cores).

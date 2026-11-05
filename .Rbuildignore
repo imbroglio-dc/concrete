@@ -14,3 +14,7 @@
 ^README\.Rmd$
 ^\.github$
 ^LICENSE\.md$
+^\.claude$
+^CLAUDE\.md$
+^\.lintr$
+^Rplots\.pdf$
