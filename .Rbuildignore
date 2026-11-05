@@ -18,3 +18,4 @@
 ^CLAUDE\.md$
 ^\.lintr$
 ^Rplots\.pdf$
+^\.git$
