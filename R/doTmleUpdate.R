@@ -124,7 +124,7 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, TargetEvent, TargetTime,
       ## deprecated in favor of the c++ version of the updateHazards function
       ## checked on pbc: max element-wise diff between R and C++ Hazards was less than .Machine$double.eps
       # NewHazards <- updateHazard(
-      #   GStar = attr(est.a[["PropScore"]], "g.star.obs"),
+      #   GStar = attr(est.a[["PropScore"]], "g.star.intervention"),
       #   Hazards = est.a[["Hazards"]],
       #   TotalSurv = est.a[["EvntFreeSurv"]],
       #   NuisanceWeight = est.a[["NuisanceWeight"]],
@@ -136,7 +136,7 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, TargetEvent, TargetTime,
       NewHazards <- updateHazardsCpp(
         Hazards = est.a[["Hazards"]],
         TotalSurv = est.a[["EvntFreeSurv"]],
-        GStar = as.matrix(attr(est.a[["PropScore"]], "g.star.obs")),
+        GStar = as.matrix(attr(est.a[["PropScore"]], "g.star.intervention")),
         NuisanceWeight = est.a[["NuisanceWeight"]],
         EvalTimes = EvalTimes,
         TargetEvent = TargetEvent,
