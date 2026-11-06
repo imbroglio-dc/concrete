@@ -19,3 +19,4 @@
 ^\.lintr$
 ^Rplots\.pdf$
 ^\.git$
+^air\.toml$

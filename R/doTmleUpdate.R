@@ -84,8 +84,17 @@
 #'
 #' @importFrom nleqslv nleqslv
 #' @keywords internal
-doTmleUpdate <- function(Estimates, SummEIC, Data, TargetEvent, TargetTime,
-                         MaxUpdateIter, OneStepEps, NormPnEIC, Verbose) {
+doTmleUpdate <- function(
+  Estimates,
+  SummEIC,
+  Data,
+  TargetEvent,
+  TargetTime,
+  MaxUpdateIter,
+  OneStepEps,
+  NormPnEIC,
+  Verbose
+) {
   Time <- Event <- `seEIC/(sqrt(n)log(n))` <- PnEIC <- NULL
   EvalTimes <- attr(Estimates, "Times")
   T.tilde <- Data[[attr(Data, "EventTime")]]
@@ -102,7 +111,7 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, TargetEvent, TargetTime,
   #     Progress <- utils::txtProgressBar(min = 0, max = 5, initial = 0, style = 3)
   #     Q <- 0
   # }
-  while (StepNum <= MaxUpdateIter & IterNum <= MaxUpdateIter * 2) {
+  while (StepNum <= MaxUpdateIter && IterNum <= MaxUpdateIter * 2) {
     IterNum <- IterNum + 1
 
     # Check survival before update; bound to 1e-12 and record any warnings on output object
@@ -147,44 +156,59 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, TargetEvent, TargetTime,
       )
       NewHazards <- lapply(NewHazards, function(hazards) {
         if (anyNA(hazards)) {
-          warning("NA/NaN values detected in updated hazard estimates; setting to 0. ",
-                  "This may indicate numerical instability. Consider increasing MinNuisance.",
-                  call. = FALSE)
+          warning(
+            "NA/NaN values detected in updated hazard estimates; setting to 0. ",
+            "This may indicate numerical instability. Consider increasing MinNuisance.",
+            call. = FALSE
+          )
           hazards[is.na(hazards) | is.nan(hazards)] <- 0
         }
         return(hazards)
       })
 
       NewSurv <- apply(Reduce(`+`, NewHazards), 2, function(haz) exp(-cumsum(haz)))
-      
+
       NewIC <- getIC(
         GStar = attr(est.a[["PropScore"]], "g.star.obs"),
-        Hazards = NewHazards, TotalSurv = NewSurv,
+        Hazards = NewHazards,
+        TotalSurv = NewSurv,
         NuisanceWeight = est.a[["NuisanceWeight"]],
-        TargetEvent = TargetEvent, TargetTime = TargetTime,
-        T.tilde = T.tilde, Delta = Delta,
-        EvalTimes = EvalTimes, GComp = FALSE
+        TargetEvent = TargetEvent,
+        TargetTime = TargetTime,
+        T.tilde = T.tilde,
+        Delta = Delta,
+        EvalTimes = EvalTimes,
+        GComp = FALSE
       )
       return(list(
-        "Hazards" = NewHazards, "EvntFreeSurv" = NewSurv,
-        "SummEIC" = summarizeIC(NewIC), "IC" = NewIC
+        "Hazards" = NewHazards,
+        "EvntFreeSurv" = NewSurv,
+        "SummEIC" = summarizeIC(NewIC),
+        "IC" = NewIC
       ))
     })
 
     ## Check for improvement
-    NewSummEIC <- do.call(rbind, lapply(seq_along(newEsts), function(a) {
-      cbind("Trt" = names(newEsts)[a], newEsts[[a]][["SummEIC"]])
-    }))
+    NewSummEIC <- do.call(
+      rbind,
+      lapply(seq_along(newEsts), function(a) {
+        cbind("Trt" = names(newEsts)[a], newEsts[[a]][["SummEIC"]])
+      })
+    )
     NewNormPnEIC <- getNormPnEIC(NewSummEIC[Time %in% TargetTime & Event %in% TargetEvent, PnEIC])
 
     # TMLE update may produce NA if survival -> 0 or numerical instability
     if (anyNA(NewNormPnEIC)) {
-      stop("NormPnEIC contains NA values; TMLE update may be numerically unstable. ",
-              "Consider increasing MinNuisance or checking data for extreme values.")
+      stop(
+        "NormPnEIC contains NA values; TMLE update may be numerically unstable. ",
+        "Consider increasing MinNuisance or checking data for extreme values."
+      )
     }
 
     if (NormPnEIC < NewNormPnEIC) {
-      if (Verbose) cat("Update increased ||PnEIC||, halving OneStepEps\n")
+      if (Verbose) {
+        cat("Update increased ||PnEIC||, halving OneStepEps\n")
+      }
       WorkingEps <- WorkingEps / 2
       next
     }
@@ -200,24 +224,29 @@ doTmleUpdate <- function(Estimates, SummEIC, Data, TargetEvent, TargetTime,
     SummEIC <- NewSummEIC
     NormPnEIC <- NewNormPnEIC
     NormPnEICs <- c(NormPnEICs, NewNormPnEIC)
-    OneStepStop <- NewSummEIC[, list(
-      "check" = abs(PnEIC) <= `seEIC/(sqrt(n)log(n))`,
-      "ratio" = abs(PnEIC) / `seEIC/(sqrt(n)log(n))`
-    ),
-    by = c("Trt", "Time", "Event")
+    OneStepStop <- NewSummEIC[,
+      list(
+        "check" = abs(PnEIC) <= `seEIC/(sqrt(n)log(n))`,
+        "ratio" = abs(PnEIC) / `seEIC/(sqrt(n)log(n))`
+      ),
+      by = c("Trt", "Time", "Event")
     ]
 
-    if (Verbose) printOneStepDiagnostics(OneStepStop, NormPnEIC)
+    if (Verbose) {
+      printOneStepDiagnostics(OneStepStop, NormPnEIC)
+    }
 
     if (all(sapply(OneStepStop[["check"]], isTRUE))) {
       attr(Estimates, "TmleConverged") <- list("converged" = TRUE, "step" = StepNum)
       attr(Estimates, "NormPnEICs") <- NormPnEICs
       return(Estimates)
     }
-  } 
+  }
 
   warning(
-    "TMLE has not converged by step ", MaxUpdateIter, " - Estimates may not have ",
+    "TMLE has not converged by step ",
+    MaxUpdateIter,
+    " - Estimates may not have ",
     "the desired asymptotic properties"
   )
 
@@ -274,19 +303,25 @@ boundSurvival <- function(Estimates, TargetRows, EvalTimes, StepNum) {
     Surv.a <- Estimates[[a]][["EvntFreeSurv"]]
     NearZero <- !is.na(Surv.a) & Surv.a <= 1e-12
 
-    new_rows <- do.call(rbind, lapply(seq_along(TargetRows), function(k) {
-      surv_k <- Surv.a[TargetRows[k], ]
-      low_k <- !is.na(surv_k) & surv_k <= 1e-12
-      if (!any(low_k)) return(NULL)
-      data.frame(
-        Regime = names(Estimates)[a], Step = StepNum,
-        TargetTime = EvalTimes[TargetRows[k]],
-        MinSurv = min(surv_k, na.rm = TRUE),
-        N_subjects = sum(low_k),
-        Pct_subjects = round(100 * mean(low_k), 1),
-        stringsAsFactors = FALSE
-      )
-    }))
+    new_rows <- do.call(
+      rbind,
+      lapply(seq_along(TargetRows), function(k) {
+        surv_k <- Surv.a[TargetRows[k], ]
+        low_k <- !is.na(surv_k) & surv_k <= 1e-12
+        if (!any(low_k)) {
+          return(NULL)
+        }
+        data.frame(
+          Regime = names(Estimates)[a],
+          Step = StepNum,
+          TargetTime = EvalTimes[TargetRows[k]],
+          MinSurv = min(surv_k, na.rm = TRUE),
+          N_subjects = sum(low_k),
+          Pct_subjects = round(100 * mean(low_k), 1),
+          stringsAsFactors = FALSE
+        )
+      })
+    )
     step_rows <- rbind(step_rows, new_rows)
 
     Estimates[[a]][["EvntFreeSurv"]][NearZero] <- 1e-12
@@ -296,9 +331,14 @@ boundSurvival <- function(Estimates, TargetRows, EvalTimes, StepNum) {
     sw <- attr(Estimates, "SurvWarnings")
     if (is.null(sw$First)) {
       msg <- paste0(
-        "Survival probability approaching 0 at TMLE step ", StepNum,
-        " in regime(s): ", paste(unique(step_rows$Regime), collapse = ", "), ". ",
-        "(min = ", formatC(min(step_rows$MinSurv), format = "e", digits = 2), "). ",
+        "Survival probability approaching 0 at TMLE step ",
+        StepNum,
+        " in regime(s): ",
+        paste(unique(step_rows$Regime), collapse = ", "),
+        ". ",
+        "(min = ",
+        formatC(min(step_rows$MinSurv), format = "e", digits = 2),
+        "). ",
         "Values bounded to 1e-12. Results may be unreliable. ",
         "Consider targeting an earlier time point or checking data quality."
       )
@@ -340,43 +380,63 @@ boundSurvival <- function(Estimates, TargetRows, EvalTimes, StepNum) {
 #' risk F_j(tau) to perturbations in hazard h_l.
 #'
 #' @keywords internal
-updateHazard <- function(GStar, Hazards, TotalSurv, NuisanceWeight, EvalTimes, T.tilde,
-                         Delta, PnEIC, NormPnEIC, OneStepEps, TargetEvent, TargetTime, 
-                        Iterative = FALSE) {
+updateHazard <- function(
+  GStar,
+  Hazards,
+  TotalSurv,
+  NuisanceWeight,
+  EvalTimes,
+  T.tilde,
+  Delta,
+  PnEIC,
+  NormPnEIC,
+  OneStepEps,
+  TargetEvent,
+  TargetTime,
+  Iterative = FALSE
+) {
   eps <- Time <- Event <- NULL
   GStar <- as.numeric(unlist(GStar))
   if (Iterative) {
     warning("Iterative TMLE not yet implemented. Performing one-step TMLE instead.")
   }
 
-  NewHazards <- lapply(Hazards, function(haz.al) { # loop over L
+  NewHazards <- lapply(Hazards, function(haz.al) {
+    # loop over L
     l <- attr(haz.al, "j")
 
     update.l <-
-      Reduce("+", x = lapply(TargetEvent, function(j) {
-        F.j.t <- apply(Hazards[[as.character(j)]] * TotalSurv, 2, cumsum)
-        Reduce("+", x = lapply(TargetTime, function(tau) {
-          ClevCov <- h.FS <- matrix(0, nrow = nrow(F.j.t), ncol = ncol(F.j.t))
-          h.FS[EvalTimes <= tau, ] <-
-            (matrix(F.j.t[EvalTimes == tau, ],
-              ncol = ncol(F.j.t),
-              nrow = nrow(F.j.t[EvalTimes <= tau, ]),
-              byrow = TRUE
-            ) -
-              F.j.t[EvalTimes <= tau, ]) /
-              TotalSurv[EvalTimes <= tau, ]
+      Reduce(
+        "+",
+        x = lapply(TargetEvent, function(j) {
+          F.j.t <- apply(Hazards[[as.character(j)]] * TotalSurv, 2, cumsum)
+          Reduce(
+            "+",
+            x = lapply(TargetTime, function(tau) {
+              ClevCov <- h.FS <- matrix(0, nrow = nrow(F.j.t), ncol = ncol(F.j.t))
+              h.FS[EvalTimes <= tau, ] <-
+                (matrix(
+                  F.j.t[EvalTimes == tau, ],
+                  ncol = ncol(F.j.t),
+                  nrow = nrow(F.j.t[EvalTimes <= tau, ]),
+                  byrow = TRUE
+                ) -
+                  F.j.t[EvalTimes <= tau, ]) /
+                TotalSurv[EvalTimes <= tau, ]
 
-          ClevCov[EvalTimes <= tau, ] <-
-            getCleverCovariate(
-              GStar = GStar,
-              NuisanceWeight = NuisanceWeight[EvalTimes <= tau, ],
-              hFS = h.FS[EvalTimes <= tau, ],
-              LeqJ = as.integer(l == j)
-            )
+              ClevCov[EvalTimes <= tau, ] <-
+                getCleverCovariate(
+                  GStar = GStar,
+                  NuisanceWeight = NuisanceWeight[EvalTimes <= tau, ],
+                  hFS = h.FS[EvalTimes <= tau, ],
+                  LeqJ = as.integer(l == j)
+                )
 
-          return(ClevCov * PnEIC[Time == tau & Event == j, PnEIC])
-        }))
-      }))
+              return(ClevCov * PnEIC[Time == tau & Event == j, PnEIC])
+            })
+          )
+        })
+      )
     newhaz.al <- haz.al * exp(update.l * OneStepEps / NormPnEIC)
     attr(newhaz.al, "j") <- l
     return(newhaz.al)
@@ -451,6 +511,6 @@ updateHazard <- function(GStar, Hazards, TotalSurv, NuisanceWeight, EvalTimes, T
 printOneStepDiagnostics <- function(OneStepStop, NormPnEIC) {
   ratio <- NULL
   Worst <- OneStepStop[, !"check"][, ratio := round(ratio, 2)][order(ratio, decreasing = TRUE)]
-  print(Worst[1:min(nrow(Worst), 3), ])
+  print(Worst[seq_len(min(nrow(Worst), 3)), ])
   cat("Norm PnEIC = ", NormPnEIC, "\n", sep = "")
 }

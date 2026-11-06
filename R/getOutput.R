@@ -2,9 +2,9 @@
 #'
 #' @param ConcreteEst "ConcreteEst" object
 #' @param Estimand character: "RR" for Relative Risks, "RD" for Risk Differences, and "Risk" for absolute risks
-#' @param Intervention numeric (default = seq_along(ConcreteEst)): the ConcreteEst list element 
-#'          corresponding to the target intervention. For comparison estimands such as RD and RR, 
-#'          Intervention should be a numeric vector with length 2, the first term designating 
+#' @param Intervention numeric (default = seq_along(ConcreteEst)): the ConcreteEst list element
+#'          corresponding to the target intervention. For comparison estimands such as RD and RR,
+#'          Intervention should be a numeric vector with length 2, the first term designating
 #'          "treatment" ConcreteEst list element and the second designating the "control".
 #' @param GComp logical: return g-formula point estimates based on initial nuisance parameter estimation
 #' @param Simultaneous logical: return simultaneous confidence intervals
@@ -16,11 +16,11 @@
 #' @examples
 #' library(data.table)
 #' library(concrete)
-#' 
+#'
 #' data <- as.data.table(survival::pbc)
 #' data <- data[1:200, .SD, .SDcols = c("id", "time", "status", "trt", "age", "sex")]
 #' data[, trt := sample(0:1, nrow(data), TRUE)]
-#' 
+#'
 #' # formatArguments() returns correctly formatted arguments for doConcrete()
 #' concrete.args <- formatArguments(DataTable = data,
 #'                                  EventTime = "time",
@@ -31,14 +31,14 @@
 #'                                  TargetEvent = c(1, 2),
 #'                                  Intervention = makeITT(),
 #'                                  CVArg = list(V = 2))
-#'                                  
+#'
 #' # doConcrete() returns tmle (and g-formula plug-in) estimates of targeted risks
 #' \donttest{
 #' concrete.est <- doConcrete(concrete.args)
-#' 
+#'
 #' # getOutput returns risk difference, relative risk, and treatment-specific risks
 #' #  GComp=TRUE returns g-formula plug-in estimates
-#' #  Simultaneous=TRUE computes simultaneous CI for all output TMLE estimates 
+#' #  Simultaneous=TRUE computes simultaneous CI for all output TMLE estimates
 #' concrete.out <- getOutput(concrete.est, Estimand = c("RR", "RD", "Risk"),
 #'                           GComp = TRUE, Simultaneous = TRUE)
 #' print(concrete.out)
@@ -47,114 +47,188 @@
 #' @importFrom MASS mvrnorm
 #' @importFrom stats cor cov
 
-getOutput <- function(ConcreteEst, Estimand = c("Risk"), Intervention = seq_along(ConcreteEst),
-                      GComp = NULL, Simultaneous = TRUE, Signif = 0.05) {
+getOutput <- function(
+  ConcreteEst,
+  Estimand = c("Risk"),
+  Intervention = seq_along(ConcreteEst),
+  GComp = NULL,
+  Simultaneous = TRUE,
+  Signif = 0.05
+) {
   `CI Low` <- `CI Hi` <- `Pt Est` <- `se` <- NULL
   if (!inherits(ConcreteEst, "ConcreteEst")) {
-    stop("getOutput() requires a 'ConcreteEst' object from doConcrete(). ",
-         "Received object of class: ", paste(class(ConcreteEst), collapse = ", "), ". ",
-         "Run doConcrete() first to obtain TMLE estimates.",
-         call. = FALSE)
+    stop(
+      "getOutput() requires a 'ConcreteEst' object from doConcrete(). ",
+      "Received object of class: ",
+      paste(class(ConcreteEst), collapse = ", "),
+      ". ",
+      "Run doConcrete() first to obtain TMLE estimates.",
+      call. = FALSE
+    )
   }
   TargetTime <- attr(ConcreteEst, "TargetTime")
   TargetEvent <- attr(ConcreteEst, "TargetEvent")
-  if (is.null(GComp))
+  if (is.null(GComp)) {
     GComp <- attr(ConcreteEst, "GComp")
-  if (!is.logical(GComp)) {
-    stop("GComp must be TRUE or FALSE. Received: ", class(GComp)[1],
-         ". Set GComp=TRUE to include g-computation (plug-in) estimates, ",
-         "or GComp=FALSE for TMLE estimates only.",
-         call. = FALSE)
   }
-  
+  if (!is.logical(GComp)) {
+    stop(
+      "GComp must be TRUE or FALSE. Received: ",
+      class(GComp)[1],
+      ". Set GComp=TRUE to include g-computation (plug-in) estimates, ",
+      "or GComp=FALSE for TMLE estimates only.",
+      call. = FALSE
+    )
+  }
+
   EstimandType <- sapply(Estimand, function(e) {
-    if (is.function(e)) return("Function")
-    if (grepl("rd", tolower(e))) return("RD")
-    if (grepl("rr", tolower(e))) return("RR")
-    if (grepl("risk", tolower(e))) return("Risk")
-    else stop("Estimand '", e, "' not recognized. Valid options are:\n",
-              "  - 'Risk': Absolute risk (cumulative incidence) under each intervention\n",
-              "  - 'RD': Risk Difference between interventions (requires 2 interventions)\n",
-              "  - 'RR': Risk Ratio between interventions (requires 2 interventions)\n",
-              "  - A custom function(ConcreteEst, TargetTime, TargetEvent, GComp)",
-              call. = FALSE)
+    if (is.function(e)) {
+      return("Function")
+    }
+    if (grepl("rd", tolower(e))) {
+      return("RD")
+    }
+    if (grepl("rr", tolower(e))) {
+      return("RR")
+    }
+    if (grepl("risk", tolower(e))) {
+      return("Risk")
+    } else {
+      stop(
+        "Estimand '",
+        e,
+        "' not recognized. Valid options are:\n",
+        "  - 'Risk': Absolute risk (cumulative incidence) under each intervention\n",
+        "  - 'RD': Risk Difference between interventions (requires 2 interventions)\n",
+        "  - 'RR': Risk Ratio between interventions (requires 2 interventions)\n",
+        "  - A custom function(ConcreteEst, TargetTime, TargetEvent, GComp)",
+        call. = FALSE
+      )
+    }
   })
   if (any(EstimandType == "Function")) {
-    warning("User-specified Estimand functions are not checked or tested. ",
-            "Please verify the correctness of your custom Estimand function(s).\n", sep = "")
+    warning(
+      "User-specified Estimand functions are not checked or tested. ",
+      "Please verify the correctness of your custom Estimand function(s).\n",
+      sep = ""
+    )
   }
-  
-  if (!is.numeric(Intervention) & !is.integer(Intervention)) {
-    stop("Intervention must be a numeric vector specifying which ConcreteEst elements to use. ",
-         "Available interventions (1 to ", length(ConcreteEst), "): ",
-         paste(names(ConcreteEst), collapse = ", "), ". ",
-         "Example: Intervention = c(1, 2) compares first vs second intervention.",
-         call. = FALSE)
+
+  if (!is.numeric(Intervention) && !is.integer(Intervention)) {
+    stop(
+      "Intervention must be a numeric vector specifying which ConcreteEst elements to use. ",
+      "Available interventions (1 to ",
+      length(ConcreteEst),
+      "): ",
+      paste(names(ConcreteEst), collapse = ", "),
+      ". ",
+      "Example: Intervention = c(1, 2) compares first vs second intervention.",
+      call. = FALSE
+    )
   }
   if (any(grepl("(RR)|(RD)", EstimandType))) {
     if (length(Intervention) < 2) {
-      stop("Risk Ratios (RR) and Risk Differences (RD) require exactly 2 interventions to compare. ",
-           "Specify Intervention = c(treatment_index, control_index). ",
-           "Available interventions: ", paste(seq_along(ConcreteEst), "=", names(ConcreteEst), collapse = ", "), ". ",
-           "Or remove 'RR'/'RD' from Estimand to compute only absolute risks.",
-           call. = FALSE)
+      stop(
+        "Risk Ratios (RR) and Risk Differences (RD) require exactly 2 interventions to compare. ",
+        "Specify Intervention = c(treatment_index, control_index). ",
+        "Available interventions: ",
+        paste(seq_along(ConcreteEst), "=", names(ConcreteEst), collapse = ", "),
+        ". ",
+        "Or remove 'RR'/'RD' from Estimand to compute only absolute risks.",
+        call. = FALSE
+      )
     }
     if (length(Intervention) > 2) {
-      message("Note: RR and RD are computed using interventions[1] vs interventions[2] only: ",
-              "'", names(ConcreteEst)[Intervention[1]], "' vs '", names(ConcreteEst)[Intervention[2]], "'")
+      message(
+        "Note: RR and RD are computed using interventions[1] vs interventions[2] only: ",
+        "'",
+        names(ConcreteEst)[Intervention[1]],
+        "' vs '",
+        names(ConcreteEst)[Intervention[2]],
+        "'"
+      )
     }
   }
   if (!is.logical(Simultaneous)) {
-    stop("Simultaneous must be TRUE or FALSE. Set TRUE for simultaneous confidence bands ",
-         "(recommended when making multiple comparisons), FALSE for pointwise CIs only.",
-         call. = FALSE)
+    stop(
+      "Simultaneous must be TRUE or FALSE. Set TRUE for simultaneous confidence bands ",
+      "(recommended when making multiple comparisons), FALSE for pointwise CIs only.",
+      call. = FALSE
+    )
   }
-  if (!is.numeric(Signif) | Signif >= 1 | Signif <= 0) {
-    stop("Signif (significance level) must be a number in (0, 1). ",
-         "Typical values: 0.05 for 95% CI, 0.01 for 99% CI. Received: ", Signif,
-         call. = FALSE)
+  if (!is.numeric(Signif) || Signif >= 1 || Signif <= 0) {
+    stop(
+      "Signif (significance level) must be a number in (0, 1). ",
+      "Typical values: 0.05 for 95% CI, 0.01 for 99% CI. Received: ",
+      Signif,
+      call. = FALSE
+    )
   }
-  
+
   Output <- data.table()
   Risks <- getRisk(ConcreteEst = ConcreteEst, TargetTime = TargetTime, TargetEvent = TargetEvent, GComp = GComp)
   if (any(sapply(Estimand, is.function))) {
     Output <- lapply(Estimand[which(sapply(Estimand, is.function))], function(estimand) {
-      do.call(estimand, list("ConcreteEst" = ConcreteEst, "TargetTime" = TargetTime,
-                             "TargetEvent" = TargetEvent, "GComp" = GComp))
+      do.call(
+        estimand,
+        list("ConcreteEst" = ConcreteEst, "TargetTime" = TargetTime, "TargetEvent" = TargetEvent, "GComp" = GComp)
+      )
     })
     names(Output) <- names(Estimand)[which(sapply(Estimand, is.function))]
   }
-  
-  if (any(grepl("Risk", EstimandType))) 
+
+  if (any(grepl("Risk", EstimandType))) {
     Output <- rbind(Output, Risks)
-  
-  if (any(grepl("RD", EstimandType))) 
-    Output <- rbind(Output, 
-                    getRD(Risks = Risks, A1 = names(ConcreteEst)[Intervention[1]], 
-                          A0 = names(ConcreteEst)[Intervention[2]], TargetTime = TargetTime, 
-                          TargetEvent = TargetEvent, GComp = GComp))
-  
-  if (any(grepl("RR", EstimandType))) 
-    Output <- rbind(Output, 
-                    getRR(Risks = Risks, A1 = names(ConcreteEst)[Intervention[1]], 
-                          A0 = names(ConcreteEst)[Intervention[2]], TargetTime = TargetTime, 
-                          TargetEvent = TargetEvent, GComp = GComp))
-  
-  Output[, `CI Low` := `Pt Est` - qnorm(1 - Signif/2)*se]
-  Output[, `CI Hi` := `Pt Est` + qnorm(1 - Signif/2)*se]
-  
-  if (Simultaneous)
-    Output <- getSimultaneous(ConcreteEst = ConcreteEst, Output = Output, EstimandType = EstimandType, 
-                              Intervention = Intervention, Signif = Signif)
-  
-  setorderv(Output, cols = c("Time", "Event", "Estimand", "Intervention", "Estimator"), 
-            order = c(1, 1, 1, 1, -1))
+  }
+
+  if (any(grepl("RD", EstimandType))) {
+    Output <- rbind(
+      Output,
+      getRD(
+        Risks = Risks,
+        A1 = names(ConcreteEst)[Intervention[1]],
+        A0 = names(ConcreteEst)[Intervention[2]],
+        TargetTime = TargetTime,
+        TargetEvent = TargetEvent,
+        GComp = GComp
+      )
+    )
+  }
+
+  if (any(grepl("RR", EstimandType))) {
+    Output <- rbind(
+      Output,
+      getRR(
+        Risks = Risks,
+        A1 = names(ConcreteEst)[Intervention[1]],
+        A0 = names(ConcreteEst)[Intervention[2]],
+        TargetTime = TargetTime,
+        TargetEvent = TargetEvent,
+        GComp = GComp
+      )
+    )
+  }
+
+  Output[, `CI Low` := `Pt Est` - qnorm(1 - Signif / 2) * se]
+  Output[, `CI Hi` := `Pt Est` + qnorm(1 - Signif / 2) * se]
+
+  if (Simultaneous) {
+    Output <- getSimultaneous(
+      ConcreteEst = ConcreteEst,
+      Output = Output,
+      EstimandType = EstimandType,
+      Intervention = Intervention,
+      Signif = Signif
+    )
+  }
+
+  setorderv(Output, cols = c("Time", "Event", "Estimand", "Intervention", "Estimator"), order = c(1, 1, 1, 1, -1))
   setcolorder(Output, c("Time", "Event", "Estimand", "Intervention", "Estimator"))
-  
-  attr(Output,"Estimand") <- EstimandType
-  attr(Output,"GComp") <- GComp
-  attr(Output,"Simultaneous") <- Simultaneous
-  attr(Output,"Signif") <- Signif 
+
+  attr(Output, "Estimand") <- EstimandType
+  attr(Output, "GComp") <- GComp
+  attr(Output, "Simultaneous") <- Simultaneous
+  attr(Output, "Signif") <- Signif
   class(Output) <- union("ConcreteOut", class(Output))
   return(Output)
 }
@@ -163,45 +237,63 @@ getRisk <- function(ConcreteEst, TargetTime, TargetEvent, GComp) {
   Event <- Time <- seEIC <- Estimand <- NULL
   risk <- lapply(seq_along(ConcreteEst), function(a) {
     est.a <- ConcreteEst[[a]]
-    risk.a <- do.call(rbind, lapply(as.character(TargetEvent), function(j) {
-      risks <- apply(est.a[["Hazards"]][[j]] * est.a[["EvntFreeSurv"]], 2, cumsum)
-      Psi <- cbind("Time" = attr(ConcreteEst, "Times")[which(attr(ConcreteEst, "Times") %in% TargetTime)],
-                   "Risk" = rowMeans(subset(risks, subset = attr(ConcreteEst, "Times") %in% TargetTime)))
-      se <- subset(est.a$SummEIC[Event == j, ], select = c("Time", "seEIC"))
-      Psi <- merge(Psi, se[, list("Time" = Time, "se" = seEIC / sqrt(ncol(risks)))], by = "Time")
-      Psi <- cbind("Estimator" = "tmle", "Event" = as.numeric(j), Psi)
-      return(Psi)
-    }))
-    if (GComp)
-      risk.a <- rbind(risk.a,
-                      cbind("Estimator" = "gcomp",
-                            est.a$GCompEst[Event %in% TargetEvent, ],
-                            "se" = NA))
-    risk.a <- cbind(Intervention = names(ConcreteEst)[a], 
-                    risk.a)
+    risk.a <- do.call(
+      rbind,
+      lapply(as.character(TargetEvent), function(j) {
+        risks <- apply(est.a[["Hazards"]][[j]] * est.a[["EvntFreeSurv"]], 2, cumsum)
+        Psi <- cbind(
+          "Time" = attr(ConcreteEst, "Times")[which(attr(ConcreteEst, "Times") %in% TargetTime)],
+          "Risk" = rowMeans(subset(risks, subset = attr(ConcreteEst, "Times") %in% TargetTime))
+        )
+        se <- subset(est.a$SummEIC[Event == j, ], select = c("Time", "seEIC"))
+        Psi <- merge(Psi, se[, list("Time" = Time, "se" = seEIC / sqrt(ncol(risks)))], by = "Time")
+        Psi <- cbind("Estimator" = "tmle", "Event" = as.numeric(j), Psi)
+        return(Psi)
+      })
+    )
+    if (GComp) {
+      risk.a <- rbind(risk.a, cbind("Estimator" = "gcomp", est.a$GCompEst[Event %in% TargetEvent, ], "se" = NA))
+    }
+    risk.a <- cbind(Intervention = names(ConcreteEst)[a], risk.a)
     return(risk.a)
   })
   Risk <- setDT(do.call(rbind, risk))
   Risk[, Estimand := "Abs Risk"]
   setnames(Risk, "Risk", "Pt Est")
   setcolorder(Risk, c("Intervention", "Estimand", "Estimator", "Event", "Time", "Pt Est", "se"))
-  attr(Risk, "IC") <- do.call(rbind, lapply(seq_along(ConcreteEst), function(a) {
-    cbind("Intervention" = names(ConcreteEst)[a], ConcreteEst[[a]][["IC"]])}))
+  attr(Risk, "IC") <- do.call(
+    rbind,
+    lapply(seq_along(ConcreteEst), function(a) {
+      cbind("Intervention" = names(ConcreteEst)[a], ConcreteEst[[a]][["IC"]])
+    })
+  )
   return(Risk)
 }
 
 getRD <- function(Risks, A1, A0, TargetTime, TargetEvent, GComp) {
   IC <- ID <- `Pt Est` <- se <- Intervention <- Estimand <- NULL
-  RD <- merge(Risks[, list("Pt Est" = `Pt Est`[Intervention == A1] - `Pt Est`[Intervention == A0]), 
-                    by = c("Estimator", "Event", "Time")], 
-              attr(Risks, "IC")[, list('Estimator' = "tmle", 
-                                       "se" = sqrt(mean((IC[Intervention == A1] - 
-                                                           IC[Intervention == A0])^2) / 
-                                                     length(unique(ID)))), 
-                                by = c("Event", "Time")], 
-              all.x = TRUE)
-  # RD <- Risks[, list("Pt Est" = `Pt Est`[Intervention == A1] - `Pt Est`[Intervention == A0], 
-  #                    se = sqrt(se[Intervention == A1]^2 + se[Intervention == A0]^2)), 
+  RD <- merge(
+    Risks[,
+      list("Pt Est" = `Pt Est`[Intervention == A1] - `Pt Est`[Intervention == A0]),
+      by = c("Estimator", "Event", "Time")
+    ],
+    attr(Risks, "IC")[,
+      list(
+        'Estimator' = "tmle",
+        "se" = sqrt(
+          mean(
+            (IC[Intervention == A1] -
+              IC[Intervention == A0])^2
+          ) /
+            length(unique(ID))
+        )
+      ),
+      by = c("Event", "Time")
+    ],
+    all.x = TRUE
+  )
+  # RD <- Risks[, list("Pt Est" = `Pt Est`[Intervention == A1] - `Pt Est`[Intervention == A0],
+  #                    se = sqrt(se[Intervention == A1]^2 + se[Intervention == A0]^2)),
   #             by = c("Estimator", "Event", "Time")]
   RD[, Intervention := paste0("[", A1, "] - [", A0, "]")]
   RD[, Estimand := "Risk Diff"]
@@ -211,23 +303,30 @@ getRD <- function(Risks, A1, A0, TargetTime, TargetEvent, GComp) {
 
 getRR <- function(Risks, A1, A0, TargetTime, TargetEvent, GComp) {
   Time <- Event <- Estimator <- IC <- ID <- `Pt Est` <- se <- Intervention <- Estimand <- NULL
-  RR <- Risks[, list("Pt Est" = `Pt Est`[Intervention == A1] / `Pt Est`[Intervention == A0]), 
-              by = c("Estimator", "Event", "Time")]
+  RR <- Risks[,
+    list("Pt Est" = `Pt Est`[Intervention == A1] / `Pt Est`[Intervention == A0]),
+    by = c("Estimator", "Event", "Time")
+  ]
   for (time in TargetTime) {
     for (event in TargetEvent) {
       R1 <- Risks[Time == time & Event == event & Estimator == "tmle" & Intervention == A1, `Pt Est`]
       R0 <- Risks[Time == time & Event == event & Estimator == "tmle" & Intervention == A0, `Pt Est`]
-      RR[Time == time & Event == event & Estimator == "tmle", 
-         se := attr(Risks, "IC")[Time == time & Event == event, 
-                                  sqrt(mean((IC[Intervention == A1] / R0 - 
-                                               IC[Intervention == A0] * R1 / R0^2)^2) / 
-                                         length(unique(ID)))]]
+      RR[
+        Time == time & Event == event & Estimator == "tmle",
+        se := attr(Risks, "IC")[
+          Time == time & Event == event,
+          sqrt(
+            mean((IC[Intervention == A1] / R0 - IC[Intervention == A0] * R1 / R0^2)^2) /
+              length(unique(ID))
+          )
+        ]
+      ]
     }
   }
-  # RR <- Risks[, list("Pt Est" = `Pt Est`[Intervention == A1] / `Pt Est`[Intervention == A0], 
-  #                    se = sqrt((se[Intervention == A1] / `Pt Est`[Intervention == A0])^2 + 
-  #                                se[Intervention == A0]^2 * 
-  #                                (`Pt Est`[Intervention == A1] / `Pt Est`[Intervention == A0]^2)^2)), 
+  # RR <- Risks[, list("Pt Est" = `Pt Est`[Intervention == A1] / `Pt Est`[Intervention == A0],
+  #                    se = sqrt((se[Intervention == A1] / `Pt Est`[Intervention == A0])^2 +
+  #                                se[Intervention == A0]^2 *
+  #                                (`Pt Est`[Intervention == A1] / `Pt Est`[Intervention == A0]^2)^2)),
   #             by = c("Estimator", "Event", "Time")]
   RR[, Intervention := paste0("[", A1, "] / [", A0, "]")]
   RR[, Estimand := "Rel Risk"]
@@ -237,44 +336,64 @@ getRR <- function(Risks, A1, A0, TargetTime, TargetEvent, GComp) {
 
 getSimultaneous <- function(ConcreteEst, Output, EstimandType, Intervention, Signif) {
   NumTime <- Estimator <- `Pt Est` <- Event <- Time <- SimQ <- IC <- Risk <- NULL
-  
+
   if (any(grepl("(RR)|(RD)", EstimandType))) {
     A1 <- names(ConcreteEst)[Intervention[1]]
     A0 <- names(ConcreteEst)[Intervention[2]]
   }
-  
-  ICs <- do.call(rbind, lapply(Intervention, function(a) {
-    cbind("Intervention" = names(ConcreteEst)[a], ConcreteEst[[a]][["IC"]])
-  }))
-  
-  ICs <- merge(ICs, getRisk(ConcreteEst = ConcreteEst, TargetTime = attr(ConcreteEst, "TargetTime"), 
-                            TargetEvent = attr(ConcreteEst, "TargetEvent"), GComp = FALSE), 
-               by = c("Intervention", "Time", "Event"))
-  if (any(grepl("RD", EstimandType)))
-    RDICs <- ICs[, list("Intervention" = "Risk Diff",
-                        "IC" = IC[Intervention == A1] - IC[Intervention == A0]), 
-                 by = c("ID", "Time", "Event")]
-  if (any(grepl("RR", EstimandType)))
-    RRICs <- ICs[, list("Intervention" = "Rel Risk",
-                        "IC" = IC[Intervention == A1] / `Pt Est`[Intervention == A0] - 
-                          IC[Intervention == A0] * `Pt Est`[Intervention == A1] / 
-                          `Pt Est`[Intervention == A0]^2), 
-                 by = c("ID", "Time", "Event")]
+
+  ICs <- do.call(
+    rbind,
+    lapply(Intervention, function(a) {
+      cbind("Intervention" = names(ConcreteEst)[a], ConcreteEst[[a]][["IC"]])
+    })
+  )
+
+  ICs <- merge(
+    ICs,
+    getRisk(
+      ConcreteEst = ConcreteEst,
+      TargetTime = attr(ConcreteEst, "TargetTime"),
+      TargetEvent = attr(ConcreteEst, "TargetEvent"),
+      GComp = FALSE
+    ),
+    by = c("Intervention", "Time", "Event")
+  )
+  if (any(grepl("RD", EstimandType))) {
+    RDICs <- ICs[,
+      list("Intervention" = "Risk Diff", "IC" = IC[Intervention == A1] - IC[Intervention == A0]),
+      by = c("ID", "Time", "Event")
+    ]
+  }
+  if (any(grepl("RR", EstimandType))) {
+    RRICs <- ICs[,
+      list(
+        "Intervention" = "Rel Risk",
+        "IC" = IC[Intervention == A1] /
+          `Pt Est`[Intervention == A0] -
+          IC[Intervention == A0] * `Pt Est`[Intervention == A1] / `Pt Est`[Intervention == A0]^2
+      ),
+      by = c("ID", "Time", "Event")
+    ]
+  }
   if (any(grepl("Risk", EstimandType))) {
     ICs <- subset(ICs, select = c("ID", "Time", "Event", "Intervention", "IC"))
   } else {
     ICs <- data.table()
   }
-  if (exists("RDICs")) ICs <- rbind(ICs, RDICs)
-  if (exists("RRICs")) ICs <- rbind(ICs, RRICs)
-  
-  ICs <- dcast(ICs[, Time := as.character(Time)], 
-               ID ~ Intervention + Time + Event, value.var = "IC")[, !c("ID")]
-  CovEIC <- cov(subset(ICs, select = sapply(1:ncol(ICs), function(j) !(max(unlist(ICs[[j]])) == 0))))
+  if (exists("RDICs")) {
+    ICs <- rbind(ICs, RDICs)
+  }
+  if (exists("RRICs")) {
+    ICs <- rbind(ICs, RRICs)
+  }
+
+  ICs <- dcast(ICs[, Time := as.character(Time)], ID ~ Intervention + Time + Event, value.var = "IC")[, !c("ID")]
+  CovEIC <- cov(subset(ICs, select = sapply(seq_len(ncol(ICs)), function(j) !(max(unlist(ICs[[j]])) == 0))))
   CovEIC[is.na(CovEIC)] <- 1e-9
-  CorrEIC <- cor(subset(ICs, select = sapply(1:ncol(ICs), function(j) !(max(unlist(ICs[[j]])) == 0))))
+  CorrEIC <- cor(subset(ICs, select = sapply(seq_len(ncol(ICs)), function(j) !(max(unlist(ICs[[j]])) == 0))))
   n <- length(attr(ConcreteEst, "T.tilde"))
-  
+
   q <- apply(abs(MASS::mvrnorm(n = 1e3, mu = rep(0, nrow(CorrEIC)), Sigma = CorrEIC)), 1, max)
   q <- as.numeric(stats::quantile(q, 1 - Signif))
   se <- data.table(names = rownames(CorrEIC), SimQ = q)
@@ -284,9 +403,23 @@ getSimultaneous <- function(ConcreteEst, Output, EstimandType, Intervention, Sig
   se[Intervention == "Risk Diff", Intervention := paste0("[", A1, "] - [", A0, "]")]
   Output[, NumTime := Time][, Time := as.character(Time)]
   simCI <- merge(Output, se, c("Intervention", "Estimator", "Event", "Time"), all.x = TRUE)
-  simCI[, Time := NumTime][, "SimCI Low" := `Pt Est` - se*SimQ][, "SimCI Hi" := `Pt Est` + se*SimQ]
-  simCI <- subset(simCI, select = c("Intervention", "Estimand", "Estimator", "Event", "Time", 
-                                    "Pt Est", "se","CI Low", "CI Hi", "SimCI Low", "SimCI Hi"))
+  simCI[, Time := NumTime][, "SimCI Low" := `Pt Est` - se * SimQ][, "SimCI Hi" := `Pt Est` + se * SimQ]
+  simCI <- subset(
+    simCI,
+    select = c(
+      "Intervention",
+      "Estimand",
+      "Estimator",
+      "Event",
+      "Time",
+      "Pt Est",
+      "se",
+      "CI Low",
+      "CI Hi",
+      "SimCI Low",
+      "SimCI Hi"
+    )
+  )
   return(simCI)
 }
 
@@ -295,8 +428,7 @@ getSimultaneous <- function(ConcreteEst, Output, EstimandType, Intervention, Sig
 #' @param ... additional arguments to be passed into print methods
 #' @exportS3Method print ConcreteOut
 print.ConcreteOut <- function(x, ...) {
-  num.cols <- intersect(c("Pt Est", "se", "CI Low", "CI Hi", "SimCI Low", "SimCI Hi"), 
-                        colnames(x))
+  num.cols <- intersect(c("Pt Est", "se", "CI Low", "CI Hi", "SimCI Low", "SimCI Hi"), colnames(x))
   dt <- x[, (num.cols) := lapply(.SD, function(y) signif(y, 2)), .SDcols = num.cols]
   NextMethod(generic = "print", object = dt)
 }
@@ -309,46 +441,64 @@ print.ConcreteOut <- function(x, ...) {
 #' @param ... additional arguments to be passed into plot methods
 #' @exportS3Method plot ConcreteOut
 plot.ConcreteOut <- function(x, NullLine = TRUE, ask = TRUE, ...) {
-  `CI Low` <- `CI Hi` <- `SimCI Low` <- `SimCI Hi` <- Intervention <- 
+  `CI Low` <- `CI Hi` <- `SimCI Low` <- `SimCI Hi` <- Intervention <-
     Event <- Time <- `Pt Est` <- Estimator <- se <- NULL
   Signif <- attr(x, "Signif")
-  Estimand <- attr(x,"Estimand")
-  GComp <- attr(x,"GComp")
-  Simultaneous <- attr(x,"Simultaneous")
-  
-  if(!requireNamespace("ggplot2", quietly = TRUE))
+  Estimand <- attr(x, "Estimand")
+  GComp <- attr(x, "GComp")
+  Simultaneous <- attr(x, "Simultaneous")
+
+  if (!requireNamespace("ggplot2", quietly = TRUE)) {
     stop("Plotting requires the 'ggplot2' package")
+  }
   if (ask) {
     oask <- devAskNewPage(TRUE)
     on.exit(devAskNewPage(oask))
   }
   fig <- list()
-  
+
   if (any(grepl("RR", Estimand))) {
     dev.hold()
     z <- x[Estimand == "Rel Risk", ][, Event := paste0("Event ", Event)]
     if (GComp) {
-      fig[["rr"]] <- ggplot2::ggplot(z, ggplot2::aes(x = Time, y = `Pt Est`, shape = Estimator, 
-                                                     ymin = `CI Low`, ymax = `CI Hi`)) + 
-        ggplot2::geom_point() + ggplot2::geom_errorbar() + ggplot2::scale_shape_manual(values = c(4, 16))
+      fig[["rr"]] <- ggplot2::ggplot(
+        z,
+        ggplot2::aes(x = Time, y = `Pt Est`, shape = Estimator, ymin = `CI Low`, ymax = `CI Hi`)
+      ) +
+        ggplot2::geom_point() +
+        ggplot2::geom_errorbar() +
+        ggplot2::scale_shape_manual(values = c(4, 16))
     } else {
-      fig[["rr"]] <- ggplot2::ggplot(z[Estimator == "tmle", ], 
-                                     ggplot2::aes(x = Time, y = `Pt Est`, ymin = `CI Low`, ymax = `CI Hi`)) + 
-        ggplot2::geom_point() + ggplot2::geom_errorbar()
+      fig[["rr"]] <- ggplot2::ggplot(
+        z[Estimator == "tmle", ],
+        ggplot2::aes(x = Time, y = `Pt Est`, ymin = `CI Low`, ymax = `CI Hi`)
+      ) +
+        ggplot2::geom_point() +
+        ggplot2::geom_errorbar()
     }
-    if (Simultaneous & length(unique(z[["Time"]])) > 1) {
-      fig[["rr"]] <- fig[["rr"]] + 
-        ggplot2::geom_ribbon(data = z[Estimator == "tmle", ], 
-                             ggplot2::aes(ymin = `SimCI Low`, ymax = `SimCI Hi`), alpha = 0.06)
+    if (Simultaneous && length(unique(z[["Time"]])) > 1) {
+      fig[["rr"]] <- fig[["rr"]] +
+        ggplot2::geom_ribbon(
+          data = z[Estimator == "tmle", ],
+          ggplot2::aes(ymin = `SimCI Low`, ymax = `SimCI Hi`),
+          alpha = 0.06
+        )
     }
-    fig[["rr"]] <- fig[["rr"]] + 
-      ggplot2::facet_wrap(~Event, scales = "free", nrow = 1) + 
+    fig[["rr"]] <- fig[["rr"]] +
+      ggplot2::facet_wrap(~Event, scales = "free", nrow = 1) +
       ggplot2::theme_minimal() +
-      ggplot2::labs(y = "Relative Risk", x = "Time", 
-                    title = paste0("Relative Risk Point Estimates with ", 
-                                   round(100 * (1 - Signif), digits = 0), "% confidence intervals"))
-    if (NullLine)
+      ggplot2::labs(
+        y = "Relative Risk",
+        x = "Time",
+        title = paste0(
+          "Relative Risk Point Estimates with ",
+          round(100 * (1 - Signif), digits = 0),
+          "% confidence intervals"
+        )
+      )
+    if (NullLine) {
       fig[["rr"]] <- fig[["rr"]] + ggplot2::geom_hline(ggplot2::aes(yintercept = 1), colour = "red", alpha = 0.4)
+    }
     plot(fig[["rr"]])
     dev.flush()
   }
@@ -356,27 +506,44 @@ plot.ConcreteOut <- function(x, NullLine = TRUE, ask = TRUE, ...) {
     dev.hold()
     z <- x[Estimand == "Risk Diff", ][, Event := paste0("Event ", Event)]
     if (GComp) {
-      fig[["rd"]] <- ggplot2::ggplot(z, ggplot2::aes(x = Time, y = `Pt Est`, shape = Estimator, 
-                                                     ymin = `CI Low`, ymax = `CI Hi`)) + 
-        ggplot2::geom_point() + ggplot2::geom_errorbar() + ggplot2::scale_shape_manual(values = c(4, 16))
+      fig[["rd"]] <- ggplot2::ggplot(
+        z,
+        ggplot2::aes(x = Time, y = `Pt Est`, shape = Estimator, ymin = `CI Low`, ymax = `CI Hi`)
+      ) +
+        ggplot2::geom_point() +
+        ggplot2::geom_errorbar() +
+        ggplot2::scale_shape_manual(values = c(4, 16))
     } else {
-      fig[["rd"]] <- ggplot2::ggplot(z[Estimator == "tmle", ], ggplot2::aes(x = Time, y = `Pt Est`, 
-                                                                            ymin = `CI Low`, ymax = `CI Hi`)) + 
-        ggplot2::geom_point() + ggplot2::geom_errorbar()
+      fig[["rd"]] <- ggplot2::ggplot(
+        z[Estimator == "tmle", ],
+        ggplot2::aes(x = Time, y = `Pt Est`, ymin = `CI Low`, ymax = `CI Hi`)
+      ) +
+        ggplot2::geom_point() +
+        ggplot2::geom_errorbar()
     }
-    if (Simultaneous & length(unique(z[["Time"]])) > 1) {
-      fig[["rd"]] <- fig[["rd"]] + 
-        ggplot2::geom_ribbon(data = z[Estimator == "tmle", ], 
-                             ggplot2::aes(ymin = `SimCI Low`, ymax = `SimCI Hi`), alpha = 0.06)
+    if (Simultaneous && length(unique(z[["Time"]])) > 1) {
+      fig[["rd"]] <- fig[["rd"]] +
+        ggplot2::geom_ribbon(
+          data = z[Estimator == "tmle", ],
+          ggplot2::aes(ymin = `SimCI Low`, ymax = `SimCI Hi`),
+          alpha = 0.06
+        )
     }
-    fig[["rd"]] <- fig[["rd"]] + 
-      ggplot2::facet_wrap(~Event, scales = "free", nrow = 1) + 
+    fig[["rd"]] <- fig[["rd"]] +
+      ggplot2::facet_wrap(~Event, scales = "free", nrow = 1) +
       ggplot2::theme_minimal() +
-      ggplot2::labs(y = "Risk Difference", x = "Time", 
-                    title = paste0("Risk Difference Point Estimates with ", 
-                                   round(100 * (1 - Signif), digits = 0), "% confidence intervals")) 
-    if (NullLine)
+      ggplot2::labs(
+        y = "Risk Difference",
+        x = "Time",
+        title = paste0(
+          "Risk Difference Point Estimates with ",
+          round(100 * (1 - Signif), digits = 0),
+          "% confidence intervals"
+        )
+      )
+    if (NullLine) {
       fig[["rd"]] <- fig[["rd"]] + ggplot2::geom_hline(ggplot2::aes(yintercept = 0), colour = "red", alpha = 0.4)
+    }
     plot(fig[["rd"]])
     dev.flush()
   }
@@ -384,27 +551,41 @@ plot.ConcreteOut <- function(x, NullLine = TRUE, ask = TRUE, ...) {
     dev.hold()
     z <- x[Estimand == "Abs Risk", ][, Event := paste0("Event ", Event)]
     if (GComp) {
-      fig[["risk"]] <- ggplot2::ggplot(z, ggplot2::aes(x = Time, y = `Pt Est`, shape = Estimator, 
-                                                       colour = Intervention, ymin = `CI Low`, ymax = `CI Hi`)) + 
-        ggplot2::geom_point() + ggplot2::geom_errorbar(alpha = 0.5) + 
+      fig[["risk"]] <- ggplot2::ggplot(
+        z,
+        ggplot2::aes(x = Time, y = `Pt Est`, shape = Estimator, colour = Intervention, ymin = `CI Low`, ymax = `CI Hi`)
+      ) +
+        ggplot2::geom_point() +
+        ggplot2::geom_errorbar(alpha = 0.5) +
         ggplot2::scale_shape_manual(values = c(4, 16))
     } else {
-      fig[["risk"]] <- ggplot2::ggplot(z[Estimator == "tmle", ], 
-                                       ggplot2::aes(x = Time, y = `Pt Est`, colour = Intervention, 
-                                                    ymin = `CI Low`, ymax = `CI Hi`)) + 
-        ggplot2::geom_point() + ggplot2::geom_errorbar(alpha = 0.5)
+      fig[["risk"]] <- ggplot2::ggplot(
+        z[Estimator == "tmle", ],
+        ggplot2::aes(x = Time, y = `Pt Est`, colour = Intervention, ymin = `CI Low`, ymax = `CI Hi`)
+      ) +
+        ggplot2::geom_point() +
+        ggplot2::geom_errorbar(alpha = 0.5)
     }
-    if (Simultaneous & length(unique(z[["Time"]])) > 1) {
-      fig[["risk"]] <- fig[["risk"]] + 
-        ggplot2::geom_ribbon(ggplot2::aes(ymin = `SimCI Low`, ymax = `SimCI Hi`, fill = Intervention), 
-                             data = z[Estimator == "tmle", ], alpha = 0.06)
+    if (Simultaneous && length(unique(z[["Time"]])) > 1) {
+      fig[["risk"]] <- fig[["risk"]] +
+        ggplot2::geom_ribbon(
+          ggplot2::aes(ymin = `SimCI Low`, ymax = `SimCI Hi`, fill = Intervention),
+          data = z[Estimator == "tmle", ],
+          alpha = 0.06
+        )
     }
-    fig[["risk"]] <- fig[["risk"]] + 
-      ggplot2::facet_wrap(~Event, scales = "free", nrow = 1) + 
+    fig[["risk"]] <- fig[["risk"]] +
+      ggplot2::facet_wrap(~Event, scales = "free", nrow = 1) +
       ggplot2::theme_minimal() +
-      ggplot2::labs(y = "Absolute Risk", x = "Time", 
-                    title = paste0("Absolute Risk Point Estimates with ", 
-                                   round(100 * (1 - Signif), digits = 0), "% confidence intervals")) 
+      ggplot2::labs(
+        y = "Absolute Risk",
+        x = "Time",
+        title = paste0(
+          "Absolute Risk Point Estimates with ",
+          round(100 * (1 - Signif), digits = 0),
+          "% confidence intervals"
+        )
+      )
     plot(fig[["risk"]])
     dev.flush()
   }
