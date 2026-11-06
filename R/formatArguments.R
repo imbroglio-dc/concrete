@@ -416,7 +416,7 @@ formatDataTable <- function(DT, EventTime, EventType, Treatment, ID, LongTime, V
 checkEventTime <- function(EventTime, DataTable = NULL) {
   if (is.character(EventTime)) {
     tmp <- try(DataTable[[EventTime]])
-    if (inherits(tmp, "try-error") | is.null(tmp)) {
+    if (inherits(tmp, "try-error") || is.null(tmp)) {
       stop("No column named '", EventTime, "' was found in the supplied DataTable")
     }
     if (anyNA(tmp)) {
@@ -441,7 +441,7 @@ checkEventTime <- function(EventTime, DataTable = NULL) {
 checkEventType <- function(EventType, DataTable = NULL) {
   if (is.character(EventType)) {
     tmp <- try(DataTable[[EventType]])
-    if (inherits(tmp, "try-error") | is.null(tmp)) {
+    if (inherits(tmp, "try-error") || is.null(tmp)) {
       stop("No column named '", EventType, "' was found in the supplied DataTable.")
     }
     if (anyNA(tmp)) {
@@ -474,7 +474,7 @@ checkEventType <- function(EventType, DataTable = NULL) {
 checkTreatment <- function(Treatment, EventType, DataTable = NULL) {
   if (is.character(Treatment)) {
     tmp <- try(DataTable[, .SD, .SDcols = Treatment])
-    if (inherits(tmp, "try-error") | is.null(tmp)) {
+    if (inherits(tmp, "try-error") || is.null(tmp)) {
       stop(
         "Column",
         ifelse(length(Treatment) > 1, "s", ""),
@@ -522,10 +522,10 @@ checkTreatment <- function(Treatment, EventType, DataTable = NULL) {
 getID <- function(ID, DataTable = NULL) {
   if (is.null(ID)) {
     ID <- "ID"
-    IDVal <- 1:nrow(DataTable)
+    IDVal <- seq_len(nrow(DataTable))
   } else if (is.character(ID)) {
     IDVal <- try(DataTable[[ID]])
-    if (inherits(IDVal, "try-error") | is.null(IDVal)) {
+    if (inherits(IDVal, "try-error") || is.null(IDVal)) {
       stop(
         "No column named '",
         ID,
@@ -710,7 +710,7 @@ getRegime <- function(Intervention, Data) {
   }
   if (is.list(Intervention)) {
     if (
-      inherits(Intervention, "concreteIntervention") |
+      inherits(Intervention, "concreteIntervention") ||
         all(
           length(Intervention) %in% c(1, 2),
           sapply(Intervention, is.function),
@@ -733,13 +733,13 @@ getRegime <- function(Intervention, Data) {
       # intervention fn ----
       # Regime input as function, dataframe, vector of individual trt values, single value
       if (is.list(Regime)) {
-        if (is.function(Regime[[1]]) & length(Regime) <= 2) {
+        if (is.function(Regime[[1]]) && length(Regime) <= 2) {
           # check intervention function
           if (is.null(names(Regime)[1])) {
             names(Regime)[1] <- "intervention"
           }
           RegimeVal <- try(do.call(Regime[["intervention"]], list(TrtVal, CovDT)))
-          if (inherits(RegimeVal, "try-error") & ncol(TrtVal) == 1) {
+          if (inherits(RegimeVal, "try-error") && ncol(TrtVal) == 1) {
             RegimeVal <- try(do.call(Regime[["intervention"]], list(unlist(TrtVal), CovDT)))
           }
           if (
@@ -775,12 +775,12 @@ getRegime <- function(Intervention, Data) {
         }
       } else if (isTRUE(length(Regime) == nrow(TrtVal) & is.numeric(Regime))) {
         RegimeVal <- data.table::copy(TrtVal)
-        for (i in 1:ncol(RegimeVal)) {
+        for (i in seq_len(ncol(RegimeVal))) {
           RegimeVal[, i] <- Regime
         }
-      } else if (isTRUE(length(Regime) == 1) & is.numeric(Regime)) {
+      } else if (isTRUE(length(Regime) == 1) && is.numeric(Regime)) {
         RegimeVal <- data.table::copy(TrtVal)
-        for (i in 1:ncol(RegimeVal)) {
+        for (i in seq_len(ncol(RegimeVal))) {
           RegimeVal[, i] <- rep_len(Regime, nrow(RegimeVal))
         }
       } else {
@@ -820,7 +820,7 @@ getRegime <- function(Intervention, Data) {
         attr(RegimeVal, "g.star") <- function(Treatment, Covariates, PropScore, Intervened) {
           Probability <- data.table::data.table(
             1 *
-              sapply(1:nrow(Treatment), function(i) {
+              sapply(seq_len(nrow(Treatment)), function(i) {
                 all(Treatment[i, ] == Intervened[i, ])
               })
           )
@@ -850,7 +850,7 @@ getRegime <- function(Intervention, Data) {
           "]] and try again"
         )
       } else {
-        if (min(as.numeric(unlist(GStarOK))) < 0 | max(as.numeric(unlist(GStarOK))) > 1) {
+        if (min(as.numeric(unlist(GStarOK))) < 0 || max(as.numeric(unlist(GStarOK))) > 1) {
           stop(
             "Intervention must be a list of regimes specificed as list(intervention",
             " = f(A, L), g.star = g(A, L)), and the g.star function f(A, L) must ",
@@ -1032,7 +1032,7 @@ getCVFolds <- function(CVArg, Data, CVSeed = sample(0:1e8, 1)) {
   }
   set.seed(CVSeed)
   CVFolds <- try(do.call(origami::make_folds, CVArg))
-  if (inherits(CVFolds, "try-error") | is.null(CVFolds)) {
+  if (inherits(CVFolds, "try-error") || is.null(CVFolds)) {
     stop("CVArg must be a list of arguments to be passed into do.call(origami::make_folds, ...)")
   }
   attr(CVFolds, "CVArg") <- CVArg
@@ -1111,7 +1111,7 @@ getModel <- function(Model, Data, Verbose) {
 
             # rename covariates ----
 
-            if (!isTRUE(attr(Model[[FitVar]][[i]], "NameChecked")) & RenameCovs) {
+            if (!isTRUE(attr(Model[[FitVar]][[i]], "NameChecked")) && RenameCovs) {
               for (covar in unique(CovNames[["CovName"]])) {
                 OldColRegex <- paste0("([\\W\\D]|\\s){1}", covar, "([\\W\\D]|\\s){1}")
                 NewCol <- CovNames[CovName == covar, ][["ColName"]]
@@ -1162,7 +1162,7 @@ makeModelList <- function(Treatment, EventTime, EventType, UniqueEvents, Model, 
         foo <- utils::capture.output(suppressMessages(SLLrnrs <- SuperLearner::listWrappers()))
         TrtLrnrs <- unlist(Model[[Trt]], recursive = TRUE)
         NonDefaultLrnrs <- TrtLrnrs[which(!(TrtLrnrs %in% SLLrnrs))]
-        if (length(NonDefaultLrnrs) > 0 & Verbose) {
+        if (length(NonDefaultLrnrs) > 0 && Verbose) {
           message(
             "These candidate learners are not in the base SuperLearner package: ",
             paste0(NonDefaultLrnrs, collapse = ","),
@@ -1269,7 +1269,7 @@ makeITT <- function(...) {
         "g.star" = function(Treatment, Covariates, PropScore, Intervened) {
           Probability <- data.table::data.table(
             1 *
-              sapply(1:nrow(Treatment), function(i) {
+              sapply(seq_len(nrow(Treatment)), function(i) {
                 all(Treatment[i, ] == Intervened[i, ])
               })
           )
@@ -1286,7 +1286,7 @@ makeITT <- function(...) {
         "g.star" = function(Treatment, Covariates, PropScore, Intervened) {
           Probability <- data.table::data.table(
             1 *
-              sapply(1:nrow(Treatment), function(i) {
+              sapply(seq_len(nrow(Treatment)), function(i) {
                 all(Treatment[i, ] == Intervened[i, ])
               })
           )
@@ -1310,7 +1310,7 @@ makeITT <- function(...) {
         "g.star" = function(Treatment, Covariates, PropScore, Intervened) {
           Probability <- data.table::data.table(
             1 *
-              sapply(1:nrow(Treatment), function(i) {
+              sapply(seq_len(nrow(Treatment)), function(i) {
                 all(Treatment[i, ] == Intervened[i, ])
               })
           )
@@ -1442,7 +1442,7 @@ print.ConcreteArgs <- function(x, ...) {
   cat('Intervention', ifelse(length(Regimes) > 1, "s", ""), "\n", sep = "")
   for (d in seq_along(Regimes)) {
     cat('  ', names(Regimes)[d], ': (', sep = "")
-    for (a in 1:ncol(Regimes[[d]])) {
+    for (a in seq_len(ncol(Regimes[[d]]))) {
       cat(
         "\"",
         colnames(Regimes[[d]])[a],
@@ -1456,7 +1456,7 @@ print.ConcreteArgs <- function(x, ...) {
     cat(
       "Observed Prevalence = ",
       round(
-        mean(sapply(1:nrow(Treatments), function(i) {
+        mean(sapply(seq_len(nrow(Treatments)), function(i) {
           all(Treatments[i, ] == Regimes[[d]][i, ])
         })),
         2
@@ -1550,7 +1550,7 @@ print.ConcreteArgs <- function(x, ...) {
   )
 
   ## Misc
-  if (isTRUE(attr(x$Model, "CovNamesChanged")) & x$Verbose) {
+  if (isTRUE(attr(x$Model, "CovNamesChanged")) && x$Verbose) {
     cat(
       "****\nCox model specifications have been renamed where necessary to reflect",
       " changed covariate names. Model specifications in .[['Model']] can be ",

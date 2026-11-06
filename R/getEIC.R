@@ -153,7 +153,7 @@ getGComp <- function(EvalTimes, Hazards, TotalSurv, TargetTime) {
   Risks <- do.call(
     rbind,
     lapply(Hazards, function(haz.j) {
-      Risk.a <- sapply(1:ncol(haz.j), function(i) {
+      Risk.a <- sapply(seq_len(ncol(haz.j)), function(i) {
         cumsum(TotalSurv[, i] * haz.j[, i])
       })
       Risk.a <- cbind(

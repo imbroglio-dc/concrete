@@ -111,7 +111,7 @@ doTmleUpdate <- function(
   #     Progress <- utils::txtProgressBar(min = 0, max = 5, initial = 0, style = 3)
   #     Q <- 0
   # }
-  while (StepNum <= MaxUpdateIter & IterNum <= MaxUpdateIter * 2) {
+  while (StepNum <= MaxUpdateIter && IterNum <= MaxUpdateIter * 2) {
     IterNum <- IterNum + 1
 
     # Check survival before update; bound to 1e-12 and record any warnings on output object
@@ -511,6 +511,6 @@ updateHazard <- function(
 printOneStepDiagnostics <- function(OneStepStop, NormPnEIC) {
   ratio <- NULL
   Worst <- OneStepStop[, !"check"][, ratio := round(ratio, 2)][order(ratio, decreasing = TRUE)]
-  print(Worst[1:min(nrow(Worst), 3), ])
+  print(Worst[seq_len(min(nrow(Worst), 3)), ])
   cat("Norm PnEIC = ", NormPnEIC, "\n", sep = "")
 }

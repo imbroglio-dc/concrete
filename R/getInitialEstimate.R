@@ -130,8 +130,8 @@ truncNuisanceWeight <- function(NuisanceDenom, MinNuisance, RegimeName) {
     warning("MinNuisance functions are not yet supported. Using default: ", "5 / (sqrt(n) * log(n)).", call. = FALSE)
     MinNuisance <- 5 / log(ncol(NuisanceDenom)) / sqrt(ncol(NuisanceDenom))
   }
-  if (is.numeric(MinNuisance) & length(MinNuisance) == 1) {
-    if (MinNuisance < 1 & MinNuisance > 0) {
+  if (is.numeric(MinNuisance) && length(MinNuisance) == 1) {
+    if (MinNuisance < 1 && MinNuisance > 0) {
       if (min(NuisanceDenom) < MinNuisance) {
         pct_subjects <- round(mean(apply(NuisanceDenom, 2, function(subj) any(subj < MinNuisance)), 3) * 100)
         pct_total <- round(mean(NuisanceDenom < MinNuisance), 3) * 100

@@ -114,7 +114,7 @@ getOutput <- function(
     )
   }
 
-  if (!is.numeric(Intervention) & !is.integer(Intervention)) {
+  if (!is.numeric(Intervention) && !is.integer(Intervention)) {
     stop(
       "Intervention must be a numeric vector specifying which ConcreteEst elements to use. ",
       "Available interventions (1 to ",
@@ -156,7 +156,7 @@ getOutput <- function(
       call. = FALSE
     )
   }
-  if (!is.numeric(Signif) | Signif >= 1 | Signif <= 0) {
+  if (!is.numeric(Signif) || Signif >= 1 || Signif <= 0) {
     stop(
       "Signif (significance level) must be a number in (0, 1). ",
       "Typical values: 0.05 for 95% CI, 0.01 for 99% CI. Received: ",
@@ -389,9 +389,9 @@ getSimultaneous <- function(ConcreteEst, Output, EstimandType, Intervention, Sig
   }
 
   ICs <- dcast(ICs[, Time := as.character(Time)], ID ~ Intervention + Time + Event, value.var = "IC")[, !c("ID")]
-  CovEIC <- cov(subset(ICs, select = sapply(1:ncol(ICs), function(j) !(max(unlist(ICs[[j]])) == 0))))
+  CovEIC <- cov(subset(ICs, select = sapply(seq_len(ncol(ICs)), function(j) !(max(unlist(ICs[[j]])) == 0))))
   CovEIC[is.na(CovEIC)] <- 1e-9
-  CorrEIC <- cor(subset(ICs, select = sapply(1:ncol(ICs), function(j) !(max(unlist(ICs[[j]])) == 0))))
+  CorrEIC <- cor(subset(ICs, select = sapply(seq_len(ncol(ICs)), function(j) !(max(unlist(ICs[[j]])) == 0))))
   n <- length(attr(ConcreteEst, "T.tilde"))
 
   q <- apply(abs(MASS::mvrnorm(n = 1e3, mu = rep(0, nrow(CorrEIC)), Sigma = CorrEIC)), 1, max)
@@ -476,7 +476,7 @@ plot.ConcreteOut <- function(x, NullLine = TRUE, ask = TRUE, ...) {
         ggplot2::geom_point() +
         ggplot2::geom_errorbar()
     }
-    if (Simultaneous & length(unique(z[["Time"]])) > 1) {
+    if (Simultaneous && length(unique(z[["Time"]])) > 1) {
       fig[["rr"]] <- fig[["rr"]] +
         ggplot2::geom_ribbon(
           data = z[Estimator == "tmle", ],
@@ -521,7 +521,7 @@ plot.ConcreteOut <- function(x, NullLine = TRUE, ask = TRUE, ...) {
         ggplot2::geom_point() +
         ggplot2::geom_errorbar()
     }
-    if (Simultaneous & length(unique(z[["Time"]])) > 1) {
+    if (Simultaneous && length(unique(z[["Time"]])) > 1) {
       fig[["rd"]] <- fig[["rd"]] +
         ggplot2::geom_ribbon(
           data = z[Estimator == "tmle", ],
@@ -566,7 +566,7 @@ plot.ConcreteOut <- function(x, NullLine = TRUE, ask = TRUE, ...) {
         ggplot2::geom_point() +
         ggplot2::geom_errorbar(alpha = 0.5)
     }
-    if (Simultaneous & length(unique(z[["Time"]])) > 1) {
+    if (Simultaneous && length(unique(z[["Time"]])) > 1) {
       fig[["risk"]] <- fig[["risk"]] +
         ggplot2::geom_ribbon(
           ggplot2::aes(ymin = `SimCI Low`, ymax = `SimCI Hi`, fill = Intervention),
